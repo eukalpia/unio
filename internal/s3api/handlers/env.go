@@ -5,11 +5,11 @@
 package handlers
 
 import (
+	"strconv"
 	"context"
 	"log/slog"
 	"net/http"
 	"net/url"
-	"strconv"
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/app"
@@ -17,6 +17,7 @@ import (
 	"github.com/eukalpia/unio/internal/auth"
 	"github.com/eukalpia/unio/internal/bufpool"
 	"github.com/eukalpia/unio/internal/object"
+	"github.com/eukalpia/unio/internal/s3api/headers"
 	"github.com/eukalpia/unio/internal/s3api/router"
 	"github.com/eukalpia/unio/internal/s3err"
 )
@@ -61,6 +62,11 @@ type Call struct {
 
 // Handle runs the handler for op.
 func (e *Env) Handle(op router.Op, c *Call) error {
+	if encryptionRefused(op) {
+		if err := headers.RejectEncryption(c.Header); err != nil {
+			return err
+		}
+	}
 	switch op {
 	case router.OpListBuckets:
 		return e.ListBuckets(c)
@@ -126,8 +132,8 @@ func writeStatus(c *Call, status int) {
 	c.RC.Response.Header.SetContentLength(0)
 }
 
-// queryInt parses an optional integer query parameter in [min, max]. A missing
-// parameter yields def.
+// queryInt parses an optional integer query parameter in [lo, hi]. A missing
+// parameter yields def. The value must be plain decimal digits; see boundedInt.
 func queryInt(q url.Values, name string, def, lo, hi int) (int, error) {
 	raw, ok := q[name]
 	if !ok || len(raw) == 0 || raw[0] == "" {
@@ -143,4 +149,16 @@ func queryInt(q url.Values, name string, def, lo, hi int) (int, error) {
 // httpTime formats t as an RFC 9110 HTTP date.
 func httpTime(t time.Time) string {
 	return t.UTC().Format(http.TimeFormat)
+}
+
+// encryptionRefused reports whether requests of op are refused when they carry
+// a server-side encryption header. These are the operations that store or
+// return object data, so an encryption request would be silently ignored.
+func encryptionRefused(op router.Op) bool {
+	switch op {
+	case router.OpPutObject, router.OpCopyObject, router.OpCreateMultipartUpload,
+		router.OpUploadPart, router.OpUploadPartCopy, router.OpGetObject, router.OpHeadObject:
+		return true
+	}
+	return false
 }
