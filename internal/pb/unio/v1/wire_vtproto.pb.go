@@ -46,6 +46,7 @@ func (m *StreamHeader) CloneVT() *StreamHeader {
 	r.Id = m.Id
 	r.Method = m.Method
 	r.Length = m.Length
+	r.TimeoutNanos = m.TimeoutNanos
 	if rhs := m.Payload; rhs != nil {
 		tmpBytes := make([]byte, len(rhs))
 		copy(tmpBytes, rhs)
@@ -680,6 +681,9 @@ func (this *StreamHeader) EqualVT(that *StreamHeader) bool {
 		return false
 	}
 	if this.Length != that.Length {
+		return false
+	}
+	if this.TimeoutNanos != that.TimeoutNanos {
 		return false
 	}
 	return string(this.unknownFields) == string(that.unknownFields)
@@ -1470,6 +1474,11 @@ func (m *StreamHeader) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.TimeoutNanos != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.TimeoutNanos))
+		i--
+		dAtA[i] = 0x28
 	}
 	if m.Length != 0 {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.Length))
@@ -2983,6 +2992,9 @@ func (m *StreamHeader) SizeVT() (n int) {
 	if m.Length != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.Length))
 	}
+	if m.TimeoutNanos != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.TimeoutNanos))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -3823,6 +3835,25 @@ func (m *StreamHeader) UnmarshalVT(dAtA []byte) error {
 				b := dAtA[iNdEx]
 				iNdEx++
 				m.Length |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TimeoutNanos", wireType)
+			}
+			m.TimeoutNanos = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.TimeoutNanos |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
