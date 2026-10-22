@@ -59,6 +59,15 @@ func (t *Transport) dial(ctx context.Context, to ids.NodeID, kind byte) (net.Con
 	if t.client == nil || t.resolv == nil {
 		return nil, errors.New("uniwire: dialing requires a client TLS configuration and a resolver")
 	}
+	// Each dial names the node it wants. The standard checks then bind the
+	// peer's certificate to that name, so a certificate for another node is
+	// refused by the handshake itself.
+	sni, err := pki.NodeDNSName(to)
+	if err != nil {
+		return nil, fmt.Errorf("uniwire: dial %q: %w", to, err)
+	}
+	cfg := t.client.Clone()
+	cfg.ServerName = sni
 	addr, err := t.resolv(to)
 	if err != nil {
 		return nil, unavailable(ctx, to, fmt.Errorf("resolve: %w", err))
@@ -70,7 +79,7 @@ func (t *Transport) dial(ctx context.Context, to ids.NodeID, kind byte) (net.Con
 	if err != nil {
 		return nil, unavailable(ctx, to, err)
 	}
-	tc := tls.Client(raw, t.client)
+	tc := tls.Client(raw, cfg)
 	hctx, hcancel := context.WithTimeout(ctx, t.lim.HandshakeTimeout)
 	err = tc.HandshakeContext(hctx)
 	hcancel()

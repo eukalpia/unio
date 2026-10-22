@@ -42,9 +42,9 @@ func (ca *CA) NewIdentity(id ids.NodeID, hosts []string, opts IssuerOptions) (*I
 // LoadIdentity loads an operator-provided identity. certFile holds the node
 // certificate (PEM, leaf first), keyFile its private key (PEM) and caFile the
 // PEM bundle of roots that issued peer certificates. The certificate must carry
-// a unio node identity URI, and it must allow both server and client
-// authentication. Renewing it is the operator's job: LoadIdentity does not
-// renew.
+// the unio node identity URI and the matching DNS name <id>.node.unio, and it
+// must allow both server and client authentication. Renewing it is the
+// operator's job: LoadIdentity does not renew.
 func LoadIdentity(certFile, keyFile, caFile string) (*Identity, error) {
 	certFile = filepath.Clean(certFile)
 	keyFile = filepath.Clean(keyFile)

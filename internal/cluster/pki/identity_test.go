@@ -61,7 +61,7 @@ func TestLoadIdentityFromOperatorFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res := exchange(t, serverCfg, clientCfg); res.serverErr != nil || res.clientErr != nil {
+	if res := exchange(t, serverCfg, clientCfg, "node-op"); res.serverErr != nil || res.clientErr != nil {
 		t.Fatalf("operator identity failed to interoperate: server=%v client=%v", res.serverErr, res.clientErr)
 	}
 }

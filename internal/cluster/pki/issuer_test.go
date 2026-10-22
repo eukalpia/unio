@@ -141,7 +141,7 @@ func TestExpiredCertificateRejectedByPeers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res := exchange(t, serverCfg, clientCfg); res.serverErr != nil || res.clientErr != nil {
+	if res := exchange(t, serverCfg, clientCfg, "node-a"); res.serverErr != nil || res.clientErr != nil {
 		t.Fatalf("valid peers failed: server=%v client=%v", res.serverErr, res.clientErr)
 	}
 
@@ -151,7 +151,7 @@ func TestExpiredCertificateRejectedByPeers(t *testing.T) {
 		t.Fatal(err)
 	}
 	clk.Advance(DefaultLifetime + time.Hour)
-	res := exchange(t, serverCfg, clientCfg)
+	res := exchange(t, serverCfg, clientCfg, "node-a")
 	if res.serverErr == nil && res.clientErr == nil {
 		t.Fatal("expired certificate accepted by a peer")
 	}
@@ -190,7 +190,7 @@ func TestHandshakeDuringRenewalSucceeds(t *testing.T) {
 	}()
 	<-entered
 
-	during := exchange(t, serverCfg, clientCfg)
+	during := exchange(t, serverCfg, clientCfg, "node-a")
 	close(release)
 	<-advanced
 	if during.serverErr != nil || during.clientErr != nil {
@@ -200,7 +200,7 @@ func TestHandshakeDuringRenewalSucceeds(t *testing.T) {
 		t.Fatal("handshake during renewal did not present the still-valid certificate")
 	}
 
-	after := exchange(t, serverCfg, clientCfg)
+	after := exchange(t, serverCfg, clientCfg, "node-a")
 	if after.serverErr != nil || after.clientErr != nil {
 		t.Fatalf("handshake after renewal failed: server=%v client=%v", after.serverErr, after.clientErr)
 	}
@@ -223,7 +223,7 @@ func TestExistingConnectionUnaffectedByRenewal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv, cli, serr, cerr := connect(t, serverCfg, clientCfg)
+	srv, cli, serr, cerr := connect(t, serverCfg, clientCfg, "node-a")
 	if serr != nil || cerr != nil {
 		t.Fatalf("handshake failed: server=%v client=%v", serr, cerr)
 	}
@@ -236,7 +236,7 @@ func TestExistingConnectionUnaffectedByRenewal(t *testing.T) {
 		t.Fatalf("existing connection broken by renewal: %v", err)
 	}
 
-	srv2, cli2, serr, cerr := connect(t, serverCfg, clientCfg)
+	srv2, cli2, serr, cerr := connect(t, serverCfg, clientCfg, "node-a")
 	if serr != nil || cerr != nil {
 		t.Fatalf("new handshake failed: server=%v client=%v", serr, cerr)
 	}
@@ -262,7 +262,7 @@ func TestCertificateFromOtherCAIsRejectedAtClock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res := exchange(t, serverCfg, clientCfg)
+	res := exchange(t, serverCfg, clientCfg, "node-a")
 	if res.serverErr == nil && res.clientErr == nil {
 		t.Fatal("certificate from another CA accepted")
 	}
