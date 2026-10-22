@@ -77,7 +77,10 @@ func (s *Store) DeleteUser(ctx context.Context, name string) error {
 	if err := s.deleteIncarnation(ctx, name, owner.ID); err != nil {
 		return err
 	}
-	if err := s.deleteKey(ctx, userPath(name)); err != nil && !errors.Is(err, meta.ErrNotFound) {
+	// The record is removed only while it still belongs to this incarnation. A
+	// repeat call can overlap a completed deletion and a re-creation of the
+	// name, and must not remove the new user.
+	if _, err := s.deleteWhile(ctx, userPath(name), ownedUser(owner.ID)); err != nil {
 		return fmt.Errorf("iam: remove user: %w", err)
 	}
 	s.clearCaches()
@@ -129,17 +132,7 @@ func (s *Store) deleteIncarnation(ctx context.Context, name, id string) error {
 			return fmt.Errorf("iam: delete access key: %w", err)
 		}
 	}
-	raw, _, err := s.kv.Get(ctx, policyPath(name))
-	if errors.Is(err, meta.ErrNotFound) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("iam: read user policy: %w", err)
-	}
-	if rec, err := decodePolicyRecord(raw); err == nil && rec.UserID != id {
-		return nil
-	}
-	if err := s.kv.Delete(ctx, policyPath(name), meta.AnyRevision); err != nil && !errors.Is(err, meta.ErrNotFound) {
+	if _, err := s.deleteWhile(ctx, policyPath(name), ownedPolicy(id)); err != nil {
 		return fmt.Errorf("iam: delete user policy: %w", err)
 	}
 	return nil

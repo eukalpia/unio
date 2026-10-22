@@ -103,3 +103,23 @@ func checkVersion(v int) error {
 	}
 	return nil
 }
+
+// ownedUser returns a predicate for deleteWhile that holds while a stored user
+// record still belongs to the incarnation id. A record that does not decode
+// is treated as owned, so that a corrupt leftover of a deleted user is cleared.
+func ownedUser(id string) func([]byte) bool {
+	return func(raw []byte) bool {
+		rec, err := decodeUserRecord(raw)
+		return err != nil || rec.ID == id
+	}
+}
+
+// ownedPolicy returns a predicate for deleteWhile that holds while a stored
+// inline policy record still belongs to the user incarnation id. As in
+// ownedUser, a record that does not decode is treated as owned.
+func ownedPolicy(id string) func([]byte) bool {
+	return func(raw []byte) bool {
+		rec, err := decodePolicyRecord(raw)
+		return err != nil || rec.UserID == id
+	}
+}
