@@ -34,13 +34,21 @@ Exit criteria:
   [architecture](docs/design/architecture.md#11-targets).
 - Benchmark Hertz on the standard transport against `net/http`.
 - Benchmark regression gates in CI.
+- Official multi-arch container images with signatures and SBOMs.
+- Helm chart for Kubernetes.
+- Ecosystem compatibility matrix in CI: Velero, Loki, Thanos, Mimir, Tempo,
+  Harbor, GitLab, restic, rclone, Kopia, Spark, Trino and Iceberg, AWS CLI
+  and SDKs.
 
 ## v0.3 — Data management
 
 - Versioning API.
 - Lifecycle rules.
 - Full bucket policies.
-- Embedded web console.
+- Embedded web console (React, TypeScript, Tailwind CSS) with a fast object
+  browser, upload manager and visual policy editor.
+- `unioctl`: admin CLI and a Bubble Tea terminal UI with a live cluster
+  dashboard and keyboard-driven bucket browser.
 - Metadata range splits for very large buckets.
 
 ## v0.4 — Enterprise features
@@ -51,6 +59,7 @@ Exit criteria:
 - Event notifications.
 - STS, OIDC and LDAP.
 - Online expansion and rebalancing.
+- Kubernetes operator (`UnioCluster` custom resource) for day-2 operations.
 
 ## Later
 
