@@ -28,13 +28,13 @@ var ErrRange = errors.New("bitrot: invalid object range or geometry")
 // (stripe index) of the first block in the range.
 type Extent struct {
 	Offset, Length int64
-	FirstBlock     int64
+	FirstBlock     uint64
 }
 
 // Position returns the position of the blocks of extent e in shard id. A
 // Reader over the extent must be built with this position.
 func (e Extent) Position(id ids.ShardID) Position {
-	return Position{Data: id.Data, Shard: id.Index, FirstBlock: uint64(e.FirstBlock)}
+	return Position{Data: id.Data, Shard: id.Index, FirstBlock: e.FirstBlock}
 }
 
 // Range describes which framed bytes of each shard serve an object byte
@@ -101,17 +101,21 @@ func ShardSize(dataSize int64, k, stripeSize int) int64 {
 // StripeExtent returns the framed range of one shard that holds stripes
 // [first, end) of an object of dataSize bytes. Its FirstBlock is first, which
 // is the position a Reader over the range must start from. An empty range has
-// zero length.
-func StripeExtent(dataSize int64, k, stripeSize int, first, end int64) Extent {
+// zero length. It returns ErrRange if first is negative.
+func StripeExtent(dataSize int64, k, stripeSize int, first, end int64) (Extent, error) {
+	if first < 0 {
+		return Extent{}, fmt.Errorf("%w: first stripe %d is negative", ErrRange, first)
+	}
 	off := blockOffset(k, stripeSize, first)
+	block := uint64(first)
 	if end <= first {
-		return Extent{Offset: off, FirstBlock: first}
+		return Extent{Offset: off, FirstBlock: block}, nil
 	}
 	return Extent{
 		Offset:     off,
 		Length:     blockEnd(dataSize, k, stripeSize, end-1) - off,
-		FirstBlock: first,
-	}
+		FirstBlock: block,
+	}, nil
 }
 
 // Span maps the object range [offset, offset+length) to the stripes that
@@ -127,10 +131,14 @@ func Span(dataSize int64, k, stripeSize int, offset, length int64) (Range, error
 	s := int64(stripeSize)
 	first := offset / s
 	end := (offset+length-1)/s + 1
+	shard, err := StripeExtent(dataSize, k, stripeSize, first, end)
+	if err != nil {
+		return Range{}, err
+	}
 	return Range{
 		FirstStripe: first,
 		EndStripe:   end,
-		Shard:       StripeExtent(dataSize, k, stripeSize, first, end),
+		Shard:       shard,
 		Skip:        offset - first*s,
 	}, nil
 }

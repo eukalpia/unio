@@ -23,7 +23,7 @@ type frame struct {
 	dataLen int // data bytes of this stripe
 	// refs counts the fan-out consumers that still hold the frame. Only the
 	// write and heal paths use it.
-	refs atomic.Int32
+	refs atomic.Int64
 }
 
 // newFrame takes a frame of n blocks from g's pool, waiting for budget.

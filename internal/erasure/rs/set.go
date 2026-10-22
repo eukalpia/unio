@@ -19,6 +19,11 @@ import (
 	"github.com/eukalpia/unio/internal/ids"
 )
 
+// maxShards bounds the shards of one set. It matches the GF(2^8) field of the
+// Reed-Solomon encoder and keeps every shard index well inside the uint16 of
+// ids.ShardID.
+const maxShards = 256
+
 // Set is a Reed-Solomon erasure set over a fixed group of drives. It is safe
 // for concurrent use.
 type Set struct {
@@ -44,6 +49,8 @@ func New(id ids.SetID, drives []drive.Drive, dataShards, parityShards int, opts 
 		return nil, fmt.Errorf("erasure/rs: data shards %d must be at least 1", dataShards)
 	case parityShards < 0:
 		return nil, fmt.Errorf("erasure/rs: parity shards %d must not be negative", parityShards)
+	case dataShards > maxShards || parityShards > maxShards || dataShards+parityShards > maxShards:
+		return nil, fmt.Errorf("erasure/rs: %d+%d shards exceed the limit of %d", dataShards, parityShards, maxShards)
 	case len(drives) != dataShards+parityShards:
 		return nil, fmt.Errorf("erasure/rs: %d drives for %d+%d shards", len(drives), dataShards, parityShards)
 	}
@@ -164,5 +171,6 @@ func (s *Set) shardDrive(layout erasure.Layout, i int) drive.Drive {
 
 // shardID returns the id of shard i of object id.
 func shardID(id ids.DataID, i int) ids.ShardID {
+	// #nosec G115 -- i indexes a shard of the set, so 0 <= i < k+m <= maxShards (256), which New enforces
 	return ids.ShardID{Data: id, Index: uint16(i)}
 }

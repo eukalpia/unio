@@ -100,7 +100,7 @@ func TestSpan(t *testing.T) {
 			want := Range{
 				FirstStripe: tt.first,
 				EndStripe:   tt.end,
-				Shard:       Extent{Offset: tt.shardOff, Length: tt.shardLen, FirstBlock: tt.first},
+				Shard:       Extent{Offset: tt.shardOff, Length: tt.shardLen, FirstBlock: uint64(tt.first)},
 				Skip:        tt.skip,
 			}
 			if sp != want {
@@ -161,8 +161,11 @@ func TestStripeExtent(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := StripeExtent(size, k, stripe, tt.first, tt.end)
-			want := Extent{Offset: tt.wantOff, Length: tt.wantLen, FirstBlock: tt.first}
+			got, err := StripeExtent(size, k, stripe, tt.first, tt.end)
+			if err != nil {
+				t.Fatalf("StripeExtent: %v", err)
+			}
+			want := Extent{Offset: tt.wantOff, Length: tt.wantLen, FirstBlock: uint64(tt.first)}
 			if got != want {
 				t.Fatalf("StripeExtent = %+v, want %+v", got, want)
 			}
@@ -220,5 +223,11 @@ func TestRangeReadsVerifyAtDerivedPositions(t *testing.T) {
 		if err := off.ReadBlock(make([]byte, BlockLen(size, k, stripe, sp.FirstStripe))); !errors.Is(err, erasure.ErrCorrupt) {
 			t.Fatalf("window [%d,+%d) read one block off: err = %v, want corrupt", win.offset, win.length, err)
 		}
+	}
+}
+
+func TestStripeExtentRejectsNegativeFirstStripe(t *testing.T) {
+	if _, err := StripeExtent(25, 4, 10, -1, 1); !errors.Is(err, ErrRange) {
+		t.Fatalf("StripeExtent(first=-1): err = %v, want ErrRange", err)
 	}
 }

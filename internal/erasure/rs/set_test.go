@@ -55,3 +55,26 @@ func TestNewReportsShape(t *testing.T) {
 		t.Fatalf("Shape = %d+%d", k, m)
 	}
 }
+
+// TestNewBoundsTheShardCount: shard indexes are stored as uint16 and the
+// encoder works with at most 256 shards, so New enforces the bound.
+func TestNewBoundsTheShardCount(t *testing.T) {
+	tests := []struct {
+		name    string
+		k, m    int
+		wantErr bool
+	}{
+		{"largest set", 255, 1, false},
+		{"one shard over", 255, 2, true},
+		{"far over", 200, 57, true},
+		{"parity over", 1, 300, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := New(ids.SetID(1), drivesOf(tt.k+tt.m), tt.k, tt.m, Options{})
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("New(%d+%d): err = %v, want error: %v", tt.k, tt.m, err, tt.wantErr)
+			}
+		})
+	}
+}
