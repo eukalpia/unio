@@ -20,22 +20,27 @@ const rebuildBatch = 4096
 // same rule that compaction relies on. Each segment is verified in full, and
 // the active segment is trimmed to its last valid record. Blob files are then
 // indexed by their size and modification time.
-func (d *Drive) rebuildIndex(ctx context.Context) error {
+// It returns, per segment, the byte ranges that were skipped because no valid
+// record starts in them.
+func (d *Drive) rebuildIndex(ctx context.Context) (map[uint64][]segment.Range, error) {
 	files, err := d.lay.listSegments()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	rb := &rebuilder{d: d, ctx: ctx, batch: d.idx.Batch()}
+	rb := &rebuilder{d: d, ctx: ctx, batch: d.idx.Batch(), damaged: map[uint64][]segment.Range{}}
 	for i, id := range files {
 		last := i == len(files)-1
 		if err := rb.segment(id, last); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if err := rb.blobs(); err != nil {
-		return err
+		return nil, err
 	}
-	return rb.commit(true)
+	if err := rb.commit(true); err != nil {
+		return nil, err
+	}
+	return rb.damaged, nil
 }
 
 // rebuilder accumulates index operations and commits them in bounded batches.
@@ -44,6 +49,7 @@ type rebuilder struct {
 	ctx     context.Context
 	batch   *index.Batch
 	pending int
+	damaged map[uint64][]segment.Range
 }
 
 // commit applies the pending batch and starts an empty one.
@@ -83,7 +89,7 @@ func (rb *rebuilder) segment(id uint64, last bool) error {
 	if err != nil {
 		return err
 	}
-	end, err := segment.Scan(f, size, true, func(rec segment.Record) error {
+	res, err := segment.Resync(f, size, func(rec segment.Record) error {
 		if err := rb.ctx.Err(); err != nil {
 			return err
 		}
@@ -107,6 +113,11 @@ func (rb *rebuilder) segment(id uint64, last bool) error {
 	})
 	if err != nil {
 		return fmt.Errorf("scan segment %d: %w", id, err)
+	}
+	end := res.End
+	if len(res.Damaged) > 0 {
+		rb.damaged[id] = res.Damaged
+		logDamage(rb.d.lay.root, id, res.Damaged)
 	}
 	if last && end < size {
 		if err := f.Truncate(end); err != nil {

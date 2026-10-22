@@ -39,6 +39,9 @@ type Drive struct {
 	compactCancel context.CancelFunc
 	compactDone   chan struct{}
 
+	// recovery is set once by Open, before the committer starts.
+	recovery Recovery
+
 	// mu is held for reading by every operation and for writing by Close.
 	// Close therefore waits for operations in progress and none starts after
 	// it has begun. Compaction is stopped before Close takes mu, because

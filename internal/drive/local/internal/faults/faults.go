@@ -14,6 +14,10 @@ const (
 	SegmentSync Point = "segment.sync"
 	// IndexCommit is consulted before an index batch is committed.
 	IndexCommit Point = "index.commit"
+	// IndexSync is consulted before an index batch is committed with sync.
+	IndexSync Point = "index.sync"
+	// DirSync is consulted before a directory is fsynced.
+	DirSync Point = "dir.sync"
 	// BlobPlace is consulted before a blob is renamed into place.
 	BlobPlace Point = "blob.place"
 	// ReadData is consulted with the buffer of every packed read that verifies

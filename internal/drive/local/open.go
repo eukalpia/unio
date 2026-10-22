@@ -71,12 +71,14 @@ func (d *Drive) load(ctx context.Context) error {
 		return err
 	}
 	if rebuilt {
-		if err := d.rebuildIndex(ctx); err != nil {
+		damaged, err := d.rebuildIndex(ctx)
+		if err != nil {
 			return fmt.Errorf("local: rebuild index: %w", err)
 		}
 		if err := d.promoteRebuiltIndex(); err != nil {
 			return err
 		}
+		d.recovery = Recovery{Rebuilt: true, Damaged: damaged}
 	}
 	if err := d.recoverSegments(); err != nil {
 		return err
