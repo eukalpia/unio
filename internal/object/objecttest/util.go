@@ -83,7 +83,7 @@ func readBody(body object.Body) (data []byte, md5sum [16]byte, ck object.Checksu
 	for i := 0; ; i++ {
 		n, rerr := body.Read(one[:])
 		if n > 0 {
-			return nil, md5sum, ck, s3err.Errorf(s3err.IncompleteBody, "body is longer than declared")
+			return nil, md5sum, ck, s3err.Errorf(s3err.InvalidRequest, "body is longer than declared")
 		}
 		if rerr == io.EOF {
 			break

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/eukalpia/unio/internal/object"
+	"github.com/eukalpia/unio/internal/s3err"
 )
 
 func TestFakeLayerConformance(t *testing.T) {
@@ -52,5 +53,40 @@ func TestBodyDigestsAfterEOF(t *testing.T) {
 	}
 	if got := b.Checksum(); got.Algorithm != object.ChecksumCRC32 || len(got.Value) != 4 {
 		t.Fatalf("checksum = %+v", got)
+	}
+}
+
+// overlongBody declares size bytes but yields size+1 of them.
+type overlongBody struct {
+	data []byte
+	pos  int
+}
+
+func (b *overlongBody) Read(p []byte) (int, error) {
+	if b.pos >= len(b.data) {
+		return 0, io.EOF
+	}
+	n := copy(p, b.data[b.pos:])
+	b.pos += n
+	if b.pos >= len(b.data) {
+		return n, io.EOF
+	}
+	return n, nil
+}
+
+func (b *overlongBody) Size() int64               { return int64(len(b.data) - 1) }
+func (b *overlongBody) MD5() [16]byte             { return [16]byte{} }
+func (b *overlongBody) Checksum() object.Checksum { return object.Checksum{} }
+
+// TestFakeRejectsOverlongBody checks that a body yielding more bytes than its
+// declared size is an InvalidRequest, as the object.Body contract requires.
+func TestFakeRejectsOverlongBody(t *testing.T) {
+	l := NewLayer()
+	if _, err := l.MakeBucket(t.Context(), testBucket, object.MakeBucketOptions{Owner: "o"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := l.PutObject(t.Context(), testBucket, "k", &overlongBody{data: []byte("123456")}, object.PutOptions{})
+	if !s3err.Is(err, s3err.InvalidRequest) {
+		t.Fatalf("err = %v, want InvalidRequest", err)
 	}
 }

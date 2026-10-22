@@ -57,7 +57,7 @@ func (g *bodyGuard) finish() error {
 			n, err := g.body.Read(one[:])
 			g.n += int64(n)
 			if n > 0 {
-				return s3err.Errorf(s3err.IncompleteBody, "request body is longer than declared")
+				return s3err.Errorf(s3err.InvalidRequest, "request body is longer than declared")
 			}
 			if err == io.EOF {
 				g.eof = true

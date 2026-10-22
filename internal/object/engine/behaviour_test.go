@@ -219,8 +219,8 @@ func TestBodyLongerThanDeclaredLeavesNothing(t *testing.T) {
 			}
 			body := &longBody{data: payloadOf(size+1, 5), declared: int64(size)}
 			_, err := h.PutObject(ctx, testBucket, "k", body, object.PutOptions{})
-			if !s3err.Is(err, s3err.IncompleteBody) {
-				t.Fatalf("err = %v, want IncompleteBody", err)
+			if !s3err.Is(err, s3err.InvalidRequest) {
+				t.Fatalf("err = %v, want InvalidRequest (the body yields more than its declared size)", err)
 			}
 			if _, err := h.HeadObject(ctx, testBucket, "k", object.GetOptions{}); !s3err.Is(err, s3err.NoSuchKey) {
 				t.Fatalf("object visible after a failed body: %v", err)
