@@ -12,6 +12,9 @@ import "io"
 //     error instead of io.EOF. The final Read may return the error together
 //     with the last bytes.
 //   - MD5 and Checksum are valid only after Read has returned io.EOF.
+//   - A body shorter than Size fails with s3err.IncompleteBody; a longer one
+//     with s3err.InvalidRequest. A declared trailing checksum that does not
+//     arrive is a failure, never a pass.
 //
 // Consumers must not commit anything that depends on the payload unless
 // Read returned io.EOF (invariant I4).

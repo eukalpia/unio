@@ -9,7 +9,8 @@ type PartInfo struct {
 	Checksum   Checksum
 }
 
-// CompletePart is one entry of a CompleteMultipartUpload request.
+// CompletePart is one entry of a CompleteMultipartUpload request. ETag is
+// unquoted, like every ETag in this package.
 type CompletePart struct {
 	PartNumber int
 	ETag       string

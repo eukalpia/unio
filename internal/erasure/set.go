@@ -30,6 +30,10 @@ type Set interface {
 	// verified; damaged shards are reported for repair. If the data cannot
 	// be served correctly, Read (or a later Read on the returned reader)
 	// fails with an error wrapping ErrReadQuorum or ErrCorrupt.
+	//
+	// The returned reader holds buffer budget and must be closed. Layout's
+	// StripeSize is authoritative for decoding, not the set's current default.
+	// Cancelling ctx ends the read with ctx's error.
 	Read(ctx context.Context, id ids.DataID, layout Layout, size, offset, length int64) (io.ReadCloser, error)
 
 	// Delete removes all shards of id. Missing shards are not an error.
@@ -39,5 +43,8 @@ type Set interface {
 
 	// Heal rewrites missing or corrupt shards of id and returns the updated
 	// layout. It returns the input layout unchanged if nothing was repaired.
+	// On partial failure it returns the layout reflecting the shards that
+	// were rewritten (zero DriveID for the others) together with the joined
+	// errors.
 	Heal(ctx context.Context, id ids.DataID, layout Layout, size int64) (Layout, error)
 }

@@ -8,9 +8,16 @@ import (
 	"github.com/eukalpia/unio/internal/s3err"
 )
 
+// ReservedBucketName is the path prefix of Unio's service endpoints
+// (/unio/health, /unio/metrics, /unio/admin). It can never be a bucket.
+const ReservedBucketName = "unio"
+
 // ValidateBucketName checks a bucket name against the S3 naming rules for
-// general purpose buckets.
+// general purpose buckets and rejects the reserved name.
 func ValidateBucketName(name string) error {
+	if name == ReservedBucketName {
+		return s3err.Errorf(s3err.InvalidBucketName, "bucket name %q is reserved", ReservedBucketName)
+	}
 	if len(name) < 3 || len(name) > 63 {
 		return s3err.Errorf(s3err.InvalidBucketName, "bucket name must be 3-63 characters long")
 	}

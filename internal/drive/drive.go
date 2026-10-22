@@ -13,6 +13,9 @@ import (
 // Shard bytes are opaque to the drive; integrity framing (bitrot hashes) is
 // added by the erasure layer. Drives additionally protect their own
 // on-disk structures (record headers) with checksums.
+//
+// Every method must return promptly once ctx is done, with an error wrapping
+// ctx.Err(); callers rely on this to drop stalled drives.
 type Drive interface {
 	// ID returns the drive id from its format record.
 	ID() ids.DriveID
