@@ -120,13 +120,11 @@ func (t compactTarget) moveTombstone(ctx context.Context, ref *segRef, rec compa
 	if err != nil {
 		return 0, corrupt(rec.Header.ShardID, err)
 	}
-	origin, err := segment.ParseTombstoneOrigin(raw[segment.HeaderSize:])
-	if err != nil {
+	if _, err := segment.ParseTombstoneOrigin(raw[segment.HeaderSize:]); err != nil {
 		return 0, corrupt(rec.Header.ShardID, err)
 	}
 	req := newRequest(reqCopyTomb, rec.Header.ShardID)
 	req.rec = raw
-	req.origin = origin
 	req.seg = rec.Segment
 	return moved(d.submit(ctx, req), raw)
 }

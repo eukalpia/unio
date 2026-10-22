@@ -93,6 +93,18 @@ func (s *segStats) sealedSegments() []compact.Segment {
 	return out
 }
 
+// hasSegmentBefore reports whether a segment with an id below id exists.
+func (s *segStats) hasSegmentBefore(id uint64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for other := range s.m {
+		if other < id {
+			return true
+		}
+	}
+	return false
+}
+
 // segEnd returns the committed end of segment id, or false if it is unknown.
 func (s *segStats) segEnd(id uint64) (int64, bool) {
 	s.mu.Lock()

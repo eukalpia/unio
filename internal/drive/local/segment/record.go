@@ -15,8 +15,9 @@
 //	38      4     CRC-32C of bytes 0..37
 //
 // Records are self-delimiting and self-verifying, so a segment can be
-// scanned without an index. Tombstone data holds the id of the segment that
-// contained the deleted record (see TombstoneOrigin).
+// scanned without an index. Tombstone data names the segment that held the
+// deleted packed record, or segment 0 for a blob (see TombstoneOrigin). The
+// drive's rules do not depend on that value, so it is informational.
 package segment
 
 import (
@@ -131,8 +132,8 @@ func AppendRecord(dst []byte, flags Flags, id ids.ShardID, data []byte) []byte {
 	return append(dst, data...)
 }
 
-// TombstoneOrigin returns the data of a tombstone that records the segment
-// which held the deleted record.
+// TombstoneOrigin returns the data of a tombstone: the segment that held the
+// deleted packed record, or 0 for a blob.
 func TombstoneOrigin(segmentID uint64) []byte {
 	return binary.BigEndian.AppendUint64(nil, segmentID)
 }

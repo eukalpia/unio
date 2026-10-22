@@ -74,6 +74,9 @@ func (d *Drive) load(ctx context.Context) error {
 		if err := d.rebuildIndex(ctx); err != nil {
 			return fmt.Errorf("local: rebuild index: %w", err)
 		}
+		if err := d.promoteRebuiltIndex(); err != nil {
+			return err
+		}
 	}
 	if err := d.recoverSegments(); err != nil {
 		return err
@@ -99,12 +102,33 @@ func (d *Drive) openIndex() (bool, error) {
 	if err := os.Rename(d.lay.index, aside); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return false, fmt.Errorf("local: set aside index: %w", err)
 	}
-	idx, err = index.Open(d.lay.index, d.opts.IndexCache)
+	// The rebuild goes to a side directory. It is installed only when complete.
+	if err := os.RemoveAll(d.lay.indexBuild); err != nil {
+		return false, fmt.Errorf("local: clear index rebuild: %w", err)
+	}
+	idx, err = index.Open(d.lay.indexBuild, d.opts.IndexCache)
 	if err != nil {
 		return false, err
 	}
 	d.idx = idx
 	return true, nil
+}
+
+// promoteRebuiltIndex installs a completed rebuild as the index. A crash before
+// the rename leaves the side directory behind, and the next open rebuilds again.
+func (d *Drive) promoteRebuiltIndex() error {
+	if err := d.idx.Close(); err != nil {
+		return fmt.Errorf("local: close rebuilt index: %w", err)
+	}
+	if err := os.Rename(d.lay.indexBuild, d.lay.index); err != nil {
+		return fmt.Errorf("local: install rebuilt index: %w", err)
+	}
+	idx, err := index.Open(d.lay.index, d.opts.IndexCache)
+	if err != nil {
+		return err
+	}
+	d.idx = idx
+	return nil
 }
 
 // indexConsistent reports whether the index describes exactly the segment files
@@ -161,7 +185,9 @@ func (d *Drive) recoverSegments() error {
 		if err != nil {
 			return fmt.Errorf("local: stat segment %d: %w", id, err)
 		}
-		if st.Size() > m.End {
+		// Only the active segment can hold uncommitted bytes. A sealed segment
+		// is never trimmed, so that no record after a damaged one is destroyed.
+		if !m.Sealed && st.Size() > m.End {
 			if err := os.Truncate(d.lay.segmentPath(id), m.End); err != nil {
 				return fmt.Errorf("local: trim segment %d: %w", id, err)
 			}

@@ -23,16 +23,7 @@ func (d *Drive) WriteShard(ctx context.Context, id ids.ShardID, r io.Reader, siz
 	if size < 0 {
 		return fmt.Errorf("local: shard %s: negative size %d", id, size)
 	}
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	if d.closed {
-		return drive.ErrClosed
-	}
-	// A cheap early check. The committer repeats it authoritatively, so a race
-	// with a concurrent writer still yields exactly one winner.
-	if _, err := d.lookup(id); err == nil {
-		return drive.ErrShardExists
-	} else if !errors.Is(err, drive.ErrShardNotFound) {
+	if err := d.checkAbsent(id); err != nil {
 		return err
 	}
 	if size <= d.opts.packedMax {
@@ -61,7 +52,36 @@ func (d *Drive) writePacked(ctx context.Context, id ids.ShardID, r io.Reader, si
 	req := newRequest(reqPut, id)
 	req.rec = full[:segment.RecordSize(size)]
 	req.created = time.Now().UnixNano()
-	return d.submit(ctx, req)
+	return d.enqueue(ctx, req)
+}
+
+// checkAbsent fails if the drive is closed or already holds id. It is an early
+// check: the committer repeats it authoritatively, so a race with a concurrent
+// writer still yields exactly one winner.
+func (d *Drive) checkAbsent(id ids.ShardID) error {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	if d.closed {
+		return drive.ErrClosed
+	}
+	if _, err := d.lookup(id); err == nil {
+		return drive.ErrShardExists
+	} else if !errors.Is(err, drive.ErrShardNotFound) {
+		return err
+	}
+	return nil
+}
+
+// enqueue hands a request to the committer and waits for its answer. It holds
+// the drive lock only for that exchange, so a client that is slow to send its
+// payload cannot delay Close. Closing the drive makes the request fail.
+func (d *Drive) enqueue(ctx context.Context, r *request) error {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	if d.closed {
+		return drive.ErrClosed
+	}
+	return d.submit(ctx, r)
 }
 
 // writeBlob writes the shard to a temporary file and asks the committer to
@@ -79,7 +99,7 @@ func (d *Drive) writeBlob(ctx context.Context, id ids.ShardID, r io.Reader, size
 	req.final = d.blobs.Path(id)
 	req.size = size
 	req.created = time.Now().UnixNano()
-	err = d.submit(ctx, req)
+	err = d.enqueue(ctx, req)
 	if err != nil {
 		_ = os.Remove(tmp)
 	}

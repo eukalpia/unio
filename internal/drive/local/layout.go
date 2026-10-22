@@ -17,19 +17,23 @@ type layout struct {
 	segments string
 	blobs    string
 	index    string
-	tmp      string
+	// indexBuild is where a rebuilt index is written before it replaces index,
+	// so that no partial index is ever opened as the real one.
+	indexBuild string
+	tmp        string
 }
 
 // newLayout returns the layout of the drive rooted at root.
 func newLayout(root string) layout {
 	meta := filepath.Join(root, ".unio")
 	return layout{
-		root:     root,
-		format:   filepath.Join(meta, "format.pb"),
-		segments: filepath.Join(meta, "segments"),
-		blobs:    filepath.Join(meta, "blobs"),
-		index:    filepath.Join(meta, "index"),
-		tmp:      filepath.Join(meta, "tmp"),
+		root:       root,
+		format:     filepath.Join(meta, "format.pb"),
+		segments:   filepath.Join(meta, "segments"),
+		blobs:      filepath.Join(meta, "blobs"),
+		index:      filepath.Join(meta, "index"),
+		indexBuild: filepath.Join(meta, "index.rebuild"),
+		tmp:        filepath.Join(meta, "tmp"),
 	}
 }
 

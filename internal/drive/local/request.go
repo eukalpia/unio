@@ -51,8 +51,6 @@ type request struct {
 	// from is the expected current location (reqCopy), or the location of a
 	// deleted shard (reqDelete, recorded when the delete is staged).
 	from index.Location
-	// origin is the segment that held the record a tombstone deletes.
-	origin uint64
 	// seg is the segment a compaction request works on.
 	seg uint64
 
