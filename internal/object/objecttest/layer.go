@@ -11,7 +11,6 @@ package objecttest
 import (
 	"bytes"
 	"context"
-	"crypto/md5"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -467,7 +466,7 @@ func (l *Layer) CopyObject(ctx context.Context, src object.Ref, dstBucket, dstKe
 		return object.Info{}, err
 	}
 	data := bytes.Clone(srcContent.data)
-	info := newInfo(dstBucket, dstKey, l.now(), md5.Sum(data), opts.Put)
+	info := newInfo(dstBucket, dstKey, l.now(), digest.SumMD5(data), opts.Put)
 	if opts.Directive == object.MetadataCopy {
 		copyAttributes(info, srcInfo)
 	}

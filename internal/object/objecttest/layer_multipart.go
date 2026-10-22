@@ -2,7 +2,6 @@ package objecttest
 
 import (
 	"context"
-	"crypto/md5"
 	"encoding/hex"
 	"fmt"
 	"sort"
@@ -105,7 +104,7 @@ func (l *Layer) CopyObjectPart(_ context.Context, src object.Ref, bucketName, ke
 	if err != nil {
 		return object.PartInfo{}, err
 	}
-	return storePart(u, partNumber, data, md5.Sum(data), ck, l.now()), nil
+	return storePart(u, partNumber, data, digest.SumMD5(data), ck, l.now()), nil
 }
 
 // ListParts implements object.Layer.
@@ -186,11 +185,11 @@ func (l *Layer) CompleteMultipartUpload(_ context.Context, bucketName, key, uplo
 	for i, sp := range stored {
 		spans = append(spans, partSpan{number: parts[i].PartNumber, off: int64(len(data)), size: int64(len(sp.data))})
 		data = append(data, sp.data...)
-		sum := md5.Sum(sp.data)
+		sum := digest.SumMD5(sp.data)
 		md5s = append(md5s, sum[:]...)
 	}
 	info := newInfo(bucketName, key, l.now(), [16]byte{}, u.opts)
-	info.ETag = fmt.Sprintf("%x-%d", md5.Sum(md5s), len(parts))
+	info.ETag = fmt.Sprintf("%x-%d", digest.SumMD5(md5s), len(parts))
 	info.Parts = len(parts)
 	info.Size = int64(len(data))
 	info.Checksum, err = compositeChecksum(u.opts.ChecksumAlgorithm, stored)

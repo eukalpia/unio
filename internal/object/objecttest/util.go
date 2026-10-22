@@ -1,11 +1,11 @@
 package objecttest
 
 import (
-	"crypto/md5"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/eukalpia/unio/internal/object/engine/digest"
 	"io"
 	"strings"
 
@@ -100,7 +100,7 @@ func readBody(body object.Body) (data []byte, md5sum [16]byte, ck object.Checksu
 
 // md5Of returns the MD5 digest of data.
 func md5Of(data []byte) [16]byte {
-	return md5.Sum(data)
+	return digest.SumMD5(data)
 }
 
 // newUploadID returns a random 32-character lower-case hex upload id.

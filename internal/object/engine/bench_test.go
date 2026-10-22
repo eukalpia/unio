@@ -1,7 +1,7 @@
 package engine_test
 
 import (
-	"crypto/md5"
+	"github.com/eukalpia/unio/internal/object/engine/digest"
 	"io"
 	"testing"
 
@@ -18,7 +18,7 @@ type benchBody struct {
 }
 
 func newBenchBody(data []byte) *benchBody {
-	return &benchBody{data: data, sum: md5.Sum(data)}
+	return &benchBody{data: data, sum: digest.SumMD5(data)}
 }
 
 func (b *benchBody) Read(p []byte) (int, error) {

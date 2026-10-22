@@ -3,8 +3,8 @@ package engine_test
 import (
 	"bytes"
 	"context"
-	"crypto/md5"
 	"errors"
+	"github.com/eukalpia/unio/internal/object/engine/digest"
 	"io"
 	"testing"
 
@@ -378,7 +378,7 @@ func (b *gatedBody) Read(p []byte) (int, error) {
 
 func (b *gatedBody) Size() int64 { return int64(len(b.data)) }
 func (b *gatedBody) MD5() [16]byte {
-	return md5.Sum(b.data)
+	return digest.SumMD5(b.data)
 }
 func (b *gatedBody) Checksum() object.Checksum { return object.Checksum{} }
 

@@ -3,9 +3,9 @@ package objecttest
 import (
 	"bytes"
 	"context"
-	"crypto/md5"
 	"encoding/hex"
 	"errors"
+	"github.com/eukalpia/unio/internal/object/engine/digest"
 	"io"
 	"math/rand/v2"
 	"testing"
@@ -434,7 +434,7 @@ func dataCount(t *testing.T, l object.Layer) int {
 
 // payload returns n deterministic pseudo-random bytes.
 func payload(n int, seed uint64) []byte {
-	r := rand.New(rand.NewPCG(seed, 0x756e696f))
+	r := rand.New(rand.NewPCG(seed, 0x756e696f)) // #nosec G404 -- deterministic test data, not a security boundary
 	b := make([]byte, n)
 	for i := 0; i < n; i += 8 {
 		v := r.Uint64()
@@ -446,7 +446,7 @@ func payload(n int, seed uint64) []byte {
 }
 
 func md5Hex(data []byte) string {
-	sum := md5.Sum(data)
+	sum := digest.SumMD5(data)
 	return hex.EncodeToString(sum[:])
 }
 

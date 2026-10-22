@@ -1,7 +1,6 @@
 package objecttest
 
 import (
-	"crypto/md5"
 	"hash"
 	"io"
 
@@ -57,7 +56,7 @@ func Declared(size int64) BodyOption {
 
 // NewBody returns a body over data.
 func NewBody(data []byte, opts ...BodyOption) *Body {
-	b := &Body{data: data, declared: int64(len(data)), failAt: -1, md5h: md5.New()}
+	b := &Body{data: data, declared: int64(len(data)), failAt: -1, md5h: digest.NewMD5()}
 	for _, o := range opts {
 		o(b)
 	}

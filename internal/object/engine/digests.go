@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"crypto/md5"
 	"hash"
 	"io"
 
@@ -19,7 +18,7 @@ type digests struct {
 }
 
 func newDigests(alg object.ChecksumAlgorithm) (*digests, error) {
-	d := &digests{md5: md5.New(), alg: alg}
+	d := &digests{md5: digest.NewMD5(), alg: alg}
 	if alg == object.ChecksumNone {
 		return d, nil
 	}

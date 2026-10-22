@@ -2,7 +2,6 @@ package objecttest
 
 import (
 	"bytes"
-	"crypto/md5"
 	"encoding/hex"
 	"fmt"
 	"testing"
@@ -36,10 +35,10 @@ func uploadWith(t *testing.T, l object.Layer, key string, parts ...[]byte) (stri
 func multipartETag(parts ...[]byte) string {
 	var raw []byte
 	for _, p := range parts {
-		sum := md5.Sum(p)
+		sum := digest.SumMD5(p)
 		raw = append(raw, sum[:]...)
 	}
-	sum := md5.Sum(raw)
+	sum := digest.SumMD5(raw)
 	return fmt.Sprintf("%s-%d", hex.EncodeToString(sum[:]), len(parts))
 }
 

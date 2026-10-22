@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"crypto/md5"
 	"encoding/hex"
 	"fmt"
 
@@ -20,15 +19,15 @@ func hexOf(sum [16]byte) string {
 // MD5 digests of its parts, followed by "-" and the number of parts. The parts
 // must be in order.
 func multipartETag(parts []meta.PartRecord) (string, error) {
-	raw := make([]byte, 0, md5.Size*len(parts))
+	raw := make([]byte, 0, digest.MD5Size*len(parts))
 	for _, p := range parts {
 		b, err := hex.DecodeString(p.ETag)
-		if err != nil || len(b) != md5.Size {
+		if err != nil || len(b) != digest.MD5Size {
 			return "", fmt.Errorf("engine: part %d has a malformed ETag", p.Number)
 		}
 		raw = append(raw, b...)
 	}
-	sum := md5.Sum(raw)
+	sum := digest.SumMD5(raw)
 	return fmt.Sprintf("%s-%d", hex.EncodeToString(sum[:]), len(parts)), nil
 }
 
