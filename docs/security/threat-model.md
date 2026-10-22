@@ -56,7 +56,7 @@ fuzzed and never trusts lengths, counts or names from the other side.
 | Tampered streaming body | Every aws-chunked chunk signature verified before its bytes are released; trailer signatures verified | `auth/sigv4` |
 | Corrupted upload committed | `object.Body` returns `io.EOF` only after length, Content-MD5, SHA-256, checksum headers and **declared** trailers verify; the object layer commits only after a clean EOF (I4) | `s3api/payload`, `object/engine` |
 | Privilege escalation | Every operation maps to an IAM action and is authorized before touching storage; explicit deny wins; default deny | `s3api`, `auth/policy` |
-| Resource exhaustion | Header, body, idle and write-idle timeouts; concurrency limit with bounded queue (`503 SlowDown`); bounded XML bodies; global buffer budget | `s3api/middleware`, `bufpool` |
+| Resource exhaustion | Header, read-idle, write-idle and keep-alive idle timeouts; concurrency limit with bounded queue (`503 SlowDown`); bounded XML bodies; global buffer budget | `s3api/middleware`, `bufpool` |
 | Memory amplification | No allocation sized from client-supplied numbers without a cap; streaming everywhere except bounded XML | all parsers |
 | Information disclosure | Clients see only S3 codes and fixed messages; internal causes are logged with a request id | `s3err`, `s3api/apierr` |
 | Reserved namespace abuse | `/unio/*` is never treated as a bucket; bucket name `unio` is rejected | `s3api/router` |
@@ -66,7 +66,7 @@ fuzzed and never trusts lengths, counts or names from the other side.
 
 | Threat | Mitigation | Where |
 |---|---|---|
-| Default or weak credentials | No defaults; root credentials must meet length rules; `unio init` generates strong secrets | `config`, `auth/iam` |
+| Default or weak credentials | No defaults; root credentials must pass `auth.ValidateRootCredentials`, the same check at configuration load and at start; `unio init` generates strong secrets | `config`, `auth` |
 | Secret theft from metadata | User secrets encrypted with AES-256-GCM under a key derived from the cluster secret (HKDF); access key id as additional data | `auth/iam` |
 | Policy parser abuse | Size limit, strict JSON, unsupported elements rejected rather than ignored, linear-time wildcard matching | `auth/policy` |
 
@@ -74,7 +74,7 @@ fuzzed and never trusts lengths, counts or names from the other side.
 
 | Threat | Mitigation | Where |
 |---|---|---|
-| Eavesdropping or tampering | TLS 1.3 on every internode connection; plaintext only with an explicit, loudly logged flag | `cluster/uniwire` |
+| Eavesdropping or tampering | TLS 1.3 on every internode connection; no setting turns it off, and configuration refuses `http` endpoints | `cluster/uniwire`, `config` |
 | Rogue node joins | Mutual TLS with certificates issued by the cluster CA; node identity taken from the certificate, not from the payload | `cluster/pki` |
 | Malformed frames | Fixed preamble, maximum frame size, length checks before allocation, fuzzed decoders | `cluster/uniwire` |
 | Error-channel leaks | Only S3 codes and registered sentinels cross the wire; other errors become generic | `cluster/uniwire` |

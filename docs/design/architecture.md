@@ -207,8 +207,8 @@ compaction updates only the local index and never writes to Raft. See
 ## 7. UniWire internode protocol
 
 - A single TCP port (9100), **always mTLS** with TLS 1.3.
-  - The only way to disable it is the explicit `--insecure-internode` flag,
-    meant for benchmarks; using it prints a loud warning.
+  - Nothing disables it. There is no plaintext option, and configuration
+    refuses `http` endpoints.
 - **Trust bootstrap from a shared secret.**
   - An Ed25519 cluster CA key is derived deterministically via HKDF from
     `UNIO_CLUSTER_SECRET` (at least 32 characters).
@@ -269,7 +269,8 @@ compaction updates only the local index and never writes to Raft. See
   - cluster information;
   - triggering repair.
 - **Service endpoints:** `/unio/health/live`, `/unio/health/ready`, and
-  `/unio/metrics` (token-protected).
+  `/unio/metrics`. Metrics accept a bearer token (`metrics.token`) when one
+  is configured, and otherwise require SigV4 with admin rights.
 
 Planned for later milestones (see [ROADMAP](../../ROADMAP.md)):
 
@@ -303,7 +304,7 @@ Planned for later milestones (see [ROADMAP](../../ROADMAP.md)):
   - XML bodies ≤ 2 MiB;
   - objects ≤ 5 TiB; parts ≤ 5 GiB; at most 10,000 parts.
 - **DoS protection:**
-  - header, body and idle timeouts (slowloris);
+  - header, read-idle, write-idle and keep-alive idle timeouts (slowloris);
   - a concurrency limit with a bounded queue, returning `503 SlowDown` when
     it is exceeded;
   - a global memory budget for buffers.
@@ -361,7 +362,8 @@ Planned for later milestones (see [ROADMAP](../../ROADMAP.md)):
   - `go test -bench` covers every hot path and is compared with `benchstat`
     in CI;
   - cluster-level comparisons against MinIO use `warp`.
-- `pprof` is served only behind authentication.
+- `pprof` is off by default. When enabled, it listens only on a loopback
+  address (`metrics.pprof_address`) and requires the metrics token.
 
 ## 13. Module layout
 

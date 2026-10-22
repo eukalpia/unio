@@ -24,8 +24,9 @@ single port.
 - Trust is bootstrapped from `UNIO_CLUSTER_SECRET`: an Ed25519 cluster CA
   key is derived via HKDF, and every node issues itself a certificate from
   it. Operator-provided certificates are also supported.
-- Plaintext is possible only with `--insecure-internode`, which is intended
-  for benchmarks.
+- There is no plaintext mode. The `--insecure-internode` option, which once
+  allowed it for benchmarks, was removed, and configuration refuses `http`
+  endpoints with an error that says so.
 
 ## Consequences
 
