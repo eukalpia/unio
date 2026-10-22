@@ -1,6 +1,13 @@
-# Unio
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/unio-mark-dark.svg">
+    <img src="assets/logo/unio-mark.svg" alt="Unio logo" width="112">
+  </picture>
+</p>
 
-**A distributed, S3-compatible object store built for speed, integrity and simple operations.**
+<h1 align="center">Unio</h1>
+
+<p align="center"><strong>A distributed, S3-compatible object store built for speed, integrity and simple operations.</strong></p>
 
 [![CI](https://github.com/eukalpia/unio/actions/workflows/ci.yml/badge.svg)](https://github.com/eukalpia/unio/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
