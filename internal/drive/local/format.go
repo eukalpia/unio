@@ -17,7 +17,8 @@ import (
 // formatVersion is the version of the on-disk layout written by this package.
 const formatVersion = 1
 
-// Errors returned by Format and Open for the drive's identity.
+// Errors returned by Format, FormatWithID, EnsureFormatted and Open for the
+// drive's identity.
 var (
 	// ErrAlreadyFormatted is returned by Format for a directory that already
 	// holds a drive.
@@ -28,33 +29,71 @@ var (
 	// ErrClusterMismatch is returned by Open for a drive that belongs to a
 	// different cluster than Options.ClusterID.
 	ErrClusterMismatch = errors.New("local: drive belongs to another cluster")
+	// ErrDriveIDMismatch is returned for a drive whose format record names a
+	// different drive id than the one expected. The drive was moved to another
+	// slot, or its paths were swapped.
+	ErrDriveIDMismatch = errors.New("local: drive has another id")
 )
 
 // Format prepares the directory at path as a drive of clusterID and returns
 // its new drive id. The format record is written atomically, so a crash
 // leaves either no record or a complete one.
 func Format(ctx context.Context, path, clusterID string) (ids.DriveID, error) {
-	if err := ctx.Err(); err != nil {
+	id := ids.NewDriveID()
+	if err := FormatWithID(ctx, path, clusterID, id); err != nil {
 		return ids.DriveID{}, err
 	}
-	if clusterID == "" {
-		return ids.DriveID{}, errors.New("local: cluster id must not be empty")
+	return id, nil
+}
+
+// FormatWithID prepares the directory at path as a drive of clusterID with the
+// given drive id. The id must not be zero. A directory that already holds a
+// drive fails with ErrAlreadyFormatted and is not changed. The record is
+// written as Format writes it.
+func FormatWithID(ctx context.Context, path, clusterID string, id ids.DriveID) error {
+	if err := checkFormatArgs(ctx, clusterID, id); err != nil {
+		return err
 	}
 	lay, err := newLayout(path)
 	if err != nil {
-		return ids.DriveID{}, err
+		return err
 	}
+	unlock, err := lockFormat(ctx, lay.format)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	return formatLocked(lay, clusterID, id)
+}
+
+// checkFormatArgs validates the arguments of FormatWithID and EnsureFormatted.
+func checkFormatArgs(ctx context.Context, clusterID string, id ids.DriveID) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if clusterID == "" {
+		return errors.New("local: cluster id must not be empty")
+	}
+	if id.IsZero() {
+		return errors.New("local: drive id must not be zero")
+	}
+	return nil
+}
+
+// formatLocked writes the format record of lay. The caller holds the format
+// lock of lay.format, so the check for an existing record and the write are
+// not interleaved with another formatter in this process.
+func formatLocked(lay layout, clusterID string, id ids.DriveID) error {
 	if _, err := os.Stat(lay.format); err == nil {
-		return ids.DriveID{}, ErrAlreadyFormatted
+		return ErrAlreadyFormatted
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return ids.DriveID{}, fmt.Errorf("local: check format: %w", err)
+		return fmt.Errorf("local: check format: %w", err)
 	}
 	for _, dir := range append(lay.dirs(), filepath.Dir(lay.index)) {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
-			return ids.DriveID{}, fmt.Errorf("local: create %s: %w", dir, err)
+			return fmt.Errorf("local: create %s: %w", dir, err)
 		}
 	}
-	id := ids.NewDriveID()
 	data, err := proto.Marshal(&uniov1.DriveFormat{
 		FormatVersion:   formatVersion,
 		ClusterId:       clusterID,
@@ -62,40 +101,53 @@ func Format(ctx context.Context, path, clusterID string) (ids.DriveID, error) {
 		CreatedUnixNano: time.Now().UnixNano(),
 	})
 	if err != nil {
-		return ids.DriveID{}, fmt.Errorf("local: encode format: %w", err)
+		return fmt.Errorf("local: encode format: %w", err)
 	}
-	if err := writeFileAtomic(lay.format, data); err != nil {
-		return ids.DriveID{}, err
-	}
-	return id, nil
+	return writeFileAtomic(lay.format, data)
 }
 
-// readFormat loads the drive id from the format record. A non-empty
-// clusterID must match the record.
-func readFormat(lay layout, clusterID string) (ids.DriveID, error) {
+// formatRecord is the decoded format record of a drive.
+type formatRecord struct {
+	clusterID string
+	id        ids.DriveID
+}
+
+// loadFormat reads and decodes the format record of lay. It returns
+// ErrNotFormatted when there is no record.
+func loadFormat(lay layout) (formatRecord, error) {
 	data, err := os.ReadFile(lay.format) // #nosec G304 -- path is the drive root joined with a fixed name, never user input
 	if errors.Is(err, os.ErrNotExist) {
-		return ids.DriveID{}, ErrNotFormatted
+		return formatRecord{}, ErrNotFormatted
 	}
 	if err != nil {
-		return ids.DriveID{}, fmt.Errorf("local: read format: %w", err)
+		return formatRecord{}, fmt.Errorf("local: read format: %w", err)
 	}
 	var rec uniov1.DriveFormat
 	if err := proto.Unmarshal(data, &rec); err != nil {
-		return ids.DriveID{}, fmt.Errorf("local: decode format: %w", err)
+		return formatRecord{}, fmt.Errorf("local: decode format: %w", err)
 	}
 	if rec.FormatVersion != formatVersion {
-		return ids.DriveID{}, fmt.Errorf("local: unsupported format version %d", rec.FormatVersion)
+		return formatRecord{}, fmt.Errorf("local: unsupported format version %d", rec.FormatVersion)
 	}
 	if len(rec.DriveId) != len(ids.DriveID{}) {
-		return ids.DriveID{}, errors.New("local: format record has a malformed drive id")
-	}
-	if clusterID != "" && rec.ClusterId != clusterID {
-		return ids.DriveID{}, ErrClusterMismatch
+		return formatRecord{}, errors.New("local: format record has a malformed drive id")
 	}
 	var id ids.DriveID
 	copy(id[:], rec.DriveId)
-	return id, nil
+	return formatRecord{clusterID: rec.ClusterId, id: id}, nil
+}
+
+// verify checks the record against the cluster and drive id a caller expects.
+// An empty clusterID or a zero want is not checked. The cluster is checked
+// first, so a drive from another cluster is reported as such.
+func (r formatRecord) verify(clusterID string, want ids.DriveID) error {
+	if clusterID != "" && r.clusterID != clusterID {
+		return ErrClusterMismatch
+	}
+	if !want.IsZero() && r.id != want {
+		return fmt.Errorf("%w: format record names %s, expected %s", ErrDriveIDMismatch, r.id, want)
+	}
+	return nil
 }
 
 // writeFileAtomic replaces path with data. It writes a temporary file, syncs
