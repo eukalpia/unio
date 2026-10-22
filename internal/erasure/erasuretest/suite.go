@@ -71,6 +71,7 @@ var suiteCases = []suiteCase{
 	{"HealRestoresCorruptShard", testHealRestoresCorruptShard},
 	{"HealRewritesMissingShards", testHealRewritesMissingShards},
 	{"HealBeyondParityFails", testHealBeyondParityFails},
+	{"MisdirectedShard", testMisdirectedShard},
 }
 
 // fixture is one erasure set over fresh in-memory drives.
@@ -555,6 +556,57 @@ func testHealBeyondParityFails(t *testing.T, newSet SetFactory, k, m int) {
 	}
 	if _, err := f.set.Heal(context.Background(), id, layout, size); err == nil {
 		t.Fatalf("Heal with %d corrupt shards returned nil", m+1)
+	}
+}
+
+// testMisdirectedShard puts a valid shard where it does not belong: a shard of
+// another object at the same index, or another shard of the same object. Its
+// bytes verify at the position they were written to, so only the position
+// binding can reject them. A read must never return wrong bytes. With parity
+// the damaged shard is rebuilt; without parity the read must fail.
+func testMisdirectedShard(t *testing.T, newSet SetFactory, k, m int) {
+	size := 2*stripeSize + 11
+	cases := []struct {
+		name        string
+		otherObject bool // take shard 0 of another object, else shard 1 of this one
+	}{
+		{"shard of another object at the same index", true},
+		{"another shard of the same object", false},
+	}
+	for _, c := range cases {
+		if !c.otherObject && k+m < 2 {
+			continue
+		}
+		t.Run(c.name, func(t *testing.T) {
+			f := newFixture(t, newSet, k, m)
+			dataA := payload(size, 21)
+			idA, layoutA := f.mustWrite(t, dataA)
+			idB, _ := f.mustWrite(t, payload(size, 22))
+
+			from := ids.ShardID{Data: idA, Index: 1}
+			if c.otherObject {
+				from = ids.ShardID{Data: idB, Index: 0}
+			}
+			bytesFrom, ok := f.mem[from.Index].Shard(from)
+			if !ok {
+				t.Fatalf("source shard %s not found", from)
+			}
+			f.mem[0].Replace(ids.ShardID{Data: idA, Index: 0}, bytesFrom)
+
+			got, err := f.readRange(context.Background(), idA, layoutA, size, 0, size)
+			if err == nil && !bytes.Equal(got, dataA) {
+				t.Fatal("misdirected shard returned wrong bytes")
+			}
+			if m == 0 {
+				if err == nil {
+					t.Fatal("misdirected shard was served without parity to repair it")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("read with a misdirected shard: %v", err)
+			}
+		})
 	}
 }
 

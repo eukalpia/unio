@@ -27,13 +27,22 @@ func FuzzRoundTrip(f *testing.F) {
 		rng := rand.New(rand.NewPCG(seed, uint64(faults)))
 		shardLen := bitrot.ShardSize(size, k, layout.StripeSize)
 		for _, i := range rng.Perm(k + m)[:min(int(faults)%(m+1), m)] {
-			if shardLen > 0 && rng.IntN(2) == 0 {
+			switch {
+			case shardLen == 0 || rng.IntN(3) == 0:
+				mem[i].SetFaults(erasuretest.Faults{Offline: true})
+			case rng.IntN(2) == 0:
 				if err := mem[i].Corrupt(shardID(id, i), rng.IntN(int(shardLen))); err != nil {
 					t.Fatal(err)
 				}
-				continue
+			default:
+				// Misdirect: shard i holds a valid shard of another index.
+				j := (i + 1 + rng.IntN(k+m-1)) % (k + m)
+				src, ok := mem[j].Shard(shardID(id, j))
+				if !ok {
+					t.Fatalf("shard %d missing", j)
+				}
+				mem[i].Replace(shardID(id, i), src)
 			}
-			mem[i].SetFaults(erasuretest.Faults{Offline: true})
 		}
 
 		off, n := int64(0), size
