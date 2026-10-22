@@ -8,7 +8,7 @@
 // never appear in a file that may be committed or in the process table.
 //
 // Validation reports every problem at once. Warnings (for example plain HTTP
-// or insecure internode traffic) are returned separately from errors.
+// on the S3 endpoint) are returned separately from errors.
 package config
 
 import "time"
@@ -56,9 +56,6 @@ type ClusterConfig struct {
 	// example https://node{1...4}:9100/data{1...4}. Together they list every
 	// drive of every node, including this one.
 	Endpoints []string `yaml:"endpoints"`
-	// InsecureInternode allows plain HTTP endpoints and disables internode
-	// TLS. It is for benchmarks and development only and prints a warning.
-	InsecureInternode bool `yaml:"insecure_internode"`
 	// Secret is the cluster secret from which the internode CA is derived.
 	// It must come from the environment (UNIO_CLUSTER_SECRET).
 	Secret Secret `yaml:"secret"`

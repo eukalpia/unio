@@ -89,6 +89,9 @@ func readConfigFile(ctx context.Context, path string, cfg *Config) error {
 	if len(data) > maxConfigFileSize {
 		return fmt.Errorf("config file %s is larger than %d bytes", path, maxConfigFileSize)
 	}
+	if err := checkRemovedYAML(path, data); err != nil {
+		return err
+	}
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(cfg); err != nil {
@@ -117,6 +120,9 @@ func applyFlags(c *Config, flags map[string]string) error {
 		byName[s.flag] = s
 	}
 	for _, name := range names {
+		if err := checkRemovedFlag(name); err != nil {
+			return err
+		}
 		s, ok := byName[name]
 		if !ok {
 			return fmt.Errorf("unknown flag --%s", name)

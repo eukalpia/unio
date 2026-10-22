@@ -28,15 +28,21 @@ type FlagSpec struct {
 	Usage string
 	// Bool reports whether the flag takes no value (--flag or --flag=false).
 	Bool bool
+	// Hidden marks a removed flag. It is registered only so that using it
+	// reports the removal, and it is left out of the help text.
+	Hidden bool
 }
 
-// FlagSpecs returns the flags that set configuration keys, in a stable order.
-// Secrets have no flags on purpose: a flag value is visible in the process
-// table.
+// FlagSpecs returns the flags that set configuration keys, in a stable order,
+// followed by the hidden flags of removed settings. Secrets have no flags on
+// purpose: a flag value is visible in the process table.
 func FlagSpecs() []FlagSpec {
 	var specs []FlagSpec
 	for _, s := range settings() {
 		specs = append(specs, FlagSpec{Name: s.flag, Env: s.env, Usage: s.usage, Bool: s.isBool})
+	}
+	for _, r := range removedSettings() {
+		specs = append(specs, FlagSpec{Name: r.flag, Env: r.env, Usage: "removed setting", Bool: r.isBool, Hidden: true})
 	}
 	return specs
 }
@@ -53,8 +59,6 @@ func settings() []setting {
 			func(c *Config) *string { return &c.Node.InternodeAddress }),
 		listSetting("endpoints", "UNIO_ENDPOINTS", "comma-separated drive endpoint patterns, e.g. https://node{1...4}:9100/data{1...4}",
 			func(c *Config) *[]string { return &c.Cluster.Endpoints }),
-		boolSetting("insecure-internode", "UNIO_INSECURE_INTERNODE", "allow plain HTTP internode traffic (development only)",
-			func(c *Config) *bool { return &c.Cluster.InsecureInternode }),
 		strSetting("tls-cert-file", "UNIO_TLS_CERT_FILE", "PEM certificate chain for the S3 endpoint",
 			func(c *Config) *string { return &c.TLS.CertFile }),
 		strSetting("tls-key-file", "UNIO_TLS_KEY_FILE", "PEM private key for the S3 endpoint",

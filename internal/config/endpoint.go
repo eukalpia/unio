@@ -15,7 +15,8 @@ import (
 // the absolute path of the drive on that node. The textual form is
 // scheme://host:port/path, for example https://node1:9100/data1.
 type Endpoint struct {
-	// Scheme is "https" or "http". Validation decides which is allowed.
+	// Scheme is "https" in a valid configuration. ParseEndpoint also accepts
+	// "http", so that validation can refuse it with an explanation.
 	Scheme string
 	// Host is the node's host name or IP address, without brackets.
 	Host string
@@ -44,7 +45,7 @@ func ParseEndpoint(raw string) (Endpoint, error) {
 	}
 	scheme := strings.ToLower(u.Scheme)
 	if scheme != "https" && scheme != "http" {
-		return Endpoint{}, fmt.Errorf("endpoint %q: scheme must be https (or http for development)", raw)
+		return Endpoint{}, fmt.Errorf("endpoint %q: scheme must be https", raw)
 	}
 	if u.User != nil {
 		return Endpoint{}, fmt.Errorf("endpoint %q must not contain credentials", raw)

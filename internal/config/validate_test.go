@@ -28,11 +28,10 @@ func TestValidate(t *testing.T) {
 		{name: "bad endpoint pattern", mutate: func(c *Config) { c.Cluster.Endpoints = []string{"https://node{1...x}:9100/d"} }, wantErr: "cluster.endpoints"},
 		{name: "plain http without insecure flag", mutate: func(c *Config) {
 			c.Cluster.Endpoints = []string{"http://node{1...4}:9100/data{1...4}"}
-		}, wantErr: "must use https"},
-		{name: "plain http with insecure flag", mutate: func(c *Config) {
-			c.Cluster.Endpoints = []string{"http://node{1...4}:9100/data{1...4}"}
-			c.Cluster.InsecureInternode = true
-		}, wantWarnings: "INSECURE INTERNODE"},
+		}, wantErr: "internode traffic is always mutual TLS"},
+		{name: "one plain http endpoint among https ones", mutate: func(c *Config) {
+			c.Cluster.Endpoints = []string{"https://node{1...4}:9100/data{1...4}", "http://node5:9100/data1"}
+		}, wantErr: "endpoint http://node5:9100/data1 uses plain http"},
 		{name: "cluster secret missing", mutate: func(c *Config) { c.Cluster.Secret = Secret{} }, wantErr: "cluster.secret is not set"},
 		{name: "cluster secret too short", mutate: func(c *Config) { c.Cluster.Secret = NewSecret("short") }, wantErr: "cluster.secret must be at least 32"},
 		{name: "erasure set does not divide drives", mutate: func(c *Config) { c.Erasure.SetDriveCount = 5 }, wantErr: "must be between 4 and 16 and divide"},

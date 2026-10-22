@@ -100,10 +100,7 @@ func checkCluster(c *Config, r *report) []Endpoint {
 	if len(drives) == 0 {
 		return nil
 	}
-	checkSchemes(c, drives, r)
-	if c.Cluster.InsecureInternode {
-		r.warnf("INSECURE INTERNODE TRAFFIC: cluster.insecure_internode is enabled. Traffic between nodes is neither encrypted nor authenticated. Use this for benchmarks and development only.")
-	}
+	checkSchemes(drives, r)
 	local := localDrives(c.Node.ID, drives)
 	if c.Node.ID != "" && len(local) == 0 {
 		r.errorf("no endpoint belongs to node %q: the host of at least one endpoint must equal node.id (endpoint hosts: %s)", c.Node.ID, strings.Join(hosts(drives), ", "))
@@ -126,14 +123,12 @@ func checkClusterSecret(c *Config, r *report) {
 	}
 }
 
-// checkSchemes requires https endpoints unless insecure internode traffic is explicitly allowed.
-func checkSchemes(c *Config, drives []Endpoint, r *report) {
-	if c.Cluster.InsecureInternode {
-		return
-	}
+// checkSchemes refuses plain HTTP endpoints. Internode traffic is always mutual
+// TLS, so there is no setting that allows http, and the error says so.
+func checkSchemes(drives []Endpoint, r *report) {
 	for _, d := range drives {
 		if d.Scheme != "https" {
-			r.errorf("endpoint %s uses plain http; internode endpoints must use https (cluster.insecure_internode is for development only)", d)
+			r.errorf("endpoint %s uses plain http: internode traffic is always mutual TLS, so every endpoint must use https", d)
 			return
 		}
 	}

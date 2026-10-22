@@ -61,6 +61,10 @@ func addConfigFlags(cmd *cobra.Command) {
 		if spec.Bool {
 			cmd.Flags().Lookup(spec.Name).NoOptDefVal = "true"
 		}
+		if spec.Hidden {
+			// Accepted only so that config reports the removal by name.
+			_ = cmd.Flags().MarkHidden(spec.Name)
+		}
 	}
 }
 

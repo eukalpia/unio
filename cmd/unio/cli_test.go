@@ -123,13 +123,25 @@ func TestServerCommand(t *testing.T) {
 			wantStderr: "plain HTTP",
 		},
 		{
-			name: "insecure internode prints a banner",
+			name: "plain http endpoint is refused",
 			env: withEnv(validEnv(), map[string]*string{
-				"UNIO_ENDPOINTS":          str("http://node{1...4}:9100/data{1...4}"),
-				"UNIO_INSECURE_INTERNODE": str("true"),
+				"UNIO_ENDPOINTS": str("http://node{1...4}:9100/data{1...4}"),
 			}),
 			wantCode:   1,
-			wantStderr: "INSECURE INTERNODE TRAFFIC",
+			wantStderr: "internode traffic is always mutual TLS",
+		},
+		{
+			name:       "removed insecure internode variable is refused by name",
+			env:        withEnv(validEnv(), map[string]*string{"UNIO_INSECURE_INTERNODE": str("true")}),
+			wantCode:   1,
+			wantStderr: "environment variable UNIO_INSECURE_INTERNODE was removed",
+		},
+		{
+			name:       "removed insecure internode flag is refused by name",
+			env:        validEnv(),
+			args:       []string{"--insecure-internode"},
+			wantCode:   1,
+			wantStderr: "flag --insecure-internode was removed",
 		},
 	}
 	for _, tt := range tests {
