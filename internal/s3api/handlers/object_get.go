@@ -48,15 +48,24 @@ func (e *Env) GetObject(c *Call, head bool) error {
 		if err != nil {
 			return err
 		}
+		length, err := intLength(info.Size)
+		if err != nil {
+			return err
+		}
 		setObjectHeaders(c, info, checksumMode)
 		applyOverrides(c)
 		c.RC.SetStatusCode(200)
-		c.RC.Response.Header.SetContentLength(int(info.Size))
+		c.RC.Response.Header.SetContentLength(length)
 		return nil
 	}
 
 	reader, err := e.Layer.GetObject(c.Ctx, c.Route.Bucket, c.Route.Key, opts)
 	if err != nil {
+		return err
+	}
+	length, err := intLength(reader.Length)
+	if err != nil {
+		_ = reader.Close()
 		return err
 	}
 	if reader.Length == 0 {
@@ -77,7 +86,7 @@ func (e *Env) GetObject(c *Call, head bool) error {
 	setObjectHeaders(c, reader.Info, checksumMode)
 	applyOverrides(c)
 	c.RC.SetStatusCode(rangeStatus(c, rng, reader))
-	c.RC.Response.Header.SetContentLength(int(reader.Length))
+	c.RC.Response.Header.SetContentLength(length)
 	e.streamObject(c, reader, buf)
 	return nil
 }

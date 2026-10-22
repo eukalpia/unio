@@ -5,7 +5,6 @@
 package handlers
 
 import (
-	"strconv"
 	"context"
 	"log/slog"
 	"net/http"
@@ -139,8 +138,8 @@ func queryInt(q url.Values, name string, def, lo, hi int) (int, error) {
 	if !ok || len(raw) == 0 || raw[0] == "" {
 		return def, nil
 	}
-	n, err := strconv.Atoi(raw[0])
-	if err != nil || n < lo || n > hi {
+	n, err := boundedInt(raw[0], lo, hi)
+	if err != nil {
 		return 0, s3err.Errorf(s3err.InvalidArgument, "%s must be an integer between %d and %d", name, lo, hi)
 	}
 	return n, nil
