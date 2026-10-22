@@ -112,7 +112,7 @@ func TestFailedBlobPlacementLeavesNoFile(t *testing.T) {
 	if _, err := d.StatShard(context.Background(), idOf(7)); !errors.Is(err, drive.ErrShardNotFound) {
 		t.Fatalf("failed blob is visible: %v", err)
 	}
-	if _, err := os.Stat(d.blobs.Path(idOf(7))); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(blobFile(t, d.blobs, idOf(7))); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("blob file left behind: %v", err)
 	}
 }
@@ -151,7 +151,7 @@ func TestOnDiskCorruptionIsDetected(t *testing.T) {
 	}
 	closeDrive(t, d)
 
-	seg := d.lay.segmentPath(loc.Segment)
+	seg := segmentFile(t, d.lay, loc.Segment)
 	raw, err := os.OpenFile(seg, os.O_RDWR, 0)
 	if err != nil {
 		t.Fatalf("open segment: %v", err)

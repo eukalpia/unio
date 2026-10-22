@@ -30,7 +30,7 @@ func FuzzRebuildFromSegment(f *testing.F) {
 			content = content[:testSegment]
 		}
 		dir := newTestDir(t)
-		segPath := newLayout(dir).segmentPath(1)
+		segPath := segmentFile(t, layoutOf(t, dir), 1)
 		if err := os.WriteFile(segPath, content, 0o600); err != nil {
 			t.Fatalf("write segment: %v", err)
 		}
@@ -81,7 +81,7 @@ func testSegmentSeed(f *testing.F) []byte {
 	if err := d.Close(); err != nil {
 		f.Fatalf("close: %v", err)
 	}
-	data, err := os.ReadFile(newLayout(dir).segmentPath(1))
+	data, err := os.ReadFile(segmentFile(f, layoutOf(f, dir), 1))
 	if err != nil {
 		f.Fatalf("read segment: %v", err)
 	}

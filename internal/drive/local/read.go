@@ -111,7 +111,11 @@ func (d *Drive) openPacked(id ids.ShardID, loc index.Location, offset, end int64
 // openBlob opens bytes [offset, end) of a blob file. Blobs carry no checksum of
 // their own; the erasure layer verifies their content.
 func (d *Drive) openBlob(id ids.ShardID, loc index.Location, offset, end int64) (io.ReadCloser, error) {
-	f, err := os.Open(d.blobs.Path(id))
+	path, err := d.blobs.Path(id)
+	if err != nil {
+		return nil, err
+	}
+	f, err := os.Open(path) // #nosec G304 -- path is the drive root joined with a hex id, never user input
 	if errors.Is(err, os.ErrNotExist) {
 		// A concurrent delete unlinks the file after the index changes.
 		if _, lerr := d.lookup(id); errors.Is(lerr, drive.ErrShardNotFound) {

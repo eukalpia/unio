@@ -102,12 +102,16 @@ func (d *Drive) writeBlob(ctx context.Context, id ids.ShardID, r io.Reader, size
 	if err != nil {
 		return err
 	}
+	final, err := d.blobs.Path(id)
+	if err != nil {
+		return err
+	}
 	if err := d.blobs.Write(ctx, tmp, r, size); err != nil {
 		return d.checkSync(fmt.Errorf("local: shard %s: %w", id, err))
 	}
 	req := newRequest(reqBlob, id)
 	req.tmp = tmp
-	req.final = d.blobs.Path(id)
+	req.final = final
 	req.size = size
 	req.created = time.Now().UnixNano()
 	err = d.enqueue(ctx, req)

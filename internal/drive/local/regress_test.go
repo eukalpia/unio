@@ -95,7 +95,7 @@ func TestSameGroupDeleteAndRecreateKeepsNewBlob(t *testing.T) {
 	del := newRequest(reqDelete, id)
 	put := newRequest(reqBlob, id)
 	put.tmp = tmp
-	put.final = d.blobs.Path(id)
+	put.final = blobFile(t, d.blobs, id)
 	put.size = int64(len(newer))
 	put.created = time.Now().UnixNano()
 

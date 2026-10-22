@@ -118,7 +118,7 @@ func TestRecordHeaderWithForgedLengthIsCorrupt(t *testing.T) {
 	closeDrive(t, d)
 
 	forged := segment.Header{ShardID: id, Length: 1 << 29, DataCRC: segment.Checksum(data)}.AppendHeader(nil)
-	raw, err := os.OpenFile(newLayout(dir).segmentPath(loc.Segment), os.O_RDWR, 0)
+	raw, err := os.OpenFile(segmentFile(t, layoutOf(t, dir), loc.Segment), os.O_RDWR, 0)
 	if err != nil {
 		t.Fatalf("open segment: %v", err)
 	}

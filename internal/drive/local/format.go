@@ -40,7 +40,10 @@ func Format(ctx context.Context, path, clusterID string) (ids.DriveID, error) {
 	if clusterID == "" {
 		return ids.DriveID{}, errors.New("local: cluster id must not be empty")
 	}
-	lay := newLayout(path)
+	lay, err := newLayout(path)
+	if err != nil {
+		return ids.DriveID{}, err
+	}
 	if _, err := os.Stat(lay.format); err == nil {
 		return ids.DriveID{}, ErrAlreadyFormatted
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -70,7 +73,7 @@ func Format(ctx context.Context, path, clusterID string) (ids.DriveID, error) {
 // readFormat loads the drive id from the format record. A non-empty
 // clusterID must match the record.
 func readFormat(lay layout, clusterID string) (ids.DriveID, error) {
-	data, err := os.ReadFile(lay.format)
+	data, err := os.ReadFile(lay.format) // #nosec G304 -- path is the drive root joined with a fixed name, never user input
 	if errors.Is(err, os.ErrNotExist) {
 		return ids.DriveID{}, ErrNotFormatted
 	}
@@ -99,7 +102,7 @@ func readFormat(lay layout, clusterID string) (ids.DriveID, error) {
 // it, renames it over path and syncs the directory.
 func writeFileAtomic(path string, data []byte) error {
 	tmp := path + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) // #nosec G304 -- path is the drive root joined with a fixed name, never user input
 	if err != nil {
 		return fmt.Errorf("local: create %s: %w", tmp, err)
 	}

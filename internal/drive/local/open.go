@@ -27,7 +27,10 @@ func Open(ctx context.Context, path string, opts Options) (*Drive, error) {
 	if err != nil {
 		return nil, err
 	}
-	lay := newLayout(path)
+	lay, err := newLayout(path)
+	if err != nil {
+		return nil, err
+	}
 	id, err := readFormat(lay, opts.ClusterID)
 	if err != nil {
 		return nil, err
@@ -158,7 +161,11 @@ func (d *Drive) indexConsistent(idx *index.Index) (bool, error) {
 		if !m.Sealed {
 			unsealed++
 		}
-		st, err := os.Stat(d.lay.segmentPath(id))
+		path, err := d.lay.segmentPath(id)
+		if err != nil {
+			return false, err
+		}
+		st, err := os.Stat(path)
 		if err != nil {
 			return false, err
 		}
@@ -210,14 +217,18 @@ func (d *Drive) recoverSegments() error {
 	active := uint64(0)
 	for _, id := range files {
 		m := metas[id]
-		st, err := os.Stat(d.lay.segmentPath(id))
+		path, err := d.lay.segmentPath(id)
+		if err != nil {
+			return err
+		}
+		st, err := os.Stat(path)
 		if err != nil {
 			return fmt.Errorf("local: stat segment %d: %w", id, err)
 		}
 		// Only the active segment can hold uncommitted bytes. A sealed segment
 		// is never trimmed, so that no record after a damaged one is destroyed.
 		if !m.Sealed && st.Size() > m.End {
-			if err := os.Truncate(d.lay.segmentPath(id), m.End); err != nil {
+			if err := os.Truncate(path, m.End); err != nil {
 				return fmt.Errorf("local: trim segment %d: %w", id, err)
 			}
 		}
@@ -243,7 +254,11 @@ func (d *Drive) recoverSegments() error {
 		return err
 	}
 	for id, meta := range metas {
-		f, err := segment.Open(d.lay.segmentPath(id), d.opts.segmentSize, meta.End)
+		path, err := d.lay.segmentPath(id)
+		if err != nil {
+			return err
+		}
+		f, err := segment.Open(path, d.opts.segmentSize, meta.End)
 		if err != nil {
 			return fmt.Errorf("local: open segment %d: %w", id, err)
 		}

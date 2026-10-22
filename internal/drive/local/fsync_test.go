@@ -154,7 +154,7 @@ func TestFailedBlobFsyncPoisonsDrive(t *testing.T) {
 	if _, err := d.StatShard(context.Background(), idOf(1)); !errors.Is(err, drive.ErrShardNotFound) {
 		t.Fatalf("blob of the failed write is visible: %v", err)
 	}
-	if _, err := os.Stat(d.blobs.Path(idOf(1))); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(blobFile(t, d.blobs, idOf(1))); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("blob file of the failed write was placed: %v", err)
 	}
 	requireFaulty(t, writeShard(d, idOf(2), payload(100, 2)), "packed write after the fault")

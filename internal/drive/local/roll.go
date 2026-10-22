@@ -61,7 +61,10 @@ func (d *Drive) abandon(f *segment.File, err error) error {
 // createSegment creates the file of segment id and makes its directory entry
 // durable. The index is not updated.
 func (d *Drive) createSegment(id uint64) (*segment.File, error) {
-	path := d.lay.segmentPath(id)
+	path, err := d.lay.segmentPath(id)
+	if err != nil {
+		return nil, err
+	}
 	f, err := segment.Create(path, d.opts.segmentSize)
 	if err != nil {
 		return nil, fmt.Errorf("local: create segment %d: %w", id, err)

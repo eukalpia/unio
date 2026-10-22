@@ -20,7 +20,7 @@ import (
 // after the direct one is closed. Filesystems that reject O_DIRECT fall back
 // to buffered writes.
 func writeFile(ctx context.Context, pool *bufpool.Pool, path string, r io.Reader, size int64, hooks *faults.Hooks) error {
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|unix.O_DIRECT, 0o600)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|unix.O_DIRECT, 0o600) // #nosec G304 -- path is the drive root joined with a hex id, never user input
 	if err != nil {
 		if errors.Is(err, unix.EINVAL) {
 			return writeBuffered(ctx, pool, path, r, size, hooks)
@@ -74,7 +74,7 @@ func writeDirect(ctx context.Context, pool *bufpool.Pool, f *os.File, r io.Reade
 // finishBuffered writes the unaligned tail, if any, through a buffered
 // descriptor and makes the whole file durable.
 func finishBuffered(path string, off int64, tail []byte, hooks *faults.Hooks) error {
-	f, err := os.OpenFile(path, os.O_WRONLY, 0)
+	f, err := os.OpenFile(path, os.O_WRONLY, 0) // #nosec G304 -- path is the drive root joined with a hex id, never user input
 	if err != nil {
 		return fmt.Errorf("blob: reopen %s: %w", path, err)
 	}

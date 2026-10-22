@@ -28,7 +28,7 @@ func TestRebuildKeepsRecordsAroundMidSegmentDamage(t *testing.T) {
 
 	// Destroy the header of record 31 (index 30) in sealed segment 1.
 	const recordSize = segment.HeaderSize + 1000
-	raw, err := os.OpenFile(newLayout(dir).segmentPath(1), os.O_RDWR, 0)
+	raw, err := os.OpenFile(segmentFile(t, layoutOf(t, dir), 1), os.O_RDWR, 0)
 	if err != nil {
 		t.Fatalf("open segment: %v", err)
 	}

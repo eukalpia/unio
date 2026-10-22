@@ -53,7 +53,7 @@ func writeAndPlace(t *testing.T, s *Store, id ids.ShardID, data []byte) string {
 	if err := s.Write(context.Background(), tmp, bytes.NewReader(data), int64(len(data))); err != nil {
 		t.Fatalf("write %d bytes: %v", len(data), err)
 	}
-	final := s.Path(id)
+	final := pathOf(t, s, id)
 	if err := s.Place(tmp, final); err != nil {
 		t.Fatalf("place: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestPathLayoutAndNames(t *testing.T) {
 		t.Fatalf("name %q has %d chars", name, len(name))
 	}
 	want := filepath.Join(s.blobs, name[:2], name)
-	if got := s.Path(id); got != want {
+	if got := pathOf(t, s, id); got != want {
 		t.Fatalf("path = %s, want %s", got, want)
 	}
 	back, err := ParseShardName(name)
@@ -163,13 +163,13 @@ func TestPlaceRemoveAndWalk(t *testing.T) {
 		t.Fatalf("walk saw %v", seen)
 	}
 
-	if err := s.Remove(s.Path(shards[1])); err != nil {
+	if err := s.Remove(pathOf(t, s, shards[1])); err != nil {
 		t.Fatalf("remove: %v", err)
 	}
-	if _, err := os.Stat(s.Path(shards[1])); !os.IsNotExist(err) {
+	if _, err := os.Stat(pathOf(t, s, shards[1])); !os.IsNotExist(err) {
 		t.Fatalf("blob still present: %v", err)
 	}
-	if err := s.Remove(s.Path(shards[1])); !errors.Is(err, os.ErrNotExist) {
+	if err := s.Remove(pathOf(t, s, shards[1])); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("second remove: %v, want not-exist", err)
 	}
 }
@@ -189,4 +189,14 @@ func TestCleanTemp(t *testing.T) {
 	if _, err := os.Stat(tmp); !os.IsNotExist(err) {
 		t.Fatalf("temp file survived: %v", err)
 	}
+}
+
+// pathOf returns the final path of the blob for id, failing the test on error.
+func pathOf(t testing.TB, s *Store, id ids.ShardID) string {
+	t.Helper()
+	p, err := s.Path(id)
+	if err != nil {
+		t.Fatalf("path of %s: %v", id, err)
+	}
+	return p
 }

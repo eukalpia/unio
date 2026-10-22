@@ -74,7 +74,10 @@ func (rb *rebuilder) op() error {
 // segment replays one segment file and records its metadata. Only the last
 // segment is active, so only it may be trimmed.
 func (rb *rebuilder) segment(id uint64, last bool) error {
-	path := rb.d.lay.segmentPath(id)
+	path, err := rb.d.lay.segmentPath(id)
+	if err != nil {
+		return err
+	}
 	info, err := os.Stat(path)
 	if err != nil {
 		return err

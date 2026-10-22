@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/eukalpia/unio/internal/drive/local/internal/safepath"
 )
 
 // layout holds the paths below a drive root. Every name is either a fixed
@@ -23,18 +25,32 @@ type layout struct {
 	tmp        string
 }
 
-// newLayout returns the layout of the drive rooted at root.
-func newLayout(root string) layout {
-	meta := filepath.Join(root, ".unio")
-	return layout{
-		root:       root,
-		format:     filepath.Join(meta, "format.pb"),
-		segments:   filepath.Join(meta, "segments"),
-		blobs:      filepath.Join(meta, "blobs"),
-		index:      filepath.Join(meta, "index"),
-		indexBuild: filepath.Join(meta, "index.rebuild"),
-		tmp:        filepath.Join(meta, "tmp"),
+// newLayout returns the layout of the drive rooted at root. Every path in it is
+// built by safepath.Join, from the root and fixed names.
+func newLayout(root string) (layout, error) {
+	meta, err := safepath.Join(root, ".unio")
+	if err != nil {
+		return layout{}, err
 	}
+	lay := layout{root: filepath.Clean(root)}
+	for _, f := range []struct {
+		dst  *string
+		name string
+	}{
+		{&lay.format, "format.pb"},
+		{&lay.segments, "segments"},
+		{&lay.blobs, "blobs"},
+		{&lay.index, "index"},
+		{&lay.indexBuild, "index.rebuild"},
+		{&lay.tmp, "tmp"},
+	} {
+		p, err := safepath.Join(meta, f.name)
+		if err != nil {
+			return layout{}, err
+		}
+		*f.dst = p
+	}
+	return lay, nil
 }
 
 // dirs returns the directories that must exist for an opened drive.
@@ -42,9 +58,10 @@ func (l layout) dirs() []string {
 	return []string{l.segments, l.blobs, l.tmp}
 }
 
-// segmentPath returns the file of segment id.
-func (l layout) segmentPath(id uint64) string {
-	return filepath.Join(l.segments, segmentName(id))
+// segmentPath returns the file of segment id. The name is 16 hex digits, so the
+// path is built only from the drive root and a generated name.
+func (l layout) segmentPath(id uint64) (string, error) {
+	return safepath.Join(l.segments, segmentName(id))
 }
 
 // segmentName returns the file name of segment id: 16 lower-case hex digits.

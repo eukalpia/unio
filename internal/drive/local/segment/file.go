@@ -27,7 +27,7 @@ func Create(path string, capacity int64) (*File, error) {
 	if capacity <= HeaderSize {
 		return nil, fmt.Errorf("segment: capacity %d too small", capacity)
 	}
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600) // #nosec G304 -- path is the drive root joined with a hex id, never user input
 	if err != nil {
 		return nil, fmt.Errorf("segment: create %s: %w", path, err)
 	}
@@ -42,7 +42,7 @@ func Create(path string, capacity int64) (*File, error) {
 // file may be longer than end (preallocated, or holding uncommitted bytes),
 // so the committed end cannot be inferred from the file size.
 func Open(path string, capacity, end int64) (*File, error) {
-	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	f, err := os.OpenFile(path, os.O_RDWR, 0) // #nosec G304 -- path is the drive root joined with a hex id, never user input
 	if err != nil {
 		return nil, fmt.Errorf("segment: open %s: %w", path, err)
 	}

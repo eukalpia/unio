@@ -254,7 +254,7 @@ func TestTornTailIsInvisibleAndTrimmed(t *testing.T) {
 				want[idOf(i)] = data
 			}
 			end := d.committedEnd
-			seg := d.lay.segmentPath(d.activeID)
+			seg := segmentFile(t, d.lay, d.activeID)
 			closeDrive(t, d)
 
 			// A record that was being appended when the process died: its header

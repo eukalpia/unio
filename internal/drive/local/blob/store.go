@@ -17,6 +17,7 @@ import (
 
 	"github.com/eukalpia/unio/internal/bufpool"
 	"github.com/eukalpia/unio/internal/drive/local/internal/faults"
+	"github.com/eukalpia/unio/internal/drive/local/internal/safepath"
 	"github.com/eukalpia/unio/internal/drive/local/internal/syncerr"
 	"github.com/eukalpia/unio/internal/ids"
 )
@@ -75,10 +76,12 @@ func ParseShardName(name string) (ids.ShardID, error) {
 	return ids.ParseShardIDBinary(raw)
 }
 
-// Path returns the final path of the blob for id.
-func (s *Store) Path(id ids.ShardID) string {
+// Path returns the final path of the blob for id: the blob directory, a
+// two-character directory and the hex name. The path is built from generated
+// names only, through safepath.Join.
+func (s *Store) Path(id ids.ShardID) (string, error) {
 	name := ShardName(id)
-	return filepath.Join(s.blobs, name[:2], name)
+	return safepath.Join(s.blobs, name[:2], name)
 }
 
 // NewTemp returns a fresh, unused path in the staging directory.
@@ -87,7 +90,7 @@ func (s *Store) NewTemp() (string, error) {
 	if _, err := rand.Read(b[:]); err != nil {
 		return "", fmt.Errorf("blob: random name: %w", err)
 	}
-	return filepath.Join(s.tmp, hex.EncodeToString(b[:])+".tmp"), nil
+	return safepath.Join(s.tmp, hex.EncodeToString(b[:])+".tmp")
 }
 
 // Write creates tmpPath and writes exactly size bytes from r into it, then

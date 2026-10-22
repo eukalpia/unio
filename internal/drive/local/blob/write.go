@@ -46,7 +46,7 @@ func copyExact(ctx context.Context, buf []byte, r io.Reader, size int64, sink fu
 // writeBuffered writes through the page cache. It is the fallback where
 // O_DIRECT is unavailable, and the only path on platforms without it.
 func writeBuffered(ctx context.Context, pool *bufpool.Pool, path string, r io.Reader, size int64, hooks *faults.Hooks) error {
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) // #nosec G304 -- path is the drive root joined with a hex id, never user input
 	if err != nil {
 		return fmt.Errorf("blob: create %s: %w", path, err)
 	}

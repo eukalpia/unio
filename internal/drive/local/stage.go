@@ -81,7 +81,11 @@ func (d *Drive) stageDelete(g *group, r *request) error {
 	r.from = loc
 	origin := loc.Segment
 	if loc.Kind == index.KindBlob {
-		r.final = d.blobs.Path(r.id)
+		final, err := d.blobs.Path(r.id)
+		if err != nil {
+			return err
+		}
+		r.final = final
 		origin = 0
 	}
 	rec := segment.AppendRecord(nil, segment.FlagTombstone, r.id, segment.TombstoneOrigin(origin))
