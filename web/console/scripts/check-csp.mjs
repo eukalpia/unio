@@ -145,16 +145,30 @@ try {
     // The shell performs the redirection, which lets the browser exit cleanly.
     const command = `${[browser, ...args].map(quote).join(" ")} > ${quote(stdoutPath)} 2> ${quote(stderrPath)}`;
     // Asynchronous, so the server above keeps answering while the browser loads the page.
-    const run = await new Promise((resolveRun) => {
-      const child = spawn("/bin/sh", ["-c", command], { stdio: ["inherit", "ignore", "ignore"] });
-      const timer = setTimeout(() => child.kill("SIGKILL"), 120_000);
-      child.on("exit", (status, signal) => {
-        clearTimeout(timer);
-        resolveRun({ status, signal });
+    const runOnce = () =>
+      new Promise((resolveRun) => {
+        const child = spawn("/bin/sh", ["-c", command], { stdio: ["inherit", "ignore", "ignore"] });
+        const timer = setTimeout(() => child.kill("SIGKILL"), 120_000);
+        child.on("exit", (status, signal) => {
+          clearTimeout(timer);
+          resolveRun({ status, signal });
+        });
       });
-    });
-    const dom = readFileSync(stdoutPath, "utf8");
-    const logText = readFileSync(stderrPath, "utf8");
+    // WSL forwards a freshly bound localhost port to Windows a moment later. A refused
+    // connection is a transport race, not a result, so the run is retried up to three times.
+    let run;
+    let dom = "";
+    let logText = "";
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      await new Promise((ready) => setTimeout(ready, 1000));
+      run = await runOnce();
+      dom = readFileSync(stdoutPath, "utf8");
+      logText = readFileSync(stderrPath, "utf8");
+      if (!/ERR_CONNECTION_REFUSED/.test(logText)) {
+        break;
+      }
+      console.error(`attempt ${attempt}: the browser could not reach the check server; retrying`);
+    }
     rmSync(stdoutPath, { force: true });
     rmSync(stderrPath, { force: true });
     const violations = logText
