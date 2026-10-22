@@ -53,10 +53,17 @@ func getRaw(t testing.TB, base, path string) *http.Response {
 // far longer than the write idle timeout. Each pause is shorter than the idle
 // timeout, so the server must keep the connection, and the bytes must arrive
 // intact.
+//
+// The idle timeout bounds the wait for one write to be accepted by the
+// kernel, and Linux wakes a writer blocked on a full socket only once about a
+// third of the send buffer is free, which on loopback is megabytes. A steady
+// client must therefore drain that much within one idle period. The timeout
+// here leaves room for that even under the race detector; the production
+// default of 60 s asks a client for a few tens of kilobytes per second.
 func TestSlowDownloadIsNotCut(t *testing.T) {
-	const size = 4 << 20
+	const size = 12 << 20
 	data := patterned(size)
-	cfg := s3api.Config{WriteIdleTimeout: 300 * time.Millisecond}
+	cfg := s3api.Config{WriteIdleTimeout: 2 * time.Second}
 	base := seedObject(t, cfg, "slow", "obj", data)
 
 	resp := getRaw(t, base, "/slow/obj")
