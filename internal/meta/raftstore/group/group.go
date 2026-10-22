@@ -247,6 +247,7 @@ func (g *Group) barrier(ctx context.Context) error {
 // Close stops the replica. It does not close the state machine, which the
 // owner closes after the group has stopped.
 func (g *Group) Close() error {
+	g.verify.close()
 	if err := g.raft.Shutdown().Error(); err != nil {
 		return fmt.Errorf("group %d: shutdown: %w", g.id, err)
 	}
