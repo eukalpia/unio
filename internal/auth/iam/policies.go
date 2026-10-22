@@ -9,6 +9,7 @@ import (
 	"github.com/eukalpia/unio/internal/auth"
 	"github.com/eukalpia/unio/internal/auth/policy"
 	"github.com/eukalpia/unio/internal/meta"
+	"github.com/eukalpia/unio/internal/s3err"
 )
 
 // maxPolicyNameLen bounds the length of a managed policy name.
@@ -198,6 +199,10 @@ func (s *Store) ListPolicies(ctx context.Context) ([]auth.Policy, error) {
 // the write came before the mark and the count below sees it. Evaluation
 // ignores attachments of missing or deleting policies in any case, so even an
 // attachment that a failed rollback left behind grants nothing.
+//
+// If a storage failure interrupts the deletion after the mark, the policy stays
+// marked. It then grants nothing, and a repeat call finishes the job, as with
+// DeleteUser.
 func (s *Store) DeletePolicy(ctx context.Context, name string) error {
 	id, err := s.markPolicyDeleting(ctx, name)
 	if err != nil {
@@ -232,7 +237,7 @@ func (s *Store) undoPolicyDelete(ctx context.Context, name, id string, cause err
 	err := s.unmarkPolicy(ctx, name, id)
 	s.clearCaches()
 	if err != nil {
-		return fmt.Errorf("iam: restore policy after refused delete: %w", err)
+		return fmt.Errorf("iam: restore policy after refused delete (%s): %w", s3err.CodeOf(cause), err)
 	}
 	return cause
 }
