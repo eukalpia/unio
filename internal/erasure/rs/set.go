@@ -54,10 +54,22 @@ func New(id ids.SetID, drives []drive.Drive, dataShards, parityShards int, opts 
 	case len(drives) != dataShards+parityShards:
 		return nil, fmt.Errorf("erasure/rs: %d drives for %d+%d shards", len(drives), dataShards, parityShards)
 	}
+	// Each shard index must live on its own drive: a drive that holds two
+	// shards of an object fails both at once, which the parity does not cover.
+	// The zero id marks an unwritten shard in a layout, so it cannot name a drive.
+	seen := make(map[ids.DriveID]int, len(drives))
 	for i, d := range drives {
 		if d == nil {
 			return nil, fmt.Errorf("erasure/rs: drive %d is nil", i)
 		}
+		id := d.ID()
+		if id.IsZero() {
+			return nil, fmt.Errorf("erasure/rs: drive %d has the zero id, which marks an unwritten shard", i)
+		}
+		if j, dup := seen[id]; dup {
+			return nil, fmt.Errorf("erasure/rs: drives %d and %d are the same drive (%s); one drive must not hold two shards of an object", j, i, id)
+		}
+		seen[id] = i
 	}
 	opts, err := opts.withDefaults()
 	if err != nil {

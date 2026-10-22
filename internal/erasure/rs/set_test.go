@@ -78,3 +78,34 @@ func TestNewBoundsTheShardCount(t *testing.T) {
 		})
 	}
 }
+
+// idDrive is a drive that reports a fixed id, for building sets whose slots
+// share an identity.
+type idDrive struct {
+	drive.Drive
+	id ids.DriveID
+}
+
+func (d idDrive) ID() ids.DriveID { return d.id }
+
+// TestNewRejectsDuplicateAndZeroDriveIDs: two shards placed on one physical
+// drive fail together, so a set may not name the same drive in two slots. The
+// zero id marks an unwritten shard in a layout, so it is refused too.
+func TestNewRejectsDuplicateAndZeroDriveIDs(t *testing.T) {
+	a, b, c := erasuretest.NewDrive(), erasuretest.NewDrive(), erasuretest.NewDrive()
+	tests := []struct {
+		name   string
+		drives []drive.Drive
+	}{
+		{"same drive in two slots", []drive.Drive{a, a, c}},
+		{"two drives reporting one id", []drive.Drive{a, idDrive{Drive: b, id: a.ID()}, c}},
+		{"zero drive id", []drive.Drive{a, idDrive{Drive: b, id: ids.DriveID{}}, c}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := New(ids.SetID(1), tt.drives, 2, 1, Options{}); err == nil {
+				t.Fatal("New accepted a set in which one drive holds two shards")
+			}
+		})
+	}
+}
