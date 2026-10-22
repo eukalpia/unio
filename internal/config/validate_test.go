@@ -99,7 +99,9 @@ func TestValidate(t *testing.T) {
 		{name: "inline threshold too large", mutate: func(c *Config) { c.Storage.InlineThreshold = 128 * kiB }, wantErr: "storage.inline_threshold"},
 		{name: "memory budget too small", mutate: func(c *Config) { c.Storage.MemoryBudget = miB }, wantErr: "storage.memory_budget"},
 		{name: "max requests zero", mutate: func(c *Config) { c.Limits.MaxRequests = 0 }, wantErr: "limits.max_requests"},
-		{name: "negative queue", mutate: func(c *Config) { c.Limits.RequestQueue = -1 }, wantErr: "limits.request_queue"},
+		{name: "negative queue", mutate: func(c *Config) { c.Limits.RequestQueue = -1 }, wantErr: "limits.request_queue -1 must be between 1"},
+		{name: "zero queue is refused", mutate: func(c *Config) { c.Limits.RequestQueue = 0 }, wantErr: "limits.request_queue 0 must be between 1"},
+		{name: "queue of one", mutate: func(c *Config) { c.Limits.RequestQueue = 1 }},
 		{name: "zero background concurrency", mutate: func(c *Config) { c.Limits.BackgroundConcurrency = 0 }, wantErr: "limits.background_concurrency"},
 		{name: "zero read idle timeout", mutate: func(c *Config) { c.Timeouts.ReadIdle = 0 }, wantErr: "timeouts.read_idle"},
 		{name: "zero write idle timeout", mutate: func(c *Config) { c.Timeouts.WriteIdle = 0 }, wantErr: "timeouts.write_idle"},
@@ -134,8 +136,42 @@ func TestValidate(t *testing.T) {
 			c.Auth.RootPassword = NewSecret(strings.Repeat("ab", 16))
 		}, wantErr: "at least 10 distinct characters"},
 		{name: "root password of 256 characters", mutate: func(c *Config) { c.Auth.RootPassword = NewSecret(strings.Repeat("Ab3Cd5Ef7Gh9Jk", 18) + "Ab3C") }},
-		{name: "metrics token missing", mutate: func(c *Config) { c.Metrics.Token = Secret{} }, wantErr: "metrics.token is not set"},
+		{name: "metrics token optional", mutate: func(c *Config) { c.Metrics.Token = Secret{} }},
+		{name: "metrics token of 32 characters", mutate: func(c *Config) { c.Metrics.Token = NewSecret("Hm4Tq9Zr2Lx7Wc1Pk8Vb3Ny6Gd5Fs0Ja") }},
+		{name: "metrics token too short", mutate: func(c *Config) { c.Metrics.Token = NewSecret("Hm4Tq9Zr2Lx7Wc1Pk8Vb3Ny6Gd5Fs0") }, wantErr: "metrics.token must be at least 32"},
 		{name: "metrics token equals cluster secret", mutate: func(c *Config) { c.Metrics.Token = NewSecret(testSecret) }, wantErr: "must differ from cluster.secret"},
+		{name: "pprof enabled without token", mutate: func(c *Config) {
+			c.Metrics.Pprof = true
+			c.Metrics.Token = Secret{}
+		}, wantErr: "metrics.pprof is enabled but metrics.token is not set"},
+		{name: "pprof on loopback", mutate: func(c *Config) { c.Metrics.Pprof = true }},
+		{name: "pprof on ipv6 loopback", mutate: func(c *Config) { c.Metrics.PprofAddress = "[::1]:9190" }},
+		{name: "pprof address empty", mutate: func(c *Config) { c.Metrics.PprofAddress = "" }, wantErr: "metrics.pprof_address \"\" must have the form"},
+		{name: "pprof address without port", mutate: func(c *Config) { c.Metrics.PprofAddress = "127.0.0.1" }, wantErr: "must have the form"},
+		{name: "pprof address on all interfaces", mutate: func(c *Config) { c.Metrics.PprofAddress = "0.0.0.0:9190" }, wantErr: "must name a loopback IP address"},
+		{name: "pprof address on a wildcard ipv6", mutate: func(c *Config) { c.Metrics.PprofAddress = "[::]:9190" }, wantErr: "must name a loopback IP address"},
+		{name: "pprof address on a host name", mutate: func(c *Config) { c.Metrics.PprofAddress = "localhost:9190" }, wantErr: "must name a loopback IP address"},
+		{name: "pprof address on a public address", mutate: func(c *Config) { c.Metrics.PprofAddress = "10.0.0.5:9190" }, wantErr: "must name a loopback IP address"},
+		{name: "pprof port zero", mutate: func(c *Config) { c.Metrics.PprofAddress = "127.0.0.1:0" }, wantErr: "the port must be between 1 and 65535"},
+		{name: "pprof address refused even when pprof is off", mutate: func(c *Config) { c.Metrics.PprofAddress = "0.0.0.0:9190" }, wantErr: "loopback"},
+		{name: "pprof port equals s3 port on all interfaces", mutate: func(c *Config) {
+			c.Metrics.Pprof = true
+			c.Metrics.PprofAddress = "127.0.0.1:9000"
+		}, wantErr: "node.s3_address"},
+		{name: "pprof port equals internode port on the same address", mutate: func(c *Config) {
+			c.Metrics.Pprof = true
+			c.Node.InternodeAddress = "127.0.0.1:9190"
+			c.Cluster.Endpoints = []string{"https://node{1...4}:9190/data{1...4}"}
+			c.Metrics.PprofAddress = "127.0.0.1:9190"
+		}, wantErr: "node.internode_address"},
+		{name: "pprof port equals s3 port on another address", mutate: func(c *Config) {
+			c.Metrics.Pprof = true
+			c.Node.S3Address = "10.0.0.5:9000"
+			c.Metrics.PprofAddress = "127.0.0.1:9000"
+		}},
+		{name: "pprof port equals s3 port while pprof is off", mutate: func(c *Config) {
+			c.Metrics.PprofAddress = "127.0.0.1:9000"
+		}},
 		{name: "bad log level", mutate: func(c *Config) { c.Log.Level = "verbose" }, wantErr: "log.level"},
 		{name: "bad log format", mutate: func(c *Config) { c.Log.Format = "xml" }, wantErr: "log.format"},
 		{name: "plain http warning on valid config", wantWarnings: "plain HTTP"},

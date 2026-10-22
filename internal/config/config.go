@@ -109,8 +109,8 @@ type StorageConfig struct {
 type LimitsConfig struct {
 	// MaxRequests is the number of S3 requests processed at the same time.
 	MaxRequests int `yaml:"max_requests"`
-	// RequestQueue is the number of requests waiting for a slot. Beyond it,
-	// clients get 503 SlowDown.
+	// RequestQueue is the number of requests waiting for a slot, at least 1.
+	// Beyond it, clients get 503 SlowDown.
 	RequestQueue int `yaml:"request_queue"`
 	// BackgroundConcurrency bounds GC, compaction and repair jobs.
 	BackgroundConcurrency int `yaml:"background_concurrency"`
@@ -155,11 +155,17 @@ type LogConfig struct {
 
 // MetricsConfig controls the token-protected observability endpoints.
 type MetricsConfig struct {
-	// Token is the bearer token for /unio/metrics and, when enabled, pprof.
-	// It must come from the environment and differ from the cluster secret.
+	// Token is the optional bearer token for /unio/metrics. When set, it must
+	// come from the environment, be at least 32 characters and differ from the
+	// cluster secret. Pprof requires it.
 	Token Secret `yaml:"token"`
-	// Pprof enables the pprof endpoints. They are off by default.
+	// Pprof enables the pprof endpoints, which are served only on PprofAddress
+	// and only with the token. They are off by default.
 	Pprof bool `yaml:"pprof"`
+	// PprofAddress is the listen address of the pprof endpoints. Its host must
+	// be a loopback IP address, so that profiles are never served on a network
+	// interface.
+	PprofAddress string `yaml:"pprof_address"`
 }
 
 // LocalDrives returns the drives owned by this node, that is, the endpoints

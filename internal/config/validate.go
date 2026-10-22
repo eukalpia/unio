@@ -279,8 +279,8 @@ func checkLimits(c *Config, r *report) {
 	if l.MaxRequests < 1 || l.MaxRequests > maxRequests {
 		r.errorf("limits.max_requests %d must be between 1 and %d (UNIO_MAX_REQUESTS)", l.MaxRequests, maxRequests)
 	}
-	if l.RequestQueue < 0 || l.RequestQueue > maxRequestQueue {
-		r.errorf("limits.request_queue %d must be between 0 and %d (UNIO_REQUEST_QUEUE)", l.RequestQueue, maxRequestQueue)
+	if l.RequestQueue < 1 || l.RequestQueue > maxRequestQueue {
+		r.errorf("limits.request_queue %d must be between 1 and %d (UNIO_REQUEST_QUEUE)", l.RequestQueue, maxRequestQueue)
 	}
 	if l.BackgroundConcurrency < 1 || l.BackgroundConcurrency > maxBackgroundJobs {
 		r.errorf("limits.background_concurrency %d must be between 1 and %d (UNIO_BACKGROUND_CONCURRENCY)",
@@ -376,18 +376,63 @@ func checkLog(c *Config, r *report) {
 	}
 }
 
-// checkMetrics validates the metrics token, which must be strong and distinct from the cluster secret.
+// checkMetrics validates the optional metrics token and the pprof listener. A
+// token that is set must be strong and distinct from the cluster secret. Pprof
+// is protected by the token alone, so it cannot be enabled without one.
 func checkMetrics(c *Config, r *report) {
 	token := c.Metrics.Token
-	if !token.IsSet() {
-		r.errorf("metrics.token is not set: set UNIO_METRICS_TOKEN or UNIO_METRICS_TOKEN_FILE (at least %d characters)", MinSecretLength)
+	if token.IsSet() {
+		if err := CheckSecretValue(token.Expose()); err != nil {
+			r.errorf("metrics.token %v (UNIO_METRICS_TOKEN)", err)
+		}
+		if c.Cluster.Secret.IsSet() && subtle.ConstantTimeCompare([]byte(token.Expose()), []byte(c.Cluster.Secret.Expose())) == 1 {
+			r.errorf("metrics.token must differ from cluster.secret (UNIO_METRICS_TOKEN)")
+		}
+	} else if c.Metrics.Pprof {
+		r.errorf("metrics.pprof is enabled but metrics.token is not set: pprof is protected by the token alone; set UNIO_METRICS_TOKEN or UNIO_METRICS_TOKEN_FILE (UNIO_PPROF)")
+	}
+	checkPprofAddress(c, r)
+}
+
+// checkPprofAddress requires the pprof listener to bind a loopback IP address.
+// When pprof is enabled, its port must also not collide with the S3 or
+// internode listener, which would fail at startup.
+func checkPprofAddress(c *Config, r *report) {
+	addr := c.Metrics.PprofAddress
+	host, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		r.errorf("metrics.pprof_address %q must have the form 127.0.0.1:9190 (UNIO_PPROF_ADDRESS)", addr)
 		return
 	}
-	if err := CheckSecretValue(token.Expose()); err != nil {
-		r.errorf("metrics.token %v (UNIO_METRICS_TOKEN)", err)
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() {
+		r.errorf("metrics.pprof_address %q must name a loopback IP address, such as 127.0.0.1 or [::1] (UNIO_PPROF_ADDRESS)", addr)
+		return
 	}
-	if c.Cluster.Secret.IsSet() && subtle.ConstantTimeCompare([]byte(token.Expose()), []byte(c.Cluster.Secret.Expose())) == 1 {
-		r.errorf("metrics.token must differ from cluster.secret (UNIO_METRICS_TOKEN)")
+	port, err := strconv.Atoi(portStr)
+	if err != nil || port < 1 || port > 65535 {
+		r.errorf("metrics.pprof_address %q: the port must be between 1 and 65535 (UNIO_PPROF_ADDRESS)", addr)
+		return
+	}
+	if !c.Metrics.Pprof {
+		return
+	}
+	for _, listen := range []struct{ name, addr string }{
+		{"node.s3_address", c.Node.S3Address},
+		{"node.internode_address", c.Node.InternodeAddress},
+	} {
+		lhost, lportStr, err := net.SplitHostPort(listen.addr)
+		if err != nil {
+			continue // reported by checkNode
+		}
+		if lport, err := strconv.Atoi(lportStr); err != nil || lport != port {
+			continue
+		}
+		// A wildcard listener, or one on the same address, also binds the pprof address.
+		lip := net.ParseIP(lhost)
+		if lhost == "" || (lip != nil && (lip.IsUnspecified() || lip.Equal(ip))) {
+			r.errorf("metrics.pprof_address %q uses port %d, which %s already listens on (UNIO_PPROF_ADDRESS)", addr, port, listen.name)
+		}
 	}
 }
 

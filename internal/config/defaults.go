@@ -10,6 +10,8 @@ const (
 	DefaultInternodeAddress = ":9100"
 	// DefaultRegion is the default S3 region of the node.
 	DefaultRegion = "us-east-1"
+	// DefaultPprofAddress is the default loopback listen address of pprof.
+	DefaultPprofAddress = "127.0.0.1:9190"
 	// DefaultPartitions is the default number of metadata partitions.
 	DefaultPartitions = 16
 	// DefaultInlineThreshold is the default largest inline object (ADR-0005).
@@ -69,6 +71,7 @@ func Defaults() Config {
 			Idle:       DefaultIdleTimeout,
 			Shutdown:   DefaultShutdownTimeout,
 		},
-		Log: LogConfig{Level: DefaultLogLevel, Format: DefaultLogFormat},
+		Log:     LogConfig{Level: DefaultLogLevel, Format: DefaultLogFormat},
+		Metrics: MetricsConfig{PprofAddress: DefaultPprofAddress},
 	}
 }

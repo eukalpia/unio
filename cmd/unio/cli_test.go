@@ -231,7 +231,7 @@ func TestConfigPrintCommand(t *testing.T) {
 		}
 	})
 	t.Run("invalid configuration is not printed", func(t *testing.T) {
-		env := withEnv(validEnv(), map[string]*string{"UNIO_METRICS_TOKEN": nil})
+		env := withEnv(validEnv(), map[string]*string{"UNIO_LOG_LEVEL": str("loud")})
 		res := runCLI(t, env, "config", "print")
 		if res.code != 1 || res.stdout != "" {
 			t.Fatalf("code = %d, stdout = %q", res.code, res.stdout)

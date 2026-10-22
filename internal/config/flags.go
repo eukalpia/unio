@@ -103,6 +103,8 @@ func settings() []setting {
 			func(c *Config) *string { return &c.Log.Format }),
 		boolSetting("pprof", "UNIO_PPROF", "enable the token-protected pprof endpoints",
 			func(c *Config) *bool { return &c.Metrics.Pprof }),
+		strSetting("pprof-address", "UNIO_PPROF_ADDRESS", "loopback listen address of the pprof endpoints, e.g. 127.0.0.1:9190",
+			func(c *Config) *string { return &c.Metrics.PprofAddress }),
 	}
 }
 
