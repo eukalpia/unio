@@ -54,11 +54,13 @@ func ParseSize(s string) (Size, error) {
 	if !ok {
 		return 0, fmt.Errorf("invalid size %q: unknown unit %q (use B, KiB, MiB, GiB or TiB)", s, unit)
 	}
-	n, err := strconv.ParseUint(digits, 10, 63)
+	// digits holds only ASCII digits, so the signed parse cannot see a sign, and it
+	// fails with a range error when the value exceeds MaxInt64.
+	n, err := strconv.ParseInt(digits, 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("invalid size %q: %w", s, err)
 	}
-	if n > uint64(math.MaxInt64)/uint64(mult) {
+	if n > math.MaxInt64/int64(mult) {
 		return 0, fmt.Errorf("invalid size %q: value overflows", s)
 	}
 	return Size(n) * mult, nil
