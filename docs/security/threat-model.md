@@ -1,7 +1,7 @@
 # Threat Model
 
 - Status: living document, reviewed with every security-relevant change
-- Last updated: 2026-10-22
+- Last updated: 2026-10-23
 
 This document lists what Unio protects, who it protects it from, where the
 trust boundaries are, and the mitigations every contribution must preserve.
@@ -53,7 +53,10 @@ fuzzed and never trusts lengths, counts or names from the other side.
 | Threat | Mitigation | Where |
 |---|---|---|
 | Signature bypass or forgery | Strict SigV4 parsing; canonical request per AWS rules; `hmac.Equal`; ±15 min skew; presigned expiry ≤ 7 days | `auth/sigv4` |
-| Tampered streaming body | Every aws-chunked chunk signature verified before its bytes are released; trailer signatures verified | `auth/sigv4` |
+| Tampered streaming body | Every aws-chunked chunk and trailer signature is verified; a failure is returned instead of `io.EOF`, so no tampered body is ever committed. Bytes of a chunk may reach temporary storage before its signature is checked, and are discarded | `auth/sigv4`, `object/engine` |
+| Unsigned request headers | Every `x-amz-*` header present must be signed (header and presigned auth). For header auth, Content-MD5 and stored object headers (Content-Type, Cache-Control, Content-Disposition, Content-Encoding, Content-Language, Expires) must be signed too; presigned URLs may leave those unsigned because browsers add them after presigning | `auth/sigv4` |
+| Declared integrity silently skipped | A trailing checksum announced in `x-amz-trailer` that does not arrive fails the upload | `s3api/payload` |
+| False sense of encryption | Server-side encryption headers (SSE-S3, SSE-KMS, SSE-C, copy-source SSE-C) are refused with `NotImplemented` until encryption is implemented, never ignored | `s3api` |
 | Corrupted upload committed | `object.Body` returns `io.EOF` only after length, Content-MD5, SHA-256, checksum headers and **declared** trailers verify; the object layer commits only after a clean EOF (I4) | `s3api/payload`, `object/engine` |
 | Privilege escalation | Every operation maps to an IAM action and is authorized before touching storage; explicit deny wins; default deny | `s3api`, `auth/policy` |
 | Resource exhaustion | Header, body, idle and write-idle timeouts; concurrency limit with bounded queue (`503 SlowDown`); bounded XML bodies; global buffer budget | `s3api/middleware`, `bufpool` |
@@ -67,6 +70,8 @@ fuzzed and never trusts lengths, counts or names from the other side.
 | Threat | Mitigation | Where |
 |---|---|---|
 | Default or weak credentials | No defaults; root credentials must meet length rules; `unio init` generates strong secrets | `config`, `auth/iam` |
+| Revoked access lingering | Local revocations take effect at once; cache fills are fenced by an epoch so an in-flight lookup cannot restore revoked state. Other nodes observe changes within the IAM cache TTL (5 s default) | `auth/iam` |
+| Re-created identity inheriting access | Users carry a random incarnation id; deletion marks the user disabled first, and cleanup touches only the deleted incarnation's keys and policy | `auth/iam` |
 | Secret theft from metadata | User secrets encrypted with AES-256-GCM under a key derived from the cluster secret (HKDF); access key id as additional data | `auth/iam` |
 | Policy parser abuse | Size limit, strict JSON, unsupported elements rejected rather than ignored, linear-time wildcard matching | `auth/policy` |
 
@@ -75,7 +80,10 @@ fuzzed and never trusts lengths, counts or names from the other side.
 | Threat | Mitigation | Where |
 |---|---|---|
 | Eavesdropping or tampering | TLS 1.3 on every internode connection; plaintext only with an explicit, loudly logged flag | `cluster/uniwire` |
-| Rogue node joins | Mutual TLS with certificates issued by the cluster CA; node identity taken from the certificate, not from the payload | `cluster/pki` |
+| Rogue node joins | Mutual TLS 1.3 with certificates issued by the cluster CA; standard library verification (no `InsecureSkipVerify`) against the node's DNS identity `<node>.node.unio`; node identity taken from the certificate, never from the payload | `cluster/pki` |
+| Node impersonation inside Raft | Every identity field Raft reads (header id and address, legacy leader and candidate fields) is bound to the authenticated TLS peer; mismatches are refused | `cluster/raftnet` |
+| Stolen node certificate | Node certificates live 7 days and are renewed at half-life with a fresh key, bounding the exposure of a leaked certificate | `cluster/pki` |
+| Holder of the cluster secret | Out of scope by design: the CA key is derived from the cluster secret, so anyone holding it can mint any node identity. Protect and rotate the secret like a root credential | — |
 | Malformed frames | Fixed preamble, maximum frame size, length checks before allocation, fuzzed decoders | `cluster/uniwire` |
 | Error-channel leaks | Only S3 codes and registered sentinels cross the wire; other errors become generic | `cluster/uniwire` |
 
@@ -86,14 +94,19 @@ fuzzed and never trusts lengths, counts or names from the other side.
 | Path traversal | On-disk names are hex ids only; user keys never reach the filesystem | `drive/local` |
 | Silent corruption | Record header CRC32C on drives; xxh3-128 per shard block verified on every read; reconstruction from parity (I2) | `drive/local`, `erasure` |
 | Torn writes and crashes | fsync before acknowledgement; atomic renames with directory fsync; torn segment tails truncated on recovery (I1) | `drive/local` |
-| Lost updates | Linearizable metadata; old data deleted only after the new version commits (I5) | `meta`, `object/engine` |
+| Lost updates | Linearizable metadata; old data deleted only after the new version commits (I5); on an ambiguous commit outcome new data is kept, never deleted | `meta`, `object/engine` |
+| Poison-pill log entry | Every Raft command is validated inside the state machine before it touches state, Apply never panics on any input (fuzzed), and replicas encode state deterministically | `meta/raftstore` |
+| Corrupted on-disk metadata | Offsets, lengths and times decoded from disk are bounds-checked before conversion; corruption is reported as `ErrCorrupt` and triggers an index rebuild, never a negative offset | `drive/local`, `meta/raftstore` |
+| Failed fsync | Any fsync failure poisons the drive: writes in the failed commit group fail, later mutations are refused, and the fsync is never retried to claim durability | `drive/local` |
+| One drive holding several shards | An erasure set rejects a drive that appears in more than one slot | `erasure/rs` |
 
 ### 4.5 Supply chain and release
 
 | Threat | Mitigation |
 |---|---|
 | Vulnerable dependency | `govulncheck` and Dependabot security updates; approved dependency list |
-| Malicious code in a pull request | Required review, CODEOWNERS for sensitive paths, CodeQL, gosec, staticcheck |
+| Malicious code in a pull request | Required review, CODEOWNERS for sensitive paths, CodeQL, gosec (built to type-check the current toolchain; the job fails if it cannot), staticcheck, fuzzing on every pull request |
+| Compromised CI tooling | Actions pinned to commit SHAs; lint tools pinned to versions; gosec built from a pinned, verified commit; checkout credentials not persisted |
 | Leaked secrets in the repository | Secret scanning with push protection |
 | Tampered release artifacts | Reproducible `-trimpath` builds, no CGO, signed images with SBOMs (v0.2) |
 
