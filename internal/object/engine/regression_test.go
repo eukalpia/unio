@@ -341,3 +341,74 @@ func mustReadKey(t *testing.T, h *harness, key string) []byte {
 	}
 	return readAll(t, r)
 }
+
+// cachingStore returns the same listing slices on every call, as a store that
+// keeps its results would. The engine must hand callers copies of them.
+type cachingStore struct {
+	*testbackend.Store
+	prefixes       []string
+	uploadPrefixes []string
+}
+
+func (s *cachingStore) ListObjects(ctx context.Context, bucket string, opts object.ListOptions) (meta.ListResult, error) {
+	res, err := s.Store.ListObjects(ctx, bucket, opts)
+	if err != nil {
+		return res, err
+	}
+	if s.prefixes == nil {
+		s.prefixes = res.CommonPrefixes
+	}
+	res.CommonPrefixes = s.prefixes
+	return res, nil
+}
+
+func (s *cachingStore) ListUploads(ctx context.Context, bucket string, opts object.ListUploadsOptions) (object.ListUploadsResult, error) {
+	res, err := s.Store.ListUploads(ctx, bucket, opts)
+	if err != nil {
+		return res, err
+	}
+	if s.uploadPrefixes == nil {
+		s.uploadPrefixes = res.CommonPrefixes
+	}
+	res.CommonPrefixes = s.uploadPrefixes
+	return res, nil
+}
+
+// TestListingResultsDoNotAliasTheStore checks that changing a listing a caller
+// received cannot change the next listing, even when the store reuses its
+// result slices.
+func TestListingResultsDoNotAliasTheStore(t *testing.T) {
+	store := &cachingStore{Store: testbackend.NewStore()}
+	reg := testbackend.NewRegistry(2, 2, 1)
+	h := newHarnessWith(t, store, reg, reg, engine.Options{})
+	ctx := t.Context()
+	if _, err := h.MakeBucket(ctx, testBucket, object.MakeBucketOptions{Owner: "o"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.PutObject(ctx, testBucket, "a/1", objecttest.NewBody([]byte("x")), object.PutOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	opts := object.ListOptions{Delimiter: "/"}
+	res, err := h.ListObjects(ctx, testBucket, opts)
+	if err != nil || len(res.CommonPrefixes) != 1 {
+		t.Fatalf("list: %+v, %v", res, err)
+	}
+	res.CommonPrefixes[0] = "zzz"
+	again, err := h.ListObjects(ctx, testBucket, opts)
+	if err != nil || len(again.CommonPrefixes) != 1 || again.CommonPrefixes[0] != "a/" {
+		t.Fatalf("listing changed by the caller: %+v, %v", again.CommonPrefixes, err)
+	}
+
+	if _, err := h.NewMultipartUpload(ctx, testBucket, "d/x", object.PutOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	up, err := h.ListMultipartUploads(ctx, testBucket, object.ListUploadsOptions{Delimiter: "/"})
+	if err != nil || len(up.CommonPrefixes) != 1 {
+		t.Fatalf("list uploads: %+v, %v", up, err)
+	}
+	up.CommonPrefixes[0] = "zzz"
+	upAgain, err := h.ListMultipartUploads(ctx, testBucket, object.ListUploadsOptions{Delimiter: "/"})
+	if err != nil || len(upAgain.CommonPrefixes) != 1 || upAgain.CommonPrefixes[0] != "d/" {
+		t.Fatalf("upload listing changed by the caller: %+v, %v", upAgain.CommonPrefixes, err)
+	}
+}

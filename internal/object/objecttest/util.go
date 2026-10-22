@@ -1,6 +1,7 @@
 package objecttest
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -147,4 +148,11 @@ func pageKeys(keys []string, prefix, delimiter, after string, max int) ([]listed
 		out = append(out, entry)
 	}
 	return out, false
+}
+
+// cloneChecksum returns c with its value copied, so that the result shares no
+// memory with c.
+func cloneChecksum(c object.Checksum) object.Checksum {
+	c.Value = bytes.Clone(c.Value)
+	return c
 }

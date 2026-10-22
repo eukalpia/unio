@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"slices"
 
 	"github.com/eukalpia/unio/internal/object"
 	"github.com/eukalpia/unio/internal/s3err"
@@ -71,5 +72,11 @@ func (e *Engine) ListMultipartUploads(ctx context.Context, bucket string, opts o
 		return object.ListUploadsResult{}, err
 	}
 	opts.MaxUploads = limit
-	return e.store.ListUploads(ctx, bucket, opts)
+	res, err := e.store.ListUploads(ctx, bucket, opts)
+	if err != nil {
+		return object.ListUploadsResult{}, err
+	}
+	res.Uploads = slices.Clone(res.Uploads)
+	res.CommonPrefixes = slices.Clone(res.CommonPrefixes)
+	return res, nil
 }

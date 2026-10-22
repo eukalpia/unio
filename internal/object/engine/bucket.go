@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"slices"
 
 	"github.com/eukalpia/unio/internal/object"
 	"github.com/eukalpia/unio/internal/s3err"
@@ -28,7 +29,11 @@ func (e *Engine) GetBucketInfo(ctx context.Context, bucket string) (object.Bucke
 
 // ListBuckets implements object.Layer.
 func (e *Engine) ListBuckets(ctx context.Context) ([]object.BucketInfo, error) {
-	return e.store.ListBuckets(ctx)
+	buckets, err := e.store.ListBuckets(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return slices.Clone(buckets), nil
 }
 
 // DeleteBucket implements object.Layer.

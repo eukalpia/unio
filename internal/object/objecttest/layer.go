@@ -263,7 +263,7 @@ func (l *Layer) PutObject(ctx context.Context, bucketName, key string, body obje
 	info.Checksum = ck
 	info.Size = int64(len(data))
 	b.commit(key, info, &content{data: data})
-	return *info, nil
+	return copyInfo(*info), nil
 }
 
 // GetObject implements object.Layer.
@@ -291,7 +291,7 @@ func (l *Layer) GetObject(_ context.Context, bucketName, key string, opts object
 	data := c.data[window.off : window.off+window.length]
 	return &object.Reader{
 		ReadCloser: io.NopCloser(bytes.NewReader(data)),
-		Info:       *info,
+		Info:       copyInfo(*info),
 		Offset:     window.off - window.base,
 		Length:     window.length,
 	}, nil
@@ -319,7 +319,7 @@ func (l *Layer) HeadObject(_ context.Context, bucketName, key string, opts objec
 		return object.Info{}, err
 	}
 	info.Size = window.size
-	return *info, nil
+	return copyInfo(*info), nil
 }
 
 // DeleteObject implements object.Layer.
@@ -396,7 +396,7 @@ func (l *Layer) ListObjects(_ context.Context, bucketName string, opts object.Li
 		if e.isPrefix {
 			res.CommonPrefixes = append(res.CommonPrefixes, e.key)
 		} else {
-			info := *b.objects[e.key]
+			info := copyInfo(*b.objects[e.key])
 			info.IsLatest = true
 			res.Objects = append(res.Objects, info)
 		}
@@ -479,7 +479,7 @@ func (l *Layer) CopyObject(ctx context.Context, src object.Ref, dstBucket, dstKe
 		return object.Info{}, quorumError()
 	}
 	b.commit(dstKey, info, &content{data: data})
-	return *info, nil
+	return copyInfo(*info), nil
 }
 
 // readableLocked resolves a key for a read: the object must exist, must
@@ -497,7 +497,7 @@ func (l *Layer) readableLocked(bucketName, key string, opts object.GetOptions) (
 	if err := opts.Conditions.EvaluateRead(*info); err != nil {
 		return nil, nil, err
 	}
-	cp := *info
+	cp := copyInfo(*info)
 	return &cp, b.content[key], nil
 }
 

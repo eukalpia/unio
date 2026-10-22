@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -142,6 +143,7 @@ func newID() (string, error) {
 func infoOf(rec meta.ObjectRecord, latest bool) object.Info {
 	info := rec.Info()
 	info.UserMetadata = cloneMap(info.UserMetadata)
+	info.Checksum = cloneChecksum(info.Checksum)
 	info.IsLatest = latest
 	return info
 }
@@ -153,7 +155,7 @@ func partInfo(p meta.PartRecord) object.PartInfo {
 		Size:       p.Size,
 		ETag:       p.ETag,
 		ModTime:    p.ModTime.UnixNano(),
-		Checksum:   p.Checksum,
+		Checksum:   cloneChecksum(p.Checksum),
 	}
 }
 
@@ -222,4 +224,12 @@ func (e *Engine) commitFailed(ctx context.Context, bucket string, plan versionPl
 		return s3err.Wrap(s3err.ConditionalRequestConflict, err)
 	}
 	return err
+}
+
+// cloneChecksum returns c with its value copied. Checksum values are slices, so
+// a copy is needed wherever a checksum crosses the engine's boundary: from a
+// caller into a record, and from a record back to a caller.
+func cloneChecksum(c object.Checksum) object.Checksum {
+	c.Value = bytes.Clone(c.Value)
+	return c
 }

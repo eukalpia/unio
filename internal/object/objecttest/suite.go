@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"math/rand/v2"
 	"testing"
@@ -45,6 +46,7 @@ func RunLayerSuite(t *testing.T, newLayer func(t *testing.T) object.Layer) {
 		{"list", suiteList},
 		{"multipart", suiteMultipart},
 		{"failures", suiteFailures},
+		{"aliasing", suiteAliasing},
 	}
 	for _, g := range groups {
 		t.Run(g.name, func(t *testing.T) { g.run(t, newLayer) })
@@ -484,6 +486,8 @@ func sizeName(n int) string {
 		return "at inline threshold"
 	case inlineSize + 1:
 		return "above inline threshold"
+	case 5*mib + 3:
+		return "5 MiB plus 3"
 	}
-	return "5 MiB plus 3"
+	return fmt.Sprintf("%d bytes", n)
 }

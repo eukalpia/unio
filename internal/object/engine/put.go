@@ -89,7 +89,7 @@ func (e *Engine) putInline(ctx context.Context, body object.Body, rec meta.Objec
 	rec.Inline = make([]byte, size)
 	copy(rec.Inline, data)
 	rec.ETag = hexOf(body.MD5())
-	rec.Checksum = body.Checksum()
+	rec.Checksum = cloneChecksum(body.Checksum())
 	garbage, err := e.store.PutObject(ctx, rec, cond)
 	if err != nil {
 		return object.Info{}, e.commitFailed(ctx, rec.Bucket, plan, err, nil)
@@ -156,7 +156,7 @@ func (e *Engine) writePart(ctx context.Context, set erasure.Set, body object.Bod
 		Number:   number,
 		Size:     size,
 		ETag:     hexOf(body.MD5()),
-		Checksum: body.Checksum(),
+		Checksum: cloneChecksum(body.Checksum()),
 		ModTime:  now,
 		Data:     id,
 		Layout:   layout,

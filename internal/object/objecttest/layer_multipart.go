@@ -147,7 +147,7 @@ func (l *Layer) ListParts(_ context.Context, bucketName, key, uploadID string, o
 			Size:       int64(len(p.data)),
 			ETag:       p.etag,
 			ModTime:    p.modTime.UnixNano(),
-			Checksum:   p.checksum,
+			Checksum:   cloneChecksum(p.checksum),
 		})
 	}
 	if len(nums) > 0 {
@@ -201,7 +201,7 @@ func (l *Layer) CompleteMultipartUpload(_ context.Context, bucketName, key, uplo
 	}
 	b.commit(key, info, &content{data: data, parts: spans})
 	delete(l.uploads, uploadID)
-	return *info, nil
+	return copyInfo(*info), nil
 }
 
 // AbortMultipartUpload implements object.Layer.
@@ -291,7 +291,7 @@ func (l *Layer) uploadLocked(bucketName, key, uploadID string) (*upload, error) 
 
 // storePart records a part under its number, replacing an earlier one.
 func storePart(u *upload, number int, data []byte, md5sum [16]byte, ck object.Checksum, now time.Time) object.PartInfo {
-	p := &uploadPart{data: data, etag: hex.EncodeToString(md5sum[:]), checksum: ck, modTime: now}
+	p := &uploadPart{data: data, etag: hex.EncodeToString(md5sum[:]), checksum: cloneChecksum(ck), modTime: now}
 	u.parts[number] = p
 	return object.PartInfo{
 		PartNumber: number,

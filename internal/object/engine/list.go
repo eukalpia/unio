@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"slices"
 
 	"github.com/eukalpia/unio/internal/object"
 )
@@ -27,7 +28,7 @@ func (e *Engine) ListObjects(ctx context.Context, bucket string, opts object.Lis
 	}
 	res := object.ListResult{
 		Objects:        make([]object.Info, 0, len(page.Objects)),
-		CommonPrefixes: page.CommonPrefixes,
+		CommonPrefixes: slices.Clone(page.CommonPrefixes),
 		IsTruncated:    page.IsTruncated,
 		NextAfter:      page.NextAfter,
 	}
