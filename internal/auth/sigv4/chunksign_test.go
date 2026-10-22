@@ -50,6 +50,15 @@ type awsChunkedSpec struct {
 	// name empty for no trailer. The value is base64, as sent.
 	trailerName  string
 	trailerValue string
+	// wireName, when set, replaces trailerName on the wire. The signer always
+	// canonicalizes the lower-case trailerName.
+	wireName string
+	// padBefore and padAfter are whitespace written around the value on the
+	// wire only.
+	padBefore, padAfter string
+	// canonPadded signs the padded value instead of the trimmed one. It
+	// models a client that did not trim, and the signature must then fail.
+	canonPadded bool
 }
 
 // encodeAWSChunked produces the wire form of the spec.
@@ -88,9 +97,17 @@ func encodeAWSChunked(s awsChunkedSpec) []byte {
 	}
 	canon := ""
 	if s.trailerName != "" {
-		line := s.trailerName + ":" + s.trailerValue
-		out.WriteString(line + "\r\n")
-		canon = line + "\n"
+		wireName := s.trailerName
+		if s.wireName != "" {
+			wireName = s.wireName
+		}
+		wireValue := s.padBefore + s.trailerValue + s.padAfter
+		out.WriteString(wireName + ":" + wireValue + "\r\n")
+		canonValue := s.trailerValue
+		if s.canonPadded {
+			canonValue = wireValue
+		}
+		canon = strings.ToLower(s.trailerName) + ":" + canonValue + "\n"
 	}
 	if s.kind == payloadStreamingTrailer {
 		ch := sha256.Sum256([]byte(canon))
@@ -108,8 +125,14 @@ type streamSpec struct {
 	marker       string
 	trailerName  string
 	trailerValue string
-	chunks       [][]byte
-	extra        http.Header
+	// wireName, padBefore, padAfter and canonPadded are passed through to
+	// the encoder; see awsChunkedSpec.
+	wireName    string
+	padBefore   string
+	padAfter    string
+	canonPadded bool
+	chunks      [][]byte
+	extra       http.Header
 }
 
 // buildSignedStream signs a PUT with the SDK, using the streaming payload
@@ -146,6 +169,10 @@ func buildSignedStream(t *testing.T, s streamSpec) *auth.Request {
 		chunks:       s.chunks,
 		trailerName:  s.trailerName,
 		trailerValue: s.trailerValue,
+		wireName:     s.wireName,
+		padBefore:    s.padBefore,
+		padAfter:     s.padAfter,
+		canonPadded:  s.canonPadded,
 	}
 	// The encoded length does not depend on the signature values, so it can
 	// be measured before the request is signed.
