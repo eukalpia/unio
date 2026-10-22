@@ -15,7 +15,9 @@
 //	38      4     CRC-32C of bytes 0..37
 //
 // Records are self-delimiting and self-verifying, so a segment can be
-// scanned without an index. Tombstone data names the segment that held the
+// scanned without an index. Scan stops at the first damaged record. Resync
+// skips the damaged range and resumes at the next valid record, and is used
+// by index rebuilds. Tombstone data names the segment that held the
 // deleted packed record, or segment 0 for a blob (see TombstoneOrigin). The
 // drive's rules do not depend on that value, so it is informational.
 package segment

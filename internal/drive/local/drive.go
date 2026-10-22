@@ -2,6 +2,40 @@
 // keeps small shards packed into append-only segments with group commit,
 // large shards as blob files, and a Pebble index that maps shard ids to their
 // locations. Compaction reclaims segments whose records were deleted.
+//
+// Durability. A write is acknowledged only after its data and index entry are
+// durable under the drive's sync policy. A failed fsync makes the drive faulty:
+// every write whose durability depended on it fails, later writes return an
+// error wrapping drive.ErrFaulty, reads continue, and Info reports the drive
+// offline. The fsync is never retried. Under SyncBatch, writes acknowledged
+// before the failing fsync stay acknowledged, and the loss window is the batch
+// interval.
+//
+// Rebuild. If the index is lost or disagrees with the segments, Open rebuilds
+// it by replaying segments in id order, where the last record for a shard
+// wins. A damaged record does not end a segment's replay: the scan resumes at
+// the next valid record, and Drive.Recovery lists the skipped byte ranges.
+// Checksums detect damage but do not authenticate: a writer who controls a
+// payload can embed a complete, valid record, and that record is recovered
+// when the bytes around it are damaged.
+//
+// Known limits.
+//
+//   - A blob whose unlink fails after its delete is committed stays on disk
+//     as an orphan. Open removes orphans when the index is trusted. A rebuild
+//     indexes them again, so a later packed record for the same id can be
+//     shadowed by the stale blob. Bitrot verification above the drive catches
+//     the stale content. The gap is accepted; it can occur on Windows, where a
+//     reader can hold the file open.
+//   - Tombstones are kept while any older segment exists, so they accumulate
+//     for as long as the oldest segment survives.
+//   - A sealed segment with damage in its middle is not compacted, because the
+//     compaction scan stops at the damage. Its live records are kept, so the
+//     space is not reclaimed, but no data is lost.
+//   - Only the active segment is trimmed on open. Sealed segments keep bytes
+//     past their committed end, which is harmless: their metadata excludes
+//     those bytes.
+//   - Windows and macOS build but are not exercised by the test suite.
 package local
 
 import (
