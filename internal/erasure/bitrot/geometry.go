@@ -113,3 +113,13 @@ func validate(dataSize int64, k, stripeSize int, offset, length int64) error {
 	}
 	return nil
 }
+
+// StripeRange returns the framed byte range of one shard that covers stripes
+// [first, end) of an object of dataSize bytes.
+func StripeRange(dataSize int64, k, stripeSize int, first, end int64) (offset, length int64) {
+	if end <= first {
+		return blockOffset(k, stripeSize, first), 0
+	}
+	offset = blockOffset(k, stripeSize, first)
+	return offset, blockEnd(dataSize, k, stripeSize, end-1) - offset
+}
