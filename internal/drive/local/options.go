@@ -125,7 +125,7 @@ func (o Options) resolve() (resolved, error) {
 		return r, errors.New("local: a segment must hold at least one packed shard")
 	case o.SyncPolicy != SyncAlways && o.SyncPolicy != SyncBatch:
 		return r, fmt.Errorf("local: unknown sync policy %d", o.SyncPolicy)
-	case r.budget < r.bigPoolSize() || r.budget < blobChunk:
+	case r.budget < r.bigPoolSize() || r.budget < r.blobPoolCharge():
 		return r, fmt.Errorf("local: buffer budget %d is too small", r.budget)
 	}
 	return r, nil
@@ -134,6 +134,12 @@ func (o Options) resolve() (resolved, error) {
 // bigPoolSize is the buffer size for the largest packed record.
 func (r resolved) bigPoolSize() int64 {
 	return r.packedMax + segment.HeaderSize
+}
+
+// blobPoolCharge is the budget charge of one blob buffer, alignment slack
+// included. The budget must be able to hold it, or the pool cannot be created.
+func (r resolved) blobPoolCharge() int64 {
+	return blobChunk + blobAlign
 }
 
 // smallPoolSize is the buffer size for packed records up to smallRecordLimit.
