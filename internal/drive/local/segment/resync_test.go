@@ -129,3 +129,15 @@ func TestResyncPropagatesCallbackError(t *testing.T) {
 		t.Fatalf("err = %v, want the callback error", err)
 	}
 }
+
+// TestResyncRejectsHeaderLongerThanTheSegment places a header whose checksum is
+// valid but whose length exceeds the segment. It must not be yielded, and the
+// scan must not allocate for the claimed length.
+func TestResyncRejectsHeaderLongerThanTheSegment(t *testing.T) {
+	forged := Header{ShardID: testID(5), Length: 1 << 29, DataCRC: 0}.AppendHeader(nil)
+	forged = append(forged, []byte("short")...)
+	got, res := resyncAll(t, forged)
+	if len(got) != 0 || res.Records != 0 || res.TailBytes != int64(len(forged)) {
+		t.Fatalf("forged header accepted: %+v with %d shards", res, len(got))
+	}
+}

@@ -188,6 +188,9 @@ func (d *Drive) WalkShards(ctx context.Context, fn func(drive.ShardInfo) error) 
 	if errors.Is(err, index.ErrClosed) {
 		return drive.ErrClosed
 	}
+	if errors.Is(err, index.ErrCorrupt) {
+		return fmt.Errorf("local: walk: %w: %w", drive.ErrCorrupt, err)
+	}
 	return err
 }
 
@@ -231,6 +234,8 @@ func (d *Drive) lookup(id ids.ShardID) (index.Location, error) {
 		return index.Location{}, drive.ErrShardNotFound
 	case errors.Is(err, index.ErrClosed):
 		return index.Location{}, drive.ErrClosed
+	case errors.Is(err, index.ErrCorrupt):
+		return index.Location{}, corrupt(id, err)
 	default:
 		return index.Location{}, err
 	}

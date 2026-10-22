@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"hash/crc32"
 
+	"github.com/eukalpia/unio/internal/drive/local/internal/safeint"
 	"github.com/eukalpia/unio/internal/ids"
 )
 
@@ -72,6 +73,13 @@ type Header struct {
 	ShardID ids.ShardID
 	Length  uint64
 	DataCRC uint32
+}
+
+// DataLength returns the length of the record's data as an int64. DecodeHeader
+// bounds the length by MaxDataLength, so every decoded header converts. A false
+// result means the header was not decoded, and the caller must reject it.
+func (h Header) DataLength() (int64, bool) {
+	return safeint.FromUint64(h.Length)
 }
 
 // RecordSize returns the on-disk size of a record whose data is n bytes.

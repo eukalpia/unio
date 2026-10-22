@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/eukalpia/unio/internal/drive"
+	"github.com/eukalpia/unio/internal/drive/local/internal/safeint"
 	"github.com/eukalpia/unio/internal/drive/local/segment"
 	"github.com/eukalpia/unio/internal/ids"
 )
@@ -46,7 +47,11 @@ func (d *Drive) writePacked(ctx context.Context, id ids.ShardID, r io.Reader, si
 	if err := readExact(r, data); err != nil {
 		return fmt.Errorf("local: shard %s: %w", id, err)
 	}
-	h := segment.Header{ShardID: id, Length: uint64(size), DataCRC: segment.Checksum(data)}
+	length, ok := safeint.ToUint64(size)
+	if !ok {
+		return fmt.Errorf("local: shard %s: negative size %d", id, size)
+	}
+	h := segment.Header{ShardID: id, Length: length, DataCRC: segment.Checksum(data)}
 	h.AppendHeader(full[:0])
 
 	req := newRequest(reqPut, id)

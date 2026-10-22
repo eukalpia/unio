@@ -21,8 +21,10 @@ const maxReadAttempts = 4
 
 var castagnoli = crc32.MakeTable(crc32.Castagnoli)
 
-// errRetired reports that a segment was retired while being opened.
-var errRetired = errors.New("local: segment retired")
+// errStale reports a location whose segment the drive does not track. The
+// segment may have been retired after the lookup, or the index may name a
+// segment that never existed. ReadShard tells the two apart.
+var errStale = errors.New("local: segment not tracked")
 
 // ReadShard implements drive.Drive. Reads of a whole packed shard verify its
 // data checksum, which is checked when the reader reaches the end. Range
@@ -36,7 +38,7 @@ func (d *Drive) ReadShard(ctx context.Context, id ids.ShardID, offset, length in
 	if d.closed {
 		return nil, drive.ErrClosed
 	}
-	for attempt := 1; ; attempt++ {
+	for attempt := 1; attempt <= maxReadAttempts; attempt++ {
 		loc, err := d.lookup(id)
 		if err != nil {
 			return nil, err
@@ -49,19 +51,37 @@ func (d *Drive) ReadShard(ctx context.Context, id ids.ShardID, offset, length in
 			return d.openBlob(id, loc, offset, end)
 		}
 		rc, err := d.openPacked(id, loc, offset, end)
-		if errors.Is(err, errRetired) && attempt < maxReadAttempts {
-			continue
+		if !errors.Is(err, errStale) {
+			return rc, err
 		}
-		return rc, err
+		// The segment is not tracked. Either a compaction moved the shard after
+		// our lookup, and the index now names the copy, or the index names a
+		// segment that does not exist.
+		next, lerr := d.lookup(id)
+		if lerr != nil {
+			return nil, lerr
+		}
+		if next == loc {
+			return nil, corrupt(id, fmt.Errorf("segment %d does not exist", loc.Segment))
+		}
 	}
+	return nil, fmt.Errorf("local: shard %s: index kept moving during the read", id)
 }
 
 // openPacked opens bytes [offset, end) of a packed shard. It holds a reference
 // to the segment until the reader is closed.
 func (d *Drive) openPacked(id ids.ShardID, loc index.Location, offset, end int64) (io.ReadCloser, error) {
+	committed, known := d.stats.segEnd(loc.Segment)
+	if !known {
+		return nil, errStale
+	}
+	if !recordFits(loc, committed) {
+		return nil, corrupt(id, fmt.Errorf("record at %d of %d bytes lies outside segment %d of %d committed bytes",
+			loc.Offset, loc.Length, loc.Segment, committed))
+	}
 	ref, ok := d.segs.acquire(loc.Segment)
 	if !ok {
-		return nil, errRetired
+		return nil, errStale
 	}
 	release := func() error { return d.segs.release(ref) }
 	h, err := ref.file.ReadHeader(loc.Offset)
@@ -69,7 +89,8 @@ func (d *Drive) openPacked(id ids.ShardID, loc index.Location, offset, end int64
 		_ = release()
 		return nil, corrupt(id, err)
 	}
-	if h.ShardID != id || int64(h.Length) != loc.Length || h.Flags&segment.FlagTombstone != 0 {
+	n, ok := h.DataLength()
+	if !ok || h.ShardID != id || n != loc.Length || h.Flags&segment.FlagTombstone != 0 {
 		_ = release()
 		return nil, corrupt(id, fmt.Errorf("record at %d does not match the index", loc.Offset))
 	}

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/eukalpia/unio/internal/drive"
+	"github.com/eukalpia/unio/internal/drive/local/segment"
 )
 
 // FuzzRebuildFromSegment writes arbitrary bytes as the only segment of a drive
@@ -20,6 +21,10 @@ func FuzzRebuildFromSegment(f *testing.F) {
 	f.Add(seed)
 	f.Add(seed[:len(seed)/2])
 	f.Add([]byte{})
+	// A header with a valid checksum that claims more data than the file holds,
+	// and one whose length exceeds the largest length a header may carry.
+	f.Add(append(segment.Header{ShardID: idOf(1), Length: 1 << 29}.AppendHeader(nil), seed[:100]...))
+	f.Add(segment.Header{ShardID: idOf(2), Length: 1 << 63}.AppendHeader(nil))
 	f.Fuzz(func(t *testing.T, content []byte) {
 		if len(content) > testSegment {
 			content = content[:testSegment]

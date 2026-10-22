@@ -166,8 +166,34 @@ func (d *Drive) indexConsistent(idx *index.Index) (bool, error) {
 			return false, nil
 		}
 	}
-	return unsealed <= 1, nil
+	if unsealed > 1 {
+		return false, nil
+	}
+	// Every entry must decode, and each packed entry must name a record inside
+	// its committed segment. Otherwise the index cannot be trusted, and Open
+	// rebuilds it from the segment files.
+	err = idx.Walk(func(_ ids.ShardID, loc index.Location) error {
+		if loc.Kind != index.KindPacked {
+			return nil
+		}
+		m, ok := metas[loc.Segment]
+		if !ok || !recordFits(loc, m.End) {
+			return errOutOfRange
+		}
+		return nil
+	})
+	switch {
+	case err == nil:
+		return true, nil
+	case errors.Is(err, errOutOfRange), errors.Is(err, index.ErrCorrupt):
+		return false, nil
+	default:
+		return false, err
+	}
 }
+
+// errOutOfRange reports an index entry that names a record outside its segment.
+var errOutOfRange = errors.New("index entry outside its segment")
 
 // recoverSegments trims segment files to their committed ends, makes sure there
 // is an active segment, opens every segment and computes the accounting.

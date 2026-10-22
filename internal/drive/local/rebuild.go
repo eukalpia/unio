@@ -79,7 +79,7 @@ func (rb *rebuilder) segment(id uint64, last bool) error {
 	if err != nil {
 		return err
 	}
-	created := info.ModTime().UnixNano()
+	created := clampedNano(info.ModTime())
 	f, err := segment.Open(path, rb.d.opts.segmentSize, 0)
 	if err != nil {
 		return err
@@ -98,11 +98,15 @@ func (rb *rebuilder) segment(id uint64, last bool) error {
 				return err
 			}
 		} else {
+			length, ok := rec.Header.DataLength()
+			if !ok {
+				return fmt.Errorf("segment %d: record at %d has an invalid length", id, rec.Offset)
+			}
 			loc := index.Location{
 				Kind:    index.KindPacked,
 				Segment: id,
 				Offset:  rec.Offset,
-				Length:  int64(rec.Header.Length),
+				Length:  length,
 				Created: created,
 			}
 			if err := rb.batch.PutShard(rec.Header.ShardID, loc); err != nil {
@@ -140,7 +144,7 @@ func (rb *rebuilder) blobs() error {
 		if err := rb.ctx.Err(); err != nil {
 			return err
 		}
-		loc := index.Location{Kind: index.KindBlob, Length: size, Created: modTime.UnixNano()}
+		loc := index.Location{Kind: index.KindBlob, Length: size, Created: clampedNano(modTime)}
 		if err := rb.batch.PutShard(id, loc); err != nil {
 			return err
 		}

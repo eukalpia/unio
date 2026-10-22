@@ -17,6 +17,11 @@ func FuzzResync(f *testing.F) {
 	damaged[HeaderSize+2] ^= 0x40
 	f.Add(damaged)
 	f.Add(valid[:len(valid)-7])
+	// Headers with valid checksums whose lengths exceed the input, and the
+	// largest length a header may carry.
+	f.Add(append(Header{ShardID: testID(9), Length: 1 << 29, DataCRC: 1}.AppendHeader(nil), valid...))
+	f.Add(Header{ShardID: testID(9), Length: MaxDataLength}.AppendHeader(nil))
+	f.Add(Header{ShardID: testID(9), Length: 1 << 63}.AppendHeader(nil))
 	f.Fuzz(func(t *testing.T, b []byte) {
 		type span struct{ start, end int64 }
 		var recs []span

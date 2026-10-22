@@ -21,6 +21,9 @@ var (
 	// ErrLive reports that a segment still holds live records and cannot be
 	// retired.
 	ErrLive = errors.New("compact: segment still has live records")
+	// ErrBadRecord reports a record whose length cannot be represented. The
+	// scan that found it should have rejected it, so this stops the pass.
+	ErrBadRecord = errors.New("compact: record length out of range")
 )
 
 // DefaultMinDeadRatio is the dead fraction above which a segment is compacted.
@@ -101,7 +104,11 @@ func Pass(ctx context.Context, t Target, cfg Config) (int, error) {
 			continue
 		}
 		err := t.Visit(ctx, seg.ID, func(rec Record) error {
-			if err := cfg.Limiter.Wait(ctx, segment.RecordSize(int64(rec.Header.Length))); err != nil {
+			n, ok := rec.Header.DataLength()
+			if !ok {
+				return ErrBadRecord
+			}
+			if err := cfg.Limiter.Wait(ctx, segment.RecordSize(n)); err != nil {
 				return err
 			}
 			_, err := t.Move(ctx, rec)

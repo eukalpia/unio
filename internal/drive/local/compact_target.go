@@ -96,6 +96,10 @@ func (t compactTarget) Move(ctx context.Context, rec compact.Record) (int64, err
 	if loc.Kind != index.KindPacked || loc.Segment != rec.Segment || loc.Offset != rec.Offset {
 		return 0, nil
 	}
+	committed, known := d.stats.segEnd(rec.Segment)
+	if !known || !recordFits(loc, committed) {
+		return 0, corrupt(rec.Header.ShardID, fmt.Errorf("index record lies outside segment %d", rec.Segment))
+	}
 	buf, err := d.pools.forData(loc.Length).Get(ctx)
 	if err != nil {
 		return 0, err

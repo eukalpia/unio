@@ -38,16 +38,20 @@ func Scan(r io.ReaderAt, size int64, verifyData bool, fn func(Record) error) (in
 		if err != nil {
 			return off, nil
 		}
-		end := off + RecordSize(int64(h.Length))
+		n, ok := h.DataLength()
+		if !ok {
+			return off, nil
+		}
+		end := off + RecordSize(n)
 		if end > size {
 			return off, nil // torn: the data is not all there
 		}
 		var data []byte
 		if verifyData {
-			if int64(cap(buf)) < int64(h.Length) {
-				buf = make([]byte, h.Length)
+			if int64(cap(buf)) < n {
+				buf = make([]byte, n)
 			}
-			data = buf[:h.Length]
+			data = buf[:n]
 			if err := readFull(r, data, off+HeaderSize); err != nil {
 				if errors.Is(err, errShort) {
 					return off, nil

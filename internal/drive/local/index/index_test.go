@@ -38,19 +38,29 @@ func commit(t *testing.T, b *Batch) {
 func TestLocationRoundTrip(t *testing.T) {
 	cases := []Location{
 		{Kind: KindPacked, Segment: 1, Offset: 0, Length: 0, Created: 1},
-		{Kind: KindPacked, Segment: 1<<63 + 3, Offset: 1 << 40, Length: 1 << 20, Created: -5},
+		{Kind: KindPacked, Segment: 1<<63 + 3, Offset: 1 << 40, Length: 1 << 20, Created: 5},
 		{Kind: KindBlob, Length: 8 << 20, Created: 123456789},
 	}
 	for _, loc := range cases {
-		got, err := decodeLocation(encodeLocation(loc))
+		got, err := decodeLocation(mustEncode(t, loc))
 		if err != nil || !reflect.DeepEqual(got, loc) {
 			t.Fatalf("round trip %+v: got %+v, %v", loc, got, err)
 		}
 	}
 }
 
+// mustEncode returns the index value of loc, failing the test on error.
+func mustEncode(tb testing.TB, loc Location) []byte {
+	tb.Helper()
+	b, err := encodeLocation(loc)
+	if err != nil {
+		tb.Fatalf("encode %+v: %v", loc, err)
+	}
+	return b
+}
+
 func TestDecodeLocationRejectsBadInput(t *testing.T) {
-	good := encodeLocation(Location{Kind: KindPacked, Segment: 2})
+	good := mustEncode(t, Location{Kind: KindPacked, Segment: 2})
 	for _, b := range [][]byte{nil, good[:10], append(append([]byte(nil), good...), 0), {9, 0, 0}} {
 		if _, err := decodeLocation(b); err == nil {
 			t.Fatalf("decodeLocation(%x) accepted bad input", b)
@@ -274,15 +284,27 @@ func TestSuccessorBoundaries(t *testing.T) {
 // FuzzDecodeLocation checks that arbitrary index values never panic the
 // decoder and that accepted values re-encode to the same bytes.
 func FuzzDecodeLocation(f *testing.F) {
-	f.Add(encodeLocation(Location{Kind: KindPacked, Segment: 1, Offset: 2, Length: 3, Created: 4}))
-	f.Add(encodeLocation(Location{Kind: KindBlob, Length: 1 << 30}))
+	f.Add(mustEncode(f, Location{Kind: KindPacked, Segment: 1, Offset: 2, Length: 3, Created: 4}))
+	f.Add(mustEncode(f, Location{Kind: KindBlob, Length: 1 << 30}))
+	// Values whose fields exceed the signed range, and a short value.
+	f.Add(rawLocation(byte(KindPacked), 1, 1<<63, 10, 1))
+	f.Add(rawLocation(byte(KindPacked), 1, 0, 1<<63+1, 1))
+	f.Add(rawLocation(byte(KindBlob), 0, 0, 10, ^uint64(0)))
+	f.Add([]byte{1, 2, 3})
 	f.Fuzz(func(t *testing.T, b []byte) {
 		loc, err := decodeLocation(b)
 		if err != nil {
+			if !errors.Is(err, ErrCorrupt) {
+				t.Fatalf("decode failure does not wrap ErrCorrupt: %v", err)
+			}
 			return
 		}
-		if got := encodeLocation(loc); string(got) != string(b) {
-			t.Fatalf("accepted value does not round-trip")
+		if loc.Offset < 0 || loc.Length < 0 || loc.Created < 0 {
+			t.Fatalf("accepted a negative field: %+v", loc)
+		}
+		got, err := encodeLocation(loc)
+		if err != nil || string(got) != string(b) {
+			t.Fatalf("accepted value does not round-trip: %v", err)
 		}
 	})
 }

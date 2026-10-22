@@ -72,7 +72,7 @@ func Resync(r io.ReaderAt, size int64, fn func(Record) error) (ResyncResult, err
 			return res, err
 		}
 		res.Records++
-		pos += RecordSize(int64(h.Length))
+		pos += RecordSize(int64(len(data)))
 		lastEnd = pos
 		res.End = pos
 	}
@@ -95,13 +95,13 @@ func validRecordAt(r io.ReaderAt, pos, size int64, buf *[]byte) (Header, []byte,
 	if err != nil {
 		return Header{}, nil, false, nil
 	}
-	if pos+RecordSize(int64(h.Length)) > size {
+	n, ok := h.DataLength()
+	if !ok || pos+RecordSize(n) > size {
 		return Header{}, nil, false, nil
 	}
 	// The bounds check above caps the length at the segment size, so the
 	// allocation below is bounded by the file, not by the header.
-	n := int(h.Length)
-	if cap(*buf) < n {
+	if int64(cap(*buf)) < n {
 		*buf = make([]byte, n)
 	}
 	data := (*buf)[:n]

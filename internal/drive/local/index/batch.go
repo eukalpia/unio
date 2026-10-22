@@ -25,7 +25,11 @@ func (b *Batch) batch() *pebble.Batch {
 
 // PutShard records the location of id.
 func (b *Batch) PutShard(id ids.ShardID, loc Location) error {
-	if err := b.batch().Set(shardKey(id), encodeLocation(loc), pebble.NoSync); err != nil {
+	value, err := encodeLocation(loc)
+	if err != nil {
+		return fmt.Errorf("index: stage put %s: %w", id, err)
+	}
+	if err := b.batch().Set(shardKey(id), value, pebble.NoSync); err != nil {
 		return fmt.Errorf("index: stage put %s: %w", id, err)
 	}
 	return nil
@@ -41,7 +45,11 @@ func (b *Batch) DeleteShard(id ids.ShardID) error {
 
 // PutSegment records the metadata of segment seg.
 func (b *Batch) PutSegment(seg uint64, m SegmentMeta) error {
-	if err := b.batch().Set(segmentKey(seg), encodeSegmentMeta(m), pebble.NoSync); err != nil {
+	value, err := encodeSegmentMeta(m)
+	if err != nil {
+		return fmt.Errorf("index: stage segment %d: %w", seg, err)
+	}
+	if err := b.batch().Set(segmentKey(seg), value, pebble.NoSync); err != nil {
 		return fmt.Errorf("index: stage segment %d: %w", seg, err)
 	}
 	return nil

@@ -126,13 +126,17 @@ func (f *File) ReadRecord(off int64, dst []byte) (Header, []byte, error) {
 	if err != nil {
 		return Header{}, nil, err
 	}
-	total := RecordSize(int64(h.Length))
+	n, ok := h.DataLength()
+	if !ok {
+		return Header{}, nil, fmt.Errorf("%w: data length exceeds the signed range", ErrInvalid)
+	}
+	total := RecordSize(n)
 	if int64(len(dst)) < total {
 		return Header{}, nil, fmt.Errorf("segment: buffer of %d bytes too small for %d", len(dst), total)
 	}
 	rec := dst[:total]
-	n, err := f.f.ReadAt(rec[HeaderSize:], off+HeaderSize)
-	if n < len(rec)-HeaderSize {
+	read, err := f.f.ReadAt(rec[HeaderSize:], off+HeaderSize)
+	if read < len(rec)-HeaderSize {
 		if err == nil || errors.Is(err, io.EOF) {
 			return Header{}, nil, fmt.Errorf("%w: data at %d is truncated", ErrInvalid, off)
 		}

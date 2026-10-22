@@ -27,6 +27,8 @@ var (
 	ErrNotFound = errors.New("index: not found")
 	// ErrClosed is returned after Close.
 	ErrClosed = errors.New("index: closed")
+	// ErrCorrupt is returned for an entry that cannot describe a location.
+	ErrCorrupt = errors.New("index: corrupt entry")
 )
 
 // Kind says where a shard's bytes live.
@@ -263,11 +265,4 @@ func (x *Index) Close() error {
 		return fmt.Errorf("index: close: %w", err)
 	}
 	return nil
-}
-
-func parseShardKey(k []byte) (ids.ShardID, error) {
-	if len(k) != 1+ids.ShardIDSize || k[0] != prefixShard {
-		return ids.ShardID{}, fmt.Errorf("index: malformed shard key of %d bytes", len(k))
-	}
-	return ids.ParseShardIDBinary(k[1:])
 }
