@@ -1,0 +1,28 @@
+Unio {{ .Chart.AppVersion }} is starting as StatefulSet {{ include "unio.fullname" . }}
+with {{ int .Values.replicas }} nodes and {{ int .Values.drivesPerNode }} drives per node.
+
+The first start waits until every node has formed its metadata groups. Check
+progress with:
+
+  kubectl -n {{ .Release.Namespace }} rollout status statefulset/{{ include "unio.fullname" . }}
+
+The S3 API is at:
+  http://{{ include "unio.fullname" . }}.{{ .Release.Namespace }}.svc:9000  (inside the cluster)
+
+To try it from your machine, forward the port:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "unio.fullname" . }} 9000:9000
+
+{{- if not .Values.auth.existingSecret }}
+
+The credentials are in the Secret {{ include "unio.credentialsSecret" . }}. Read the root user with:
+
+  kubectl -n {{ .Release.Namespace }} get secret {{ include "unio.credentialsSecret" . }} -o jsonpath='{.data.root-user}' | base64 -d
+
+Back up this Secret now (see docs/deploy/kubernetes.md). It is kept on uninstall.
+{{- end }}
+
+{{- if not .Values.tls.existingSecret }}
+
+The S3 endpoint serves plain HTTP, because tls.existingSecret is empty.
+{{- end }}
