@@ -90,17 +90,10 @@ func TestServerCommand(t *testing.T) {
 		notStderr  string
 	}{
 		{
-			name:       "valid configuration reaches the placeholder",
-			env:        validEnv(),
-			wantCode:   1,
-			wantStderr: "not yet available",
-		},
-		{
 			name:       "invalid configuration is reported before starting",
 			env:        withEnv(validEnv(), map[string]*string{"UNIO_CLUSTER_SECRET": nil}),
 			wantCode:   1,
 			wantStderr: "cluster.secret is not set",
-			notStderr:  "not yet available",
 		},
 		{
 			name:       "flags override the environment",

@@ -1,15 +1,11 @@
 package main
 
 import (
-	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"runtime/debug"
 	"strings"
 	"testing"
-
-	"github.com/eukalpia/unio/internal/config"
 )
 
 func TestVersionCommand(t *testing.T) {
@@ -117,22 +113,5 @@ func TestHealthcheckUnreachableAndInvalidURL(t *testing.T) {
 func TestHealthcheckDefaultURL(t *testing.T) {
 	if !strings.HasPrefix(defaultHealthURL, "http://127.0.0.1:9000/unio/health/") {
 		t.Fatalf("default health URL = %q", defaultHealthURL)
-	}
-}
-
-func TestRunServerPlaceholder(t *testing.T) {
-	cfg := config.Defaults()
-	err := runServer(context.Background(), &cfg)
-	if err == nil || !strings.Contains(err.Error(), "not yet available") {
-		t.Fatalf("runServer error = %v, want the not-yet-available message", err)
-	}
-}
-
-func TestRunServerHonoursCancellation(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	cfg := config.Defaults()
-	if err := runServer(ctx, &cfg); !errors.Is(err, context.Canceled) {
-		t.Fatalf("runServer with cancelled context = %v, want context.Canceled", err)
 	}
 }

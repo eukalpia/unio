@@ -25,7 +25,7 @@ func newServerCmd(a app) *cobra.Command {
 				return err
 			}
 			reportWarnings(logger, warnings)
-			return runServer(cmd.Context(), cfg)
+			return runServer(cmd.Context(), cfg, logger)
 		},
 	}
 	addConfigFlags(cmd)
