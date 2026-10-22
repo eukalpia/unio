@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/hashicorp/raft"
@@ -58,6 +59,13 @@ type Group struct {
 	fsm          *fsm.FSM
 	applyTimeout time.Duration
 	verify       *verifier
+
+	// barrierApplied is the highest log index a completed barrier has shown
+	// to be reflected in the state machine. Raft never hands no-op and
+	// barrier entries to the state machine, so on an idle leader the state
+	// machine's own applied index stays below the commit index; this records
+	// that the state is nonetheless complete up to the barrier.
+	barrierApplied atomic.Uint64
 }
 
 // Start creates the replica and bootstraps the group when the replica has
@@ -194,8 +202,8 @@ func mapApplyError(err error) error {
 
 // Read answers a query linearizably. It must run on the leader: the leader
 // confirms its leadership with a coalesced round, waits until the state
-// machine has applied every entry committed before the read started, and
-// then reads the state. Followers return meta.ErrNotLeader.
+// machine reflects every entry committed before the read started, and then
+// reads the state. Followers return meta.ErrNotLeader.
 //
 // The read path is the ReadIndex rule with a fast path. After the leader
 // confirms its leadership, it reads its commit index c and its last log index.
@@ -203,9 +211,16 @@ func mapApplyError(err error) error {
 // c equals the last index, the log has nothing beyond c and c covers every
 // committed write. When c is behind the last index, a newly elected leader
 // may not yet have committed its own first entry, so the read first waits for
-// a barrier. The state machine must also have applied up to c; otherwise the
-// read waits for a barrier as well. A barrier is applied only after everything
-// before it, which closes both gaps without polling.
+// a barrier. The state must also reflect every entry up to c; otherwise the
+// read waits for a barrier as well. A barrier completes only after the state
+// machine has processed everything before it, which closes both gaps without
+// polling.
+//
+// Whether the state reflects c is decided by the state machine's own applied
+// index, not by raft's AppliedIndex: raft advances that index when it hands
+// entries to the state machine, before they are applied, so a new leader
+// whose state machine is still working through the previous leader's writes
+// would otherwise answer without an acknowledged write.
 func (g *Group) Read(ctx context.Context, q *pb.ReadQuery) (*pb.ReadResult, error) {
 	if !g.IsLeader() {
 		return nil, meta.ErrNotLeader
@@ -218,10 +233,7 @@ func (g *Group) Read(ctx context.Context, q *pb.ReadQuery) (*pb.ReadResult, erro
 	}
 	commit := g.raft.CommitIndex()
 	last := g.raft.LastIndex()
-	// Raft does not send no-op and configuration entries to the state
-	// machine, so AppliedIndex can lag behind the commit index on an idle
-	// leader; the barrier covers that case too.
-	if commit < last || g.raft.AppliedIndex() < commit {
+	if commit < last || g.stateThrough() < commit {
 		if err := g.barrier(ctx); err != nil {
 			return nil, err
 		}
@@ -229,7 +241,15 @@ func (g *Group) Read(ctx context.Context, q *pb.ReadQuery) (*pb.ReadResult, erro
 	return g.fsm.Read(q)
 }
 
-// barrier waits until every entry appended before the call has been applied.
+// stateThrough returns the log index up to which the state machine's state is
+// known to be complete: its own applied index, or the index of the last
+// barrier it has processed, whichever is higher.
+func (g *Group) stateThrough() uint64 {
+	return max(g.fsm.Applied(), g.barrierApplied.Load())
+}
+
+// barrier waits until every entry appended before the call has been applied,
+// and records the barrier's index as reflected in the state.
 func (g *Group) barrier(ctx context.Context) error {
 	fut := g.raft.Barrier(g.applyTimeout)
 	done := make(chan error, 1)
@@ -238,6 +258,9 @@ func (g *Group) barrier(ctx context.Context) error {
 	case err := <-done:
 		if err != nil {
 			return fmt.Errorf("group %d: barrier: %w", g.id, err)
+		}
+		if f, ok := fut.(raft.IndexFuture); ok {
+			raiseTo(&g.barrierApplied, f.Index())
 		}
 		return nil
 	case <-ctx.Done():
@@ -253,4 +276,15 @@ func (g *Group) Close() error {
 		return fmt.Errorf("group %d: shutdown: %w", g.id, err)
 	}
 	return nil
+}
+
+// raiseTo sets v to n if n is higher, so concurrent barriers only move it
+// forward.
+func raiseTo(v *atomic.Uint64, n uint64) {
+	for {
+		cur := v.Load()
+		if n <= cur || v.CompareAndSwap(cur, n) {
+			return
+		}
+	}
 }

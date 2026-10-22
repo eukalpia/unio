@@ -152,7 +152,7 @@ func (f *FSM) restore(br *bufio.Reader) error {
 	if err != nil {
 		return err
 	}
-	f.applied = applied
+	f.applied.Store(applied)
 	return nil
 }
 
