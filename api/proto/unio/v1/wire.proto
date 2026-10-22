@@ -1,0 +1,217 @@
+// UniWire internode messages. These are never stored on disk; they travel
+// over the mTLS transport defined in docs/adr/0003-uniwire-internode-transport.md.
+// Field numbers are never reused, and new fields are optional.
+syntax = "proto3";
+
+package unio.v1;
+
+// RPCError classifies a failed call. Only the S3 error code, a client-safe
+// message and the name of a registered sentinel error cross the wire; internal
+// causes never do.
+message RPCError {
+  string code = 1;
+  string message = 2;
+  string sentinel = 3;
+}
+
+// StreamHeader opens one half of a stream exchange. The caller's header is
+// followed by length raw bytes (an upload). The callee's header is followed by
+// length raw bytes (a download) and then a StreamTrailer.
+message StreamHeader {
+  uint64 id = 1;
+  string method = 2;
+  bytes payload = 3;
+  int64 length = 4;
+}
+
+// StreamTrailer ends the callee's reply. An unset error means success.
+message StreamTrailer {
+  uint64 id = 1;
+  RPCError error = 2;
+}
+
+// ShardRef addresses a shard: the 16-byte DataID and the 2-byte shard index.
+message ShardRef {
+  bytes data = 1;
+  uint32 index = 2;
+}
+
+// ShardMeta describes a stored shard.
+message ShardMeta {
+  ShardRef shard = 1;
+  int64 size = 2;
+  int64 created_unix_nano = 3;
+}
+
+// WriteShardHeader is the stream payload of drive.WriteShard. The shard
+// size is the stream length.
+message WriteShardHeader {
+  bytes drive = 1;
+  ShardRef shard = 2;
+}
+
+// ReadShardRequest is the stream payload of drive.ReadShard. A negative
+// length reads to the end of the shard.
+message ReadShardRequest {
+  bytes drive = 1;
+  ShardRef shard = 2;
+  int64 offset = 3;
+  int64 length = 4;
+}
+
+// DriveRequest addresses a drive hosted by the callee.
+message DriveRequest {
+  bytes drive = 1;
+}
+
+// ShardRequest addresses one shard on a drive.
+message ShardRequest {
+  bytes drive = 1;
+  ShardRef shard = 2;
+}
+
+// Empty is the response of calls that return nothing.
+message Empty {}
+
+// DriveInfo reports drive identity, capacity and health.
+message DriveInfo {
+  bytes id = 1;
+  string node = 2;
+  string endpoint = 3;
+  uint64 total = 4;
+  uint64 free = 5;
+  uint64 used = 6;
+  bool online = 7;
+}
+
+// WalkShardsRequest asks for the next page of a walk. An empty cursor starts
+// a new walk.
+message WalkShardsRequest {
+  bytes drive = 1;
+  bytes cursor = 2;
+  uint32 limit = 3;
+}
+
+// WalkShardsResponse is one page of a walk. An empty cursor with done set
+// means the walk is complete.
+message WalkShardsResponse {
+  repeated ShardMeta shards = 1;
+  bytes cursor = 2;
+  bool done = 3;
+}
+
+// PingRequest probes a node's liveness.
+message PingRequest {}
+
+// PingResponse identifies the answering node and the cluster map it holds.
+message PingResponse {
+  string node = 1;
+  uint64 map_version = 2;
+}
+
+// RaftHeader mirrors hashicorp/raft RPCHeader.
+message RaftHeader {
+  uint32 protocol_version = 1;
+  bytes id = 2;
+  bytes addr = 3;
+}
+
+// RaftLog mirrors hashicorp/raft Log.
+message RaftLog {
+  uint64 index = 1;
+  uint64 term = 2;
+  uint32 type = 3;
+  bytes data = 4;
+  bytes extensions = 5;
+  int64 appended_unix_nano = 6;
+}
+
+// RaftAppendEntries is a raft AppendEntriesRequest for one group.
+message RaftAppendEntries {
+  uint32 group = 1;
+  RaftHeader header = 2;
+  uint64 term = 3;
+  bytes leader = 4;
+  uint64 prev_log_entry = 5;
+  uint64 prev_log_term = 6;
+  repeated RaftLog entries = 7;
+  uint64 leader_commit_index = 8;
+}
+
+// RaftAppendEntriesResponse is a raft AppendEntriesResponse.
+message RaftAppendEntriesResponse {
+  RaftHeader header = 1;
+  uint64 term = 2;
+  uint64 last_log = 3;
+  bool success = 4;
+  bool no_retry_backoff = 5;
+}
+
+// RaftRequestVote is a raft RequestVoteRequest for one group.
+message RaftRequestVote {
+  uint32 group = 1;
+  RaftHeader header = 2;
+  uint64 term = 3;
+  bytes candidate = 4;
+  uint64 last_log_index = 5;
+  uint64 last_log_term = 6;
+  bool leadership_transfer = 7;
+}
+
+// RaftRequestVoteResponse is a raft RequestVoteResponse.
+message RaftRequestVoteResponse {
+  RaftHeader header = 1;
+  uint64 term = 2;
+  bytes peers = 3;
+  bool granted = 4;
+}
+
+// RaftRequestPreVote is a raft RequestPreVoteRequest for one group.
+message RaftRequestPreVote {
+  uint32 group = 1;
+  RaftHeader header = 2;
+  uint64 term = 3;
+  uint64 last_log_index = 4;
+  uint64 last_log_term = 5;
+}
+
+// RaftRequestPreVoteResponse is a raft RequestPreVoteResponse.
+message RaftRequestPreVoteResponse {
+  RaftHeader header = 1;
+  uint64 term = 2;
+  bool granted = 3;
+}
+
+// RaftInstallSnapshot is the payload of a raft InstallSnapshotRequest. The
+// snapshot bytes follow as the stream body, exactly size bytes long.
+message RaftInstallSnapshot {
+  uint32 group = 1;
+  RaftHeader header = 2;
+  uint32 snapshot_version = 3;
+  uint64 term = 4;
+  bytes leader = 5;
+  uint64 last_log_index = 6;
+  uint64 last_log_term = 7;
+  bytes peers = 8;
+  bytes configuration = 9;
+  uint64 configuration_index = 10;
+  int64 size = 11;
+}
+
+// RaftInstallSnapshotResponse is a raft InstallSnapshotResponse.
+message RaftInstallSnapshotResponse {
+  RaftHeader header = 1;
+  uint64 term = 2;
+  bool success = 3;
+}
+
+// RaftTimeoutNow is a raft TimeoutNowRequest for one group.
+message RaftTimeoutNow {
+  uint32 group = 1;
+  RaftHeader header = 2;
+}
+
+// RaftTimeoutNowResponse is a raft TimeoutNowResponse.
+message RaftTimeoutNowResponse {
+  RaftHeader header = 1;
+}
