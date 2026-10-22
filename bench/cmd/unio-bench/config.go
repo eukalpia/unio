@@ -109,6 +109,9 @@ func (c *config) validate(workloadList string) error {
 	if strings.TrimSpace(c.region) == "" {
 		return errors.New("-region must not be empty")
 	}
+	if err := checkOutputPaths(c.out, c.markdown); err != nil {
+		return err
+	}
 	if c.bucket == "" {
 		name, err := defaultBucket()
 		if err != nil {
