@@ -202,3 +202,24 @@ func TestCloseStopsWhenContextIsDone(t *testing.T) {
 		t.Fatalf("Close with done context: err = %v, want context.Canceled", err)
 	}
 }
+
+func TestPendingCountsUnfinishedDeletions(t *testing.T) {
+	gate := make(chan struct{})
+	set := &recordingSet{gate: gate}
+	q := newQueue(t, Config{QueueSize: 4, Workers: 1})
+	for i := 0; i < 2; i++ {
+		if !q.Enqueue(Task{Set: set, Data: ids.NewDataID()}) {
+			t.Fatalf("enqueue %d rejected", i)
+		}
+	}
+	if got := q.Pending(); got != 2 {
+		t.Fatalf("Pending() = %d before any deletion finished, want 2", got)
+	}
+	close(gate)
+	if err := q.Wait(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := q.Pending(); got != 0 {
+		t.Fatalf("Pending() = %d after Wait, want 0", got)
+	}
+}
