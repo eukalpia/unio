@@ -138,8 +138,6 @@ wait:
 		if err == nil {
 			continue
 		}
-		h.logger.WarnContext(ctx, "readiness check failed",
-			slog.String("check", c.name), slog.Any("error", err))
 		failures = append(failures, &checkError{name: c.name, err: err})
 	}
 	return errors.Join(failures...)
@@ -161,6 +159,12 @@ func (h *Health) ReadyHandler() http.Handler {
 		ctx, cancel := context.WithTimeout(r.Context(), h.checkTimeout)
 		defer cancel()
 		if err := h.Check(ctx); err != nil {
+			// Check reports failures to its caller and logs nothing, so that
+			// a caller serving its own probe logs each failure once.
+			for _, f := range checkFailures(err) {
+				h.logger.WarnContext(ctx, "readiness check failed",
+					slog.String("check", f.name), slog.Any("error", f.err))
+			}
 			writeHealth(w, http.StatusServiceUnavailable, healthBody{Status: "unavailable", Failed: failedNames(err)})
 			return
 		}
@@ -191,15 +195,25 @@ func runCheck(ctx context.Context, c readinessCheck) (err error) {
 
 // failedNames returns the names of the checks that Check reported, in order.
 func failedNames(err error) []string {
+	var names []string
+	for _, f := range checkFailures(err) {
+		names = append(names, f.name)
+	}
+	return names
+}
+
+// checkFailures returns the failed checks that err, a result of Check,
+// reports.
+func checkFailures(err error) []*checkError {
 	switch e := err.(type) {
 	case *checkError:
-		return []string{e.name}
+		return []*checkError{e}
 	case interface{ Unwrap() []error }:
-		var names []string
+		var failures []*checkError
 		for _, sub := range e.Unwrap() {
-			names = append(names, failedNames(sub)...)
+			failures = append(failures, checkFailures(sub)...)
 		}
-		return names
+		return failures
 	default:
 		return nil
 	}
