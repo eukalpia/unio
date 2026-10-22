@@ -176,5 +176,5 @@ func (a *Authenticator) verifyPresigned(ctx context.Context, req *auth.Request, 
 	if err := verifySignature(key, dateV, hdr, canon); err != nil {
 		return nil, err
 	}
-	return buildResult(req, id, payload{kind: payloadUnsigned}, t)
+	return buildResult(req, verified{id: id, pl: payload{kind: payloadUnsigned}, t: t, amz: dateV, scope: hdr.scope.String(), key: key, seed: hdr.signature})
 }

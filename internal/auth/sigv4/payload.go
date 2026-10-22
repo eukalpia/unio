@@ -1,7 +1,6 @@
 package sigv4
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"hash"
@@ -103,12 +102,3 @@ func (d *digestReader) Read(p []byte) (int, error) {
 
 // emptyDigest is the SHA-256 of an empty payload.
 var emptyDigest = sha256.Sum256(nil)
-
-// checkEmptyDigest verifies that a request without a body signed the digest
-// of an empty payload.
-func checkEmptyDigest(want [sha256.Size]byte) error {
-	if !bytes.Equal(want[:], emptyDigest[:]) {
-		return s3err.Errorf(s3err.XAmzContentSHA256Mismatch, "payload does not match x-amz-content-sha256")
-	}
-	return nil
-}
