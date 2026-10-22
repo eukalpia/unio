@@ -368,7 +368,7 @@ func (t *Transport) serveTransfer(nc net.Conn, from ids.NodeID, hdr *uniov1.Stre
 	if hdr.TimeoutNanos > 0 {
 		limit = min(limit, time.Duration(hdr.TimeoutNanos))
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), limit)
+	ctx, cancel := context.WithTimeout(t.serveCtx, limit)
 	defer cancel()
 	if err := nc.SetDeadline(time.Now().Add(limit)); err != nil {
 		return false

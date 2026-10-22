@@ -115,7 +115,7 @@ type rpcServerConn struct {
 // serveRPC serves one inbound RPC connection. It returns once the connection
 // has failed and every handler it started has returned.
 func (t *Transport) serveRPC(nc net.Conn, from ids.NodeID) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.serveCtx)
 	c := &rpcServerConn{
 		t:        t,
 		nc:       nc,
