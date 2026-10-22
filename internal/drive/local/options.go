@@ -7,6 +7,7 @@ import (
 
 	"github.com/cockroachdb/pebble/v2"
 
+	"github.com/eukalpia/unio/internal/bufpool"
 	"github.com/eukalpia/unio/internal/drive/local/internal/faults"
 	"github.com/eukalpia/unio/internal/drive/local/segment"
 	"github.com/eukalpia/unio/internal/ids"
@@ -73,8 +74,12 @@ type Options struct {
 	// Pebble's default cache.
 	IndexCache *pebble.Cache
 	// BufferBudget bounds the memory used for I/O buffers. Zero selects
-	// DefaultBufferBudget.
+	// DefaultBufferBudget. It is ignored when Budget is set.
 	BufferBudget int64
+	// Budget, when non-nil, is the memory budget the drive draws its I/O
+	// buffers from. It replaces BufferBudget. The budget is shared with other
+	// drives and consumers of the node, and the drive does not close it.
+	Budget *bufpool.Budget
 	// CompactRate bounds the bytes per second read by compaction. Zero
 	// selects DefaultCompactRate, and a negative value disables compaction.
 	CompactRate int64
@@ -88,7 +93,7 @@ type resolved struct {
 	Options
 	packedMax   int64
 	segmentSize int64
-	budget      int64
+	budget      int64 // total buffer memory the drive may draw
 	compactRate int64
 	batchEvery  time.Duration
 }
@@ -105,7 +110,10 @@ func (o Options) resolve() (resolved, error) {
 		r.segmentSize = DefaultSegmentSize
 	}
 	r.budget = o.BufferBudget
-	if r.budget == 0 {
+	switch {
+	case o.Budget != nil:
+		r.budget = o.Budget.Total()
+	case r.budget == 0:
 		r.budget = DefaultBufferBudget
 	}
 	r.compactRate = o.CompactRate
