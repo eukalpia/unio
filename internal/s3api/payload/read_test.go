@@ -66,6 +66,12 @@ func readCases() []readCase {
 		{name: "trailer value mismatch", steps: whole, spec: Spec{Size: size, Algorithm: object.ChecksumCRC32C, Trailer: trailerOf(object.Checksum{Algorithm: object.ChecksumCRC32C, Value: corrupt(be32(checkCRC32C))}, true)}, code: s3err.XAmzContentChecksumMismatch},
 		{name: "trailer algorithm mismatch", steps: whole, spec: Spec{Size: size, Algorithm: object.ChecksumCRC32C, Trailer: trailerOf(object.Checksum{Algorithm: object.ChecksumSHA1, Value: checkDigest(object.ChecksumSHA1)}, true)}, code: s3err.XAmzContentChecksumMismatch},
 		{name: "expected checked before trailer", steps: whole, spec: Spec{Size: size, Algorithm: object.ChecksumCRC32C, Expected: corrupt(be32(checkCRC32C)), Trailer: trailerOf(object.Checksum{Algorithm: object.ChecksumCRC32C, Value: be32(checkCRC32C)}, true)}, code: s3err.BadDigest},
+		{name: "trailer required without trailer func", steps: whole, spec: Spec{Size: size, Algorithm: object.ChecksumCRC32C, TrailerRequired: true}, code: s3err.IncompleteBody},
+		{name: "trailer required but not received", steps: whole, spec: Spec{Size: size, Algorithm: object.ChecksumCRC32C, TrailerRequired: true, Trailer: trailerOf(object.Checksum{}, false)}, code: s3err.IncompleteBody},
+		{name: "trailer required with chunks and no trailer", steps: []step{{data: data[:4]}, {data: data[4:], err: io.EOF}}, spec: Spec{Size: size, Algorithm: object.ChecksumCRC32C, TrailerRequired: true}, code: s3err.IncompleteBody},
+		{name: "trailer required with wrong algorithm", steps: whole, spec: Spec{Size: size, Algorithm: object.ChecksumCRC32C, TrailerRequired: true, Trailer: trailerOf(object.Checksum{Algorithm: object.ChecksumSHA1, Value: checkDigest(object.ChecksumSHA1)}, true)}, code: s3err.XAmzContentChecksumMismatch},
+		{name: "trailer required with wrong digest", steps: whole, spec: Spec{Size: size, Algorithm: object.ChecksumCRC32C, TrailerRequired: true, Trailer: trailerOf(object.Checksum{Algorithm: object.ChecksumCRC32C, Value: corrupt(be32(checkCRC32C))}, true)}, code: s3err.XAmzContentChecksumMismatch},
+		{name: "trailer required with match", steps: whole, spec: Spec{Size: size, Algorithm: object.ChecksumCRC32C, TrailerRequired: true, Trailer: trailerOf(object.Checksum{Algorithm: object.ChecksumCRC32C, Value: be32(checkCRC32C)}, true)}, want: data},
 	}
 	for _, a := range algorithms() {
 		cases = append(cases,
@@ -75,6 +81,8 @@ func readCases() []readCase {
 			readCase{name: a.String() + " chunked", steps: []step{{data: data[:2]}, {data: data[2:]}, {err: io.EOF}}, spec: Spec{Size: size, Algorithm: a, Expected: checkDigest(a)}, want: data},
 			readCase{name: a.String() + " trailer match", steps: whole, spec: Spec{Size: size, Algorithm: a, Trailer: trailerOf(object.Checksum{Algorithm: a, Value: checkDigest(a)}, true)}, want: data},
 			readCase{name: a.String() + " trailer mismatch", steps: whole, spec: Spec{Size: size, Algorithm: a, Trailer: trailerOf(object.Checksum{Algorithm: a, Value: corrupt(checkDigest(a))}, true)}, code: s3err.XAmzContentChecksumMismatch},
+			readCase{name: a.String() + " trailer required match", steps: whole, spec: Spec{Size: size, Algorithm: a, TrailerRequired: true, Trailer: trailerOf(object.Checksum{Algorithm: a, Value: checkDigest(a)}, true)}, want: data},
+			readCase{name: a.String() + " trailer required missing", steps: whole, spec: Spec{Size: size, Algorithm: a, TrailerRequired: true}, code: s3err.IncompleteBody},
 		)
 	}
 	return cases

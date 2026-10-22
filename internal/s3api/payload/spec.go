@@ -27,6 +27,10 @@ type Spec struct {
 	// Trailer is auth.Result.Trailer: returns the trailing checksum of an aws-chunked body.
 	// It is valid only after the underlying reader returned io.EOF. May be nil.
 	Trailer func() (object.Checksum, bool)
+	// TrailerRequired is set when the request declared a trailing checksum, so the body is
+	// only valid if the trailer arrives and names the same algorithm as Algorithm. Requires
+	// a non-none Algorithm.
+	TrailerRequired bool
 }
 
 // validate reports whether s is internally consistent. Its errors describe
@@ -44,6 +48,9 @@ func (s Spec) validate() error {
 	}
 	if s.SHA256 != nil && len(s.SHA256) != sha256.Size {
 		return fmt.Errorf("payload: SHA-256 is %d bytes, want %d", len(s.SHA256), sha256.Size)
+	}
+	if s.TrailerRequired && s.Algorithm == object.ChecksumNone {
+		return errors.New("payload: a required trailing checksum needs a checksum algorithm")
 	}
 	if s.Expected != nil {
 		if s.Algorithm == object.ChecksumNone {

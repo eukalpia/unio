@@ -42,6 +42,9 @@ type Body struct {
 	wantAlgo   []byte // Spec.Expected
 	trailer    func() (object.Checksum, bool)
 
+	// trailerRequired is Spec.TrailerRequired: a missing trailer fails the final Read.
+	trailerRequired bool
+
 	// scratch receives digests produced by hash.Hash.Sum, so that computing a
 	// digest never allocates.
 	scratch [sha256.Size]byte
@@ -63,12 +66,13 @@ func New(r io.Reader, spec Spec) (*Body, error) {
 		return nil, err
 	}
 	b := &Body{
-		r:       r,
-		size:    spec.Size,
-		md5h:    md5.New(),
-		wantMD5: bytes.Clone(spec.ContentMD5),
-		algo:    spec.Algorithm,
-		trailer: spec.Trailer,
+		r:               r,
+		size:            spec.Size,
+		md5h:            md5.New(),
+		wantMD5:         bytes.Clone(spec.ContentMD5),
+		algo:            spec.Algorithm,
+		trailer:         spec.Trailer,
+		trailerRequired: spec.TrailerRequired,
 	}
 	if spec.SHA256 != nil {
 		b.sha256h = sha256.New()

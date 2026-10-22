@@ -24,6 +24,11 @@ type ChecksumRequest struct {
 	// Expected is the digest supplied in an x-amz-checksum-<algo> header (raw bytes,
 	// base64 decoded), or nil when the digest arrives later (trailer) or is absent.
 	Expected []byte
+	// TrailerDeclared is true when x-amz-trailer names an x-amz-checksum-<algo> trailer.
+	// The client then promises that the trailing checksum arrives after the body, so the
+	// body is only valid if it does (see payload.Spec.TrailerRequired). Expected may be nil
+	// while TrailerDeclared is true.
+	TrailerDeclared bool
 }
 
 // ParseChecksumRequest collects the checksum request from the headers:
@@ -35,8 +40,8 @@ type ChecksumRequest struct {
 //     name the algorithm without a digest. Names are upper case as S3 sends them
 //     (object.ParseChecksumAlgorithm); unknown names return InvalidRequest.
 //   - x-amz-trailer lists trailer names (comma separated). A name of the form
-//     x-amz-checksum-<algo> selects that algorithm (aws-chunked uploads, where the digest is
-//     verified later from the trailer).
+//     x-amz-checksum-<algo> selects that algorithm and sets TrailerDeclared (aws-chunked
+//     uploads, where the digest is verified later from the trailer).
 //
 // All sources that name an algorithm must agree; a disagreement returns InvalidRequest.
 // A digest header that names an algorithm different from the others returns InvalidRequest.
@@ -96,7 +101,7 @@ func ParseChecksumRequest(h http.Header) (ChecksumRequest, error) {
 
 	// Repeated trailer lines form one list, so they are joined.
 	if trailers := strings.Join(h.Values("X-Amz-Trailer"), ","); trailers != "" {
-		if err := applyTrailerNames(trailers, &req.Algorithm); err != nil {
+		if err := applyTrailerNames(trailers, &req); err != nil {
 			return ChecksumRequest{}, err
 		}
 	}
@@ -104,8 +109,9 @@ func ParseChecksumRequest(h http.Header) (ChecksumRequest, error) {
 }
 
 // applyTrailerNames applies the checksum names of a comma-separated trailer
-// list to algo. Empty list elements are ignored, as RFC 9110 requires.
-func applyTrailerNames(list string, algo *object.ChecksumAlgorithm) error {
+// list to req, and records a promised checksum trailer in req.TrailerDeclared.
+// Empty list elements are ignored, as RFC 9110 requires.
+func applyTrailerNames(list string, req *ChecksumRequest) error {
 	count := 0
 	for {
 		name, rest, more := strings.Cut(list, ",")
@@ -119,9 +125,10 @@ func applyTrailerNames(list string, algo *object.ChecksumAlgorithm) error {
 				if !ok {
 					return s3err.Errorf(s3err.InvalidRequest, "unsupported checksum trailer")
 				}
-				if err := agreeAlgorithm(algo, a); err != nil {
+				if err := agreeAlgorithm(&req.Algorithm, a); err != nil {
 					return err
 				}
+				req.TrailerDeclared = true
 			}
 		}
 		if !more {

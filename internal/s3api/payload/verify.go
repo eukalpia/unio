@@ -26,21 +26,30 @@ func (b *Body) verify() error {
 	return b.verifyTrailer(algoSum)
 }
 
-// verifyTrailer checks the trailing checksum of an aws-chunked body, if the
-// caller supplied one. algoSum is the computed digest of the requested
-// algorithm, or nil when none was requested.
+// verifyTrailer checks the trailing checksum of an aws-chunked body. algoSum is
+// the computed digest of the requested algorithm, or nil when none was
+// requested. When the request declared a trailing checksum (trailerRequired),
+// a missing trailer fails the check, and so does a trailer with another
+// algorithm; otherwise an absent trailer is accepted.
 func (b *Body) verifyTrailer(algoSum []byte) error {
-	if b.trailer == nil {
-		return nil
+	var c object.Checksum
+	ok := false
+	if b.trailer != nil {
+		c, ok = b.trailer()
 	}
-	c, ok := b.trailer()
 	if !ok {
+		if b.trailerRequired {
+			return s3err.Errorf(s3err.IncompleteBody, "the declared trailing checksum was not received")
+		}
 		return nil
 	}
 	if b.algo == object.ChecksumNone {
 		return s3err.Errorf(s3err.InvalidRequest, "a trailing checksum was sent but no checksum algorithm was requested")
 	}
 	if c.Algorithm != b.algo {
+		if b.trailerRequired {
+			return s3err.Errorf(s3err.XAmzContentChecksumMismatch, "the trailing checksum algorithm does not match the declared algorithm")
+		}
 		return s3err.Errorf(s3err.XAmzContentChecksumMismatch, "The trailer checksum algorithm does not match the requested checksum algorithm.")
 	}
 	if !bytes.Equal(algoSum, c.Value) {

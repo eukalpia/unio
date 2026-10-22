@@ -71,6 +71,8 @@ func TestVerificationOrder(t *testing.T) {
 		{name: "expected before trailer", spec: Spec{Algorithm: object.ChecksumCRC32C, Expected: badCRC, Trailer: trailerBad}, code: s3err.BadDigest},
 		{name: "trailer last", spec: Spec{Algorithm: object.ChecksumCRC32C, Trailer: trailerBad}, code: s3err.XAmzContentChecksumMismatch},
 		{name: "trailer ok after earlier checks pass", spec: Spec{Algorithm: object.ChecksumCRC32C, Expected: be32(checkCRC32C), Trailer: trailerOK}},
+		{name: "expected before missing required trailer", spec: Spec{Algorithm: object.ChecksumCRC32C, Expected: badCRC, TrailerRequired: true}, code: s3err.BadDigest},
+		{name: "missing required trailer last", spec: Spec{Algorithm: object.ChecksumCRC32C, Expected: be32(checkCRC32C), TrailerRequired: true}, code: s3err.IncompleteBody},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -81,6 +83,82 @@ func TestVerificationOrder(t *testing.T) {
 			}
 			_, err = drain(t, b, 64)
 			requireCode(t, err, tc.code)
+		})
+	}
+}
+
+// TestTrailerRequiredSuccess checks that a declared trailing checksum with the
+// right algorithm and digest completes the payload, for every algorithm.
+func TestTrailerRequiredSuccess(t *testing.T) {
+	for _, a := range algorithms() {
+		t.Run(a.String(), func(t *testing.T) {
+			b, err := New(newScript(step{data: checkInput, err: io.EOF}), Spec{
+				Size:            int64(len(checkInput)),
+				Algorithm:       a,
+				TrailerRequired: true,
+				Trailer:         trailerOf(object.Checksum{Algorithm: a, Value: checkDigest(a)}, true),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := drain(t, b, 64)
+			requireCode(t, err, "")
+			if string(got) != checkInput {
+				t.Fatalf("delivered %q, want %q", got, checkInput)
+			}
+			if c := b.Checksum(); c.Algorithm != a || !bytes.Equal(c.Value, checkDigest(a)) {
+				t.Fatalf("Checksum() = %v with digest %x, want %s digest %x", c.Algorithm, c.Value, a, checkDigest(a))
+			}
+		})
+	}
+}
+
+// TestTrailerRequiredFailsFinalRead checks that a missing trailing checksum is
+// reported by the Read that reaches the end of the payload, never as io.EOF,
+// and that the failure is sticky.
+func TestTrailerRequiredFailsFinalRead(t *testing.T) {
+	tests := []struct {
+		name  string
+		steps []step
+	}{
+		{name: "last bytes with eof", steps: []step{{data: checkInput, err: io.EOF}}},
+		{name: "last bytes then separate eof", steps: []step{{data: checkInput}, {err: io.EOF}}},
+		{name: "last bytes split", steps: []step{{data: checkInput[:5]}, {data: checkInput[5:], err: io.EOF}}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, bufSize := range []int{1, 4, 64} {
+				b, err := New(newScript(tc.steps...), Spec{
+					Size:            int64(len(checkInput)),
+					Algorithm:       object.ChecksumCRC32C,
+					TrailerRequired: true,
+					Trailer:         trailerOf(object.Checksum{}, false),
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				buf := make([]byte, bufSize)
+				var delivered []byte
+				var terminal error
+				for range maxReads {
+					n, err := b.Read(buf)
+					delivered = append(delivered, buf[:n]...)
+					if err != nil {
+						terminal = err
+						break
+					}
+				}
+				if terminal == nil {
+					t.Fatalf("buf=%d: no terminal error", bufSize)
+				}
+				requireCode(t, terminal, s3err.IncompleteBody)
+				if string(delivered) != checkInput {
+					t.Fatalf("buf=%d: delivered %q before the error, want %q", bufSize, delivered, checkInput)
+				}
+				if n, err := b.Read(buf); n != 0 || err != terminal {
+					t.Fatalf("buf=%d: Read after failure = (%d, %v), want (0, %v)", bufSize, n, err, terminal)
+				}
+			}
 		})
 	}
 }

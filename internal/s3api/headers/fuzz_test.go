@@ -155,6 +155,9 @@ func FuzzParseChecksumRequest(f *testing.F) {
 			wantCode(t, err, s3err.InvalidRequest)
 			return
 		}
+		if req.TrailerDeclared && (trailer == "" || req.Algorithm == object.ChecksumNone) {
+			t.Fatalf("trailer declared for %q without a checksum algorithm (%s)", trailer, req.Algorithm)
+		}
 		if req.Expected == nil {
 			return
 		}

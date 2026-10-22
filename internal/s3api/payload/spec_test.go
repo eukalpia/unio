@@ -36,6 +36,9 @@ func TestNewValidation(t *testing.T) {
 		{name: "expected too long for SHA1", r: r, spec: Spec{Algorithm: object.ChecksumSHA1, Expected: make([]byte, 32)}, wantErr: true},
 		{name: "algorithm without expected", r: r, spec: Spec{Algorithm: object.ChecksumCRC64NVME}},
 		{name: "trailer without algorithm", r: r, spec: Spec{Trailer: trailerOf(object.Checksum{}, false)}},
+		{name: "trailer required without algorithm", r: r, spec: Spec{TrailerRequired: true, Trailer: trailerOf(object.Checksum{}, false)}, wantErr: true},
+		{name: "trailer required with algorithm", r: r, spec: Spec{Algorithm: object.ChecksumSHA256, TrailerRequired: true, Trailer: trailerOf(object.Checksum{}, false)}},
+		{name: "trailer required with algorithm and no trailer func", r: r, spec: Spec{Algorithm: object.ChecksumCRC32, TrailerRequired: true}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

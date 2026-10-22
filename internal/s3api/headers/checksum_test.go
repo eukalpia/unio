@@ -74,17 +74,17 @@ func TestParseChecksumRequest(t *testing.T) {
 		{
 			name: "trailer names the algorithm",
 			h:    http.Header{"X-Amz-Trailer": {"x-amz-checksum-crc32c"}},
-			want: ChecksumRequest{Algorithm: object.ChecksumCRC32C},
+			want: ChecksumRequest{Algorithm: object.ChecksumCRC32C, TrailerDeclared: true},
 		},
 		{
 			name: "trailer list with other names",
 			h:    http.Header{"X-Amz-Trailer": {"x-amz-meta-owner, x-amz-checksum-sha1"}},
-			want: ChecksumRequest{Algorithm: object.ChecksumSHA1},
+			want: ChecksumRequest{Algorithm: object.ChecksumSHA1, TrailerDeclared: true},
 		},
 		{
 			name: "trailer repeated in two lines",
 			h:    http.Header{"X-Amz-Trailer": {"x-amz-checksum-sha1", "X-Amz-Checksum-Sha1"}},
-			want: ChecksumRequest{Algorithm: object.ChecksumSHA1},
+			want: ChecksumRequest{Algorithm: object.ChecksumSHA1, TrailerDeclared: true},
 		},
 		{
 			name: "trailer without checksum names",
@@ -113,7 +113,7 @@ func TestParseChecksumRequest(t *testing.T) {
 				"X-Amz-Checksum-Sha256": {b64(digestOf(32)...)},
 				"X-Amz-Trailer":         {"x-amz-checksum-sha256"},
 			},
-			want: ChecksumRequest{Algorithm: object.ChecksumSHA256, Expected: digestOf(32)},
+			want: ChecksumRequest{Algorithm: object.ChecksumSHA256, Expected: digestOf(32), TrailerDeclared: true},
 		},
 		{
 			name: "checksum mode and type are not digests",
@@ -197,6 +197,99 @@ func TestParseChecksumRequest(t *testing.T) {
 			wantNoError(t, err)
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Fatalf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestParseChecksumRequestTrailerDeclared checks when a promised checksum trailer
+// is recorded in ChecksumRequest.TrailerDeclared.
+func TestParseChecksumRequestTrailerDeclared(t *testing.T) {
+	crc32Digest := []byte{0, 0, 0, 1}
+	cases := []struct {
+		name string
+		h    http.Header
+		want bool
+		code s3err.Code
+	}{
+		{
+			name: "trailer names crc32 alone",
+			h:    http.Header{"X-Amz-Trailer": {"x-amz-checksum-crc32"}},
+			want: true,
+		},
+		{
+			name: "trailer names sha256 among other names",
+			h:    http.Header{"X-Amz-Trailer": {"x-amz-meta-owner, x-amz-checksum-sha256"}},
+			want: true,
+		},
+		{
+			name: "trailer lines joined before parsing",
+			h:    http.Header{"X-Amz-Trailer": {"x-amz-meta-owner", "x-amz-checksum-crc64nvme"}},
+			want: true,
+		},
+		{
+			name: "trailer names only metadata",
+			h:    http.Header{"X-Amz-Trailer": {"x-amz-meta-foo"}},
+			want: false,
+		},
+		{
+			name: "empty trailer header",
+			h:    http.Header{"X-Amz-Trailer": {""}},
+			want: false,
+		},
+		{
+			name: "digest header without trailer",
+			h:    http.Header{"X-Amz-Checksum-Crc32": {b64(crc32Digest...)}},
+			want: false,
+		},
+		{
+			name: "algorithm header without trailer",
+			h:    http.Header{"X-Amz-Checksum-Algorithm": {"CRC32"}},
+			want: false,
+		},
+		{
+			name: "trailer and algorithm agree",
+			h: http.Header{
+				"X-Amz-Checksum-Algorithm": {"CRC32"},
+				"X-Amz-Trailer":            {"x-amz-checksum-crc32"},
+			},
+			want: true,
+		},
+		{
+			name: "trailer and digest agree",
+			h: http.Header{
+				"X-Amz-Checksum-Crc32": {b64(crc32Digest...)},
+				"X-Amz-Trailer":        {"x-amz-checksum-crc32"},
+			},
+			want: true,
+		},
+		{
+			name: "trailer disagrees with algorithm",
+			h: http.Header{
+				"X-Amz-Checksum-Algorithm": {"CRC32"},
+				"X-Amz-Trailer":            {"x-amz-checksum-sha1"},
+			},
+			code: s3err.InvalidRequest,
+		},
+		{
+			name: "trailer disagrees with digest",
+			h: http.Header{
+				"X-Amz-Checksum-Crc32": {b64(crc32Digest...)},
+				"X-Amz-Trailer":        {"x-amz-checksum-sha1"},
+			},
+			code: s3err.InvalidRequest,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ParseChecksumRequest(tc.h)
+			if tc.code != "" {
+				wantCode(t, err, tc.code)
+				return
+			}
+			wantNoError(t, err)
+			if got.TrailerDeclared != tc.want {
+				t.Fatalf("TrailerDeclared = %v, want %v", got.TrailerDeclared, tc.want)
 			}
 		})
 	}

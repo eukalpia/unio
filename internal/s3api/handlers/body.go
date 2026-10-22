@@ -24,12 +24,13 @@ func (c *Call) verifiedBody(contentMD5 []byte, sum headers.ChecksumRequest) (*pa
 		src = bytes.NewReader(nil)
 	}
 	body, err := payload.New(src, payload.Spec{
-		Size:       size,
-		ContentMD5: contentMD5,
-		SHA256:     c.Auth.PayloadSHA256,
-		Algorithm:  sum.Algorithm,
-		Expected:   sum.Expected,
-		Trailer:    c.Auth.Trailer,
+		Size:            size,
+		ContentMD5:      contentMD5,
+		SHA256:          c.Auth.PayloadSHA256,
+		Algorithm:       sum.Algorithm,
+		Expected:        sum.Expected,
+		Trailer:         c.Auth.Trailer,
+		TrailerRequired: sum.TrailerDeclared,
 	})
 	if err != nil {
 		return nil, err
