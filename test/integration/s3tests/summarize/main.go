@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 )
 
 func main() {
@@ -59,7 +60,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 // readFile opens path and passes it to parse. Errors name the file.
 func readFile[T any](path string, parse func(io.Reader) (T, error)) (T, error) {
 	var zero T
-	f, err := os.Open(path)
+	// #nosec G304 -- path is a result file named on the command line; it is cleaned and only read
+	f, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		return zero, err
 	}

@@ -3,6 +3,7 @@ package integration
 import (
 	"bytes"
 	"context"
+	// #nosec G501 -- MD5 is the S3 ETag of a single-part upload; it is not used for security
 	"crypto/md5"
 	"crypto/rand"
 	"crypto/sha256"
@@ -191,6 +192,7 @@ func headObject(ctx context.Context, t *testing.T, cli *s3.Client, bucket, key s
 // md5ETag returns the quoted hex MD5 that S3 reports as the ETag of a
 // single-part upload.
 func md5ETag(data []byte) string {
+	// #nosec G401 -- computes the S3 ETag of a single-part upload; not a security control
 	sum := md5.Sum(data)
 	return `"` + hex.EncodeToString(sum[:]) + `"`
 }

@@ -31,6 +31,7 @@ func NewExecRunner() Runner {
 // includes the command's stderr so the cause shows up in test output. Stdout
 // is returned even when the command fails.
 func (execRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	// #nosec G204 -- name is the docker CLI or a test binary chosen by this package's callers; args come from validated values and no shell is involved
 	cmd := exec.CommandContext(ctx, name, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

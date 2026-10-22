@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -74,7 +75,8 @@ var (
 // setup first. Later calls return the result of the first.
 func trustCA(path string) error {
 	caOnce.Do(func() {
-		pemData, err := os.ReadFile(path)
+		// #nosec G304 -- path is the CA file named by the operator in UNIO_TEST_CA_FILE; it is cleaned and only parsed as PEM
+		pemData, err := os.ReadFile(filepath.Clean(path))
 		if err != nil {
 			caErr = fmt.Errorf("read %s: %w", envCAFile, err)
 			return
