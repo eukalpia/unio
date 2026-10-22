@@ -99,11 +99,17 @@ type Bucket struct {
 }
 
 // ListBucketsResult is a ListAllMyBuckets response.
+//
+// ContinuationToken and Prefix are emitted only when non-empty.
 type ListBucketsResult struct {
 	// Owner is the account that owns the buckets.
 	Owner Owner
 	// Buckets lists the buckets of the account.
 	Buckets []Bucket
+	// ContinuationToken is the token for the next page, if there is one.
+	ContinuationToken string
+	// Prefix is the prefix the listing was filtered by, if any.
+	Prefix string
 }
 
 // ErrorResponse is the body of every S3 error. Fields are always emitted, even
