@@ -30,6 +30,7 @@ import (
 	"github.com/eukalpia/unio/internal/s3api/middleware"
 	"github.com/eukalpia/unio/internal/s3api/reqstat"
 	"github.com/eukalpia/unio/internal/s3api/router"
+	"github.com/eukalpia/unio/internal/s3err"
 )
 
 // maxRequestBody is the transport body limit. Bodies are streamed, never
@@ -278,7 +279,12 @@ func (s *Server) handle(ctx context.Context, c *app.RequestContext) {
 		return s.authz.Authorize(ctx, identity, action, bucket, key)
 	}
 	if requiresPreAuthorization(rt.Op) {
-		if err := authorize(primaryAction(rt.Op), rt.Bucket, rt.Key); err != nil {
+		action, ok := primaryAction(rt.Op)
+		if !ok {
+			apierr.Write(c, s.logger, s3err.Wrap(s3err.AccessDenied, fmt.Errorf("s3api: no action for operation %s", rt.Op)), resource)
+			return
+		}
+		if err := authorize(action, rt.Bucket, rt.Key); err != nil {
 			apierr.Write(c, s.logger, err, resource)
 			return
 		}
