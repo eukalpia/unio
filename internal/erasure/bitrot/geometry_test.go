@@ -1,6 +1,13 @@
 package bitrot
 
-import "testing"
+import (
+	"bytes"
+	"errors"
+	"testing"
+
+	"github.com/eukalpia/unio/internal/erasure"
+	"github.com/eukalpia/unio/internal/ids"
+)
 
 func TestShardBlockSize(t *testing.T) {
 	tests := []struct {
@@ -83,24 +90,35 @@ func TestSpan(t *testing.T) {
 		{"second stripe exactly", 10, 10, 1, 2, 19, 19, 0},
 		{"short last stripe", 20, 5, 2, 3, 38, 18, 0},
 		{"inside last stripe", 24, 1, 2, 3, 38, 18, 4},
-		{"empty range", 7, 0, 0, 0, 0, 0, 0},
-		{"empty object", 0, 0, 0, 0, 0, 0, 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sz := int64(size)
-			if tt.name == "empty object" {
-				sz = 0
-			}
-			sp, err := Span(sz, k, stripe, tt.offset, tt.length)
+			sp, err := Span(size, k, stripe, tt.offset, tt.length)
 			if err != nil {
 				t.Fatalf("Span: %v", err)
 			}
-			want := Range{FirstStripe: tt.first, EndStripe: tt.end, ShardOffset: tt.shardOff, ShardLength: tt.shardLen, Skip: tt.skip}
+			want := Range{
+				FirstStripe: tt.first,
+				EndStripe:   tt.end,
+				Shard:       Extent{Offset: tt.shardOff, Length: tt.shardLen, FirstBlock: tt.first},
+				Skip:        tt.skip,
+			}
 			if sp != want {
 				t.Fatalf("Span = %+v, want %+v", sp, want)
 			}
 		})
+	}
+}
+
+func TestSpanOfEmptyRangeIsZero(t *testing.T) {
+	for _, tc := range []struct{ size, offset int64 }{{25, 7}, {25, 0}, {0, 0}, {25, 25}} {
+		sp, err := Span(tc.size, 4, 10, tc.offset, 0)
+		if err != nil {
+			t.Fatalf("Span(%d, %d, 0): %v", tc.size, tc.offset, err)
+		}
+		if sp != (Range{}) {
+			t.Fatalf("Span of an empty range = %+v, want zero", sp)
+		}
 	}
 }
 
@@ -120,14 +138,14 @@ func TestSpanRejectsBadArguments(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := Span(tt.size, tt.k, tt.stripe, tt.offset, tt.length); err == nil {
-				t.Fatal("Span accepted invalid arguments")
+			if _, err := Span(tt.size, tt.k, tt.stripe, tt.offset, tt.length); !errors.Is(err, ErrRange) {
+				t.Fatalf("Span: err = %v, want ErrRange", err)
 			}
 		})
 	}
 }
 
-func TestStripeRange(t *testing.T) {
+func TestStripeExtent(t *testing.T) {
 	// Framed blocks of an object of 25 bytes, k=4, stripe 10: 19, 19, 18 bytes.
 	const size, k, stripe = 25, 4, 10
 	tests := []struct {
@@ -139,14 +157,68 @@ func TestStripeRange(t *testing.T) {
 		{"middle stripe", 1, 2, 19, 19},
 		{"last stripe", 2, 3, 38, 18},
 		{"first two", 0, 2, 0, 38},
-		{"empty", 1, 1, 19, 0},
+		{"last two", 1, 3, 19, 37},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			off, length := StripeRange(size, k, stripe, tt.first, tt.end)
-			if off != tt.wantOff || length != tt.wantLen {
-				t.Fatalf("StripeRange = (%d,%d), want (%d,%d)", off, length, tt.wantOff, tt.wantLen)
+			got := StripeExtent(size, k, stripe, tt.first, tt.end)
+			want := Extent{Offset: tt.wantOff, Length: tt.wantLen, FirstBlock: tt.first}
+			if got != want {
+				t.Fatalf("StripeExtent = %+v, want %+v", got, want)
 			}
 		})
+	}
+}
+
+// TestRangeReadsVerifyAtDerivedPositions reads windows of stripes the way
+// a range read does: the extent of the window is cut from a fully written
+// shard, and a reader built from the extent's position must verify exactly
+// the blocks of the window. A reader one block off must fail.
+func TestRangeReadsVerifyAtDerivedPositions(t *testing.T) {
+	const size, k, stripe = 25, 4, 10
+	id := ids.ShardID{Data: ids.DataID{7, 7}, Index: 2}
+	data := make([]byte, size)
+	for i := range data {
+		data[i] = byte(i*31 + 5)
+	}
+	// Write the whole shard: block s holds the bytes of stripe s, padded.
+	var shard bytes.Buffer
+	w := NewWriter(&shard, Position{Data: id.Data, Shard: id.Index})
+	for s := range Stripes(size, stripe) {
+		block := make([]byte, BlockLen(size, k, stripe, s))
+		copy(block, data[s*stripe:s*stripe+StripeLen(size, stripe, s)])
+		if err := w.WriteBlock(block); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shardBytes := shard.Bytes()
+	if int64(len(shardBytes)) != ShardSize(size, k, stripe) {
+		t.Fatalf("shard is %d bytes, want %d", len(shardBytes), ShardSize(size, k, stripe))
+	}
+
+	windows := []struct{ offset, length int64 }{
+		{0, 1}, {9, 2}, {10, 10}, {20, 5}, {24, 1}, {0, 25}, {9, 16},
+	}
+	for _, win := range windows {
+		sp, err := Span(size, k, stripe, win.offset, win.length)
+		if err != nil {
+			t.Fatal(err)
+		}
+		window := shardBytes[sp.Shard.Offset : sp.Shard.Offset+sp.Shard.Length]
+		// Verify every block of the window from its own position.
+		r := NewReader(bytes.NewReader(window), sp.Shard.Position(id))
+		for s := sp.FirstStripe; s < sp.EndStripe; s++ {
+			if err := r.ReadBlock(make([]byte, BlockLen(size, k, stripe, s))); err != nil {
+				t.Fatalf("window [%d,+%d) stripe %d: %v", win.offset, win.length, s, err)
+			}
+		}
+		if err := r.Done(); err != nil {
+			t.Fatalf("window [%d,+%d): %v", win.offset, win.length, err)
+		}
+		// Off by one block, the same window must fail on its first block.
+		off := NewReader(bytes.NewReader(window), Position{Data: id.Data, Shard: id.Index, FirstBlock: uint64(sp.FirstStripe) + 1})
+		if err := off.ReadBlock(make([]byte, BlockLen(size, k, stripe, sp.FirstStripe))); !errors.Is(err, erasure.ErrCorrupt) {
+			t.Fatalf("window [%d,+%d) read one block off: err = %v, want corrupt", win.offset, win.length, err)
+		}
 	}
 }

@@ -73,13 +73,13 @@ func (st *stream) readBlock(ctx context.Context, s int64, dst []byte) error {
 	}
 	if st.rc == nil || st.next != s {
 		st.close()
-		off, length := bitrot.StripeRange(st.size, st.k, st.stripe, s, st.end)
-		rc, err := st.drive.ReadShard(ctx, st.shard, off, length)
+		ext := bitrot.StripeExtent(st.size, st.k, st.stripe, s, st.end)
+		rc, err := st.drive.ReadShard(ctx, st.shard, ext.Offset, ext.Length)
 		if err != nil {
 			st.dead = true
 			return fmt.Errorf("shard %d: open at stripe %d: %w", st.index, s, err)
 		}
-		st.rc, st.br, st.next = rc, bitrot.NewReader(rc), s
+		st.rc, st.br, st.next = rc, bitrot.NewReader(rc, ext.Position(st.shard)), s
 	}
 	err := st.br.ReadBlock(dst)
 	st.next++

@@ -1,33 +1,50 @@
-// Package bitrot frames erasure shards with per-block checksums and provides
-// the offset arithmetic that maps object byte ranges onto framed shard
-// ranges.
+// Package bitrot frames erasure shards with position-bound checksums and
+// provides the offset arithmetic that maps object byte ranges onto framed
+// shard ranges.
 //
 // A shard is a sequence of blocks. Block i holds the data of stripe i and is
-// stored as [16-byte xxh3-128 digest of the block data][block data]. Every
-// block is ceil(stripeSize/k) bytes except the last block of a shard, which
-// covers the final, possibly shorter, stripe.
+// stored as [16-byte digest][block data]. The digest is the xxh3-128 of the
+// block data, seeded by a 64-bit xxh3 of (DataID, shard index, block index),
+// so a block verifies only at the position it was written to. Every block is
+// ceil(stripeSize/k) bytes except the last block of a shard, which covers the
+// final, possibly shorter, stripe.
 package bitrot
 
 import (
 	"errors"
 	"fmt"
+
+	"github.com/eukalpia/unio/internal/ids"
 )
 
-// HashSize is the length of the xxh3-128 digest that prefixes every block.
+// HashSize is the length of the digest that prefixes every block.
 const HashSize = 16
 
 // ErrRange is returned by Span for arguments that do not describe a valid
 // byte range of an object.
 var ErrRange = errors.New("bitrot: invalid object range or geometry")
 
+// Extent is a framed byte range of one shard. FirstBlock is the block index
+// (stripe index) of the first block in the range.
+type Extent struct {
+	Offset, Length int64
+	FirstBlock     int64
+}
+
+// Position returns the position of the blocks of extent e in shard id. A
+// Reader over the extent must be built with this position.
+func (e Extent) Position(id ids.ShardID) Position {
+	return Position{Data: id.Data, Shard: id.Index, FirstBlock: uint64(e.FirstBlock)}
+}
+
 // Range describes which framed bytes of each shard serve an object byte
 // range.
 type Range struct {
 	// FirstStripe and EndStripe bound the stripes touched, as [First, End).
 	FirstStripe, EndStripe int64
-	// ShardOffset and ShardLength are the framed byte range of one shard
-	// that covers every touched block.
-	ShardOffset, ShardLength int64
+	// Shard is the framed range of one shard that covers every touched
+	// block. Its FirstBlock equals FirstStripe.
+	Shard Extent
 	// Skip is the number of data bytes at the start of FirstStripe that
 	// precede the requested range.
 	Skip int64
@@ -81,6 +98,22 @@ func ShardSize(dataSize int64, k, stripeSize int) int64 {
 	return blockEnd(dataSize, k, stripeSize, n-1)
 }
 
+// StripeExtent returns the framed range of one shard that holds stripes
+// [first, end) of an object of dataSize bytes. Its FirstBlock is first, which
+// is the position a Reader over the range must start from. An empty range has
+// zero length.
+func StripeExtent(dataSize int64, k, stripeSize int, first, end int64) Extent {
+	off := blockOffset(k, stripeSize, first)
+	if end <= first {
+		return Extent{Offset: off, FirstBlock: first}
+	}
+	return Extent{
+		Offset:     off,
+		Length:     blockEnd(dataSize, k, stripeSize, end-1) - off,
+		FirstBlock: first,
+	}
+}
+
 // Span maps the object range [offset, offset+length) to the stripes that
 // serve it and to the framed range of each shard that must be read.
 // A zero length yields the zero Range.
@@ -97,8 +130,7 @@ func Span(dataSize int64, k, stripeSize int, offset, length int64) (Range, error
 	return Range{
 		FirstStripe: first,
 		EndStripe:   end,
-		ShardOffset: blockOffset(k, stripeSize, first),
-		ShardLength: blockEnd(dataSize, k, stripeSize, end-1) - blockOffset(k, stripeSize, first),
+		Shard:       StripeExtent(dataSize, k, stripeSize, first, end),
 		Skip:        offset - first*s,
 	}, nil
 }
@@ -112,14 +144,4 @@ func validate(dataSize int64, k, stripeSize int, offset, length int64) error {
 		return fmt.Errorf("%w: [%d,%d) outside %d bytes", ErrRange, offset, offset+length, dataSize)
 	}
 	return nil
-}
-
-// StripeRange returns the framed byte range of one shard that covers stripes
-// [first, end) of an object of dataSize bytes.
-func StripeRange(dataSize int64, k, stripeSize int, first, end int64) (offset, length int64) {
-	if end <= first {
-		return blockOffset(k, stripeSize, first), 0
-	}
-	offset = blockOffset(k, stripeSize, first)
-	return offset, blockEnd(dataSize, k, stripeSize, end-1) - offset
 }
