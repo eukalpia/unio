@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/eukalpia/unio/internal/auth"
+	"github.com/eukalpia/unio/internal/auth/authtest"
+	"github.com/eukalpia/unio/internal/auth/iam"
 	"github.com/eukalpia/unio/internal/config"
 )
 
@@ -62,6 +64,13 @@ func TestInitWritesValidCredentials(t *testing.T) {
 	}
 	if err := auth.ValidateRootCredentials(env["UNIO_ROOT_USER"], env["UNIO_ROOT_PASSWORD"]); err != nil {
 		t.Errorf("root credentials from unio init rejected by auth.ValidateRootCredentials: %v", err)
+	}
+	if _, err := iam.New(authtest.NewMemKV(), iam.Config{
+		KEK:           iam.DeriveKEK([]byte(fxSecret)),
+		RootAccessKey: env["UNIO_ROOT_USER"],
+		RootSecret:    env["UNIO_ROOT_PASSWORD"],
+	}); err != nil {
+		t.Errorf("root credentials from unio init rejected by iam.New: %v", err)
 	}
 	if !auth.ValidAccessKeyID(env["UNIO_ROOT_USER"]) {
 		t.Errorf("root user from unio init %q is not letters and digits", env["UNIO_ROOT_USER"])

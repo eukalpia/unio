@@ -176,14 +176,14 @@ func TestConfigValidateCommand(t *testing.T) {
 	t.Run("invalid reports every problem", func(t *testing.T) {
 		env := withEnv(validEnv(), map[string]*string{
 			"UNIO_NODE_ID":   nil,
-			"UNIO_ROOT_USER": str("short"),
+			"UNIO_ROOT_USER": str("administrator"),
 			"UNIO_LOG_LEVEL": str("loud"),
 		})
 		res := runCLI(t, env, "config", "validate")
 		if res.code != 1 {
 			t.Fatalf("exit code = %d, want 1", res.code)
 		}
-		for _, want := range []string{"node.id is required", "root access key must be at least 12", "log.level"} {
+		for _, want := range []string{"node.id is required", "well-known default name", "log.level"} {
 			if !strings.Contains(res.stderr, want) {
 				t.Errorf("stderr does not mention %q:\n%s", want, res.stderr)
 			}
