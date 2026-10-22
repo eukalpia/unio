@@ -1,0 +1,142 @@
+// Stored metadata records. This schema is an on-disk contract: field
+// numbers are never reused, new fields are optional, and changes require an
+// ADR (see docs/adr/0006-protobuf-encoding.md).
+syntax = "proto3";
+
+package unio.v1;
+
+enum VersioningState {
+  VERSIONING_STATE_UNVERSIONED = 0;
+  VERSIONING_STATE_ENABLED = 1;
+  VERSIONING_STATE_SUSPENDED = 2;
+}
+
+enum ChecksumAlgorithm {
+  CHECKSUM_ALGORITHM_NONE = 0;
+  CHECKSUM_ALGORITHM_CRC32 = 1;
+  CHECKSUM_ALGORITHM_CRC32C = 2;
+  CHECKSUM_ALGORITHM_CRC64NVME = 3;
+  CHECKSUM_ALGORITHM_SHA1 = 4;
+  CHECKSUM_ALGORITHM_SHA256 = 5;
+}
+
+enum ChecksumType {
+  CHECKSUM_TYPE_FULL_OBJECT = 0;
+  CHECKSUM_TYPE_COMPOSITE = 1;
+}
+
+message Checksum {
+  ChecksumAlgorithm algorithm = 1;
+  ChecksumType type = 2;
+  bytes value = 3;
+  uint32 parts = 4;
+}
+
+message BucketRecord {
+  string name = 1;
+  uint64 id = 2;
+  int64 created_unix_nano = 3;
+  string owner = 4;
+  VersioningState versioning = 5;
+  // True while the bucket is being deleted; writes are rejected.
+  bool deleting = 6;
+}
+
+message ErasureLayout {
+  uint32 set = 1;
+  uint32 data_shards = 2;
+  uint32 parity_shards = 3;
+  uint32 stripe_size = 4;
+  // 16-byte drive ids; an empty entry marks a shard that was not written.
+  repeated bytes drives = 5;
+}
+
+message PartRecord {
+  uint32 number = 1;
+  int64 size = 2;
+  string etag = 3;
+  Checksum checksum = 4;
+  int64 mod_time_unix_nano = 5;
+  // 16-byte DataID.
+  bytes data = 6;
+  ErasureLayout layout = 7;
+}
+
+message ObjectAttributes {
+  string content_type = 1;
+  string content_encoding = 2;
+  string content_disposition = 3;
+  string content_language = 4;
+  string cache_control = 5;
+  string expires = 6;
+  map<string, string> user_metadata = 7;
+  string tags = 8;
+  string storage_class = 9;
+}
+
+message ObjectRecord {
+  string bucket = 1;
+  string key = 2;
+  string version_id = 3;
+  int64 mod_time_unix_nano = 4;
+  bool delete_marker = 5;
+  int64 size = 6;
+  string etag = 7;
+  ObjectAttributes attributes = 8;
+  Checksum checksum = 9;
+  // Present (possibly empty) only for inline objects.
+  optional bytes inline = 10;
+  repeated PartRecord parts = 11;
+  bool multipart = 12;
+}
+
+message UploadRecord {
+  string bucket = 1;
+  string key = 2;
+  string upload_id = 3;
+  int64 initiated_unix_nano = 4;
+  ObjectAttributes attributes = 5;
+  ChecksumAlgorithm checksum_algorithm = 6;
+}
+
+message NodeInfo {
+  string id = 1;
+  string addr = 2;
+  string s3_addr = 3;
+}
+
+message DriveLocation {
+  bytes id = 1;
+  string node = 2;
+  string path = 3;
+}
+
+message SetInfo {
+  uint32 id = 1;
+  uint32 data_shards = 2;
+  uint32 parity_shards = 3;
+  repeated bytes drives = 4;
+}
+
+message PartitionInfo {
+  uint32 id = 1;
+  repeated string replicas = 2;
+  repeated string non_voters = 3;
+}
+
+message ClusterMap {
+  uint64 version = 1;
+  string cluster_id = 2;
+  repeated NodeInfo nodes = 3;
+  repeated DriveLocation drives = 4;
+  repeated SetInfo sets = 5;
+  repeated PartitionInfo partitions = 6;
+}
+
+// DriveFormat is stored in <drive>/.unio/format.pb.
+message DriveFormat {
+  uint32 format_version = 1;
+  string cluster_id = 2;
+  bytes drive_id = 3;
+  int64 created_unix_nano = 4;
+}

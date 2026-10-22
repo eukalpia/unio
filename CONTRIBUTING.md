@@ -11,7 +11,8 @@ read it before opening a pull request.
   from the [architecture](docs/design/architecture.md#12-correctness-invariants)
   will not be merged.
 - Discuss significant changes in an issue first. Changes to contracts
-  (`internal/core`, `api/proto`) or to the architecture require an
+  (the contract packages listed in the
+  [architecture](docs/design/architecture.md#13-module-layout), `api/proto`) or to the architecture require an
   [ADR](docs/adr/README.md).
 - Report security vulnerabilities privately. See [SECURITY.md](SECURITY.md).
 
@@ -19,7 +20,7 @@ read it before opening a pull request.
 
 | Tool | Version |
 |---|---|
-| Go | 1.25 or newer |
+| Go | 1.26 or newer (the project toolchain is 1.27) |
 | OS | Linux or macOS. On Windows, use **WSL2** (Ubuntu) |
 | C compiler | gcc or clang, only for the race detector (`-race` needs cgo) |
 | Docker | For cluster, integration and benchmark tests |
@@ -105,8 +106,8 @@ requests with commits that are not signed off fail CI.
 - `gofmt` and `goimports` formatting; `go vet` and `staticcheck` clean.
 - Pass `context.Context` as the first argument of every function that does
   I/O or may block, and honour cancellation.
-- Wrap errors with `%w`, and use the typed errors from `internal/core` at
-  module boundaries. Never expose internal error details to S3 clients.
+- Wrap errors with `%w`, and use `s3err` codes and the domain sentinel
+  errors at module boundaries. Never expose internal error details to S3 clients.
 - Library code never panics. There is no global mutable state.
 - **Bounded resources.** Every queue, pool and goroutine fan-out has a limit.
   Buffers come from `internal/bufpool`.
@@ -115,7 +116,8 @@ requests with commits that are not signed off fail CI.
 - Log with `log/slog`. Never log secrets, signatures or object data.
 - Document every exported identifier.
 - **Module boundaries.** A package depends on other modules only through
-  interfaces in `internal/core`, never on their internals.
+  contract packages (`object`, `drive`, `erasure`, `meta`, `auth`,
+  `cluster`), never on another implementation package.
 
 ## Testing requirements
 
@@ -133,9 +135,8 @@ What we expect from tests:
 
 - **Unit tests** for new behaviour. We practise test-driven development:
   write the failing test first.
-- **Conformance suites.** Implementations of `internal/core` interfaces must
-  pass the matching suite in `internal/core/coretest`, for example
-  `coretest.RunDriveSuite`.
+- **Conformance suites.** Implementations of a contract must pass the
+  suite in its `*test` package, for example `drivetest.RunSuite`.
 - **Fuzz tests** for every parser of untrusted input: headers, signatures,
   XML, wire frames, on-disk records.
 - **Benchmarks** for hot paths. Include `benchstat` output in the PR when
@@ -159,7 +160,7 @@ faster than one large one.
 ## Code ownership
 
 Areas and their owners are listed in [.github/CODEOWNERS](.github/CODEOWNERS).
-Changes to `internal/core`, `api/proto`, `go.mod` and security-sensitive
+Changes to contract packages, `api/proto`, `go.mod` and security-sensitive
 packages (`auth`, `cluster`) always require a maintainer review.
 
 ## License

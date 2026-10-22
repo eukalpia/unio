@@ -9,14 +9,14 @@ The goal of v0.1 is a working, secure multi-node cluster with the core S3 API.
 
 | Workstream | Package | Scope |
 |---|---|---|
-| Contracts | `internal/core`, `api/proto`, `bufpool`, `hashreader` | Interfaces, shared types, protobuf schema, in-memory fakes, conformance suites |
+| Contracts | `ids`, `s3err`, `object`, `drive`, `erasure`, `meta`, `auth`, `cluster`, `bufpool`, `api/proto` | Domain contracts, shared types, protobuf schema |
 | S3 API gateway | `internal/s3api` | Hertz server, routing, fast XML, S3 error model, limits |
-| Authentication | `internal/auth` | SigV4 (header, presigned, chunked, trailers), IAM keys, basic policies |
-| Erasure coding | `internal/erasure` | Streaming encode and decode, bitrot framing, quorums, heal-on-read |
-| Drive engine | `internal/storage` | Packed segments, blob files, local index, group commit, compaction |
-| Metadata | `internal/meta` | Multi-Raft on Pebble, state machines, key schema, listing |
-| Cluster | `internal/cluster` | UniWire mTLS transport, PKI bootstrap, remote drives, Raft transport, topology |
-| Object layer | `internal/object` | PUT/GET/DELETE/COPY/multipart orchestration, inline and packed tiers, GC queue |
+| Authentication | `internal/auth/{sigv4,policy,iam}` | SigV4 (header, presigned, chunked, trailers), IAM keys, basic policies |
+| Erasure coding | `internal/erasure/{bitrot,rs}` | Streaming encode and decode, bitrot framing, quorums, heal-on-read |
+| Drive engine | `internal/drive/local` | Packed segments, blob files, local index, group commit, compaction |
+| Metadata | `internal/meta/{raftstore,recordpb}` | Multi-Raft on Pebble, state machines, key schema, listing |
+| Cluster | `internal/cluster/{uniwire,pki,remotedrive,raftnet,topology}` | UniWire mTLS transport, PKI bootstrap, remote drives, Raft transport, topology |
+| Object layer | `internal/object/engine` | PUT/GET/DELETE/COPY/multipart orchestration, inline and packed tiers, GC queue |
 | Platform | `cmd/unio`, `config`, `obs`, `test`, `bench`, `deploy` | CLI, configuration, observability, Docker Compose, integration, chaos and benchmark harnesses, CI |
 | Integration | `internal/server` | Node assembly, end-to-end tests, `ceph/s3-tests` subset |
 
