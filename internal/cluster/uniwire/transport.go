@@ -73,13 +73,17 @@ func New(cfg Config) (*Transport, error) {
 	if log == nil {
 		log = slog.Default()
 	}
+	budget := lim.StreamBudget
+	if budget == nil {
+		budget = bufpool.NewBudget(lim.StreamBufferBudget)
+	}
 	t := &Transport{
 		client:         cfg.Client,
 		server:         cfg.Server,
 		resolv:         cfg.Resolve,
 		lim:            lim,
 		log:            log,
-		buffers:        bufpool.NewPool(lim.StreamBufferSize, bufpool.NewBudget(lim.StreamBufferBudget)),
+		buffers:        bufpool.NewPool(lim.StreamBufferSize, budget),
 		inbound:        semaphore.NewWeighted(int64(lim.MaxInboundConns)),
 		conns:          map[net.Conn]struct{}{},
 		peers:          map[ids.NodeID]*peer{},

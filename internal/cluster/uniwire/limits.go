@@ -3,6 +3,8 @@ package uniwire
 import (
 	"fmt"
 	"time"
+
+	"github.com/eukalpia/unio/internal/bufpool"
 )
 
 // Limits bounds every resource the transport uses: frame sizes, connections,
@@ -44,8 +46,16 @@ type Limits struct {
 	// StreamBufferSize is the size of each copy buffer used by streams.
 	StreamBufferSize int
 	// StreamBufferBudget is the total memory for stream copy buffers. A
-	// transfer waits for a buffer when the budget is exhausted.
+	// transfer waits for a buffer when the budget is exhausted. It is ignored
+	// when StreamBudget is set.
 	StreamBufferBudget int64
+	// StreamBudget is a memory budget shared with other components of the
+	// node. When it is non-nil, the transport draws its stream copy buffers
+	// from it instead of from a private budget of StreamBufferBudget bytes,
+	// so one limit covers every buffer the node uses. Its total must be at
+	// least StreamBufferSize. The transport never closes or resizes it. The
+	// caller owns it and must keep it alive while the transport runs.
+	StreamBudget *bufpool.Budget
 }
 
 // DefaultLimits returns the limits used when a field is left at zero.
@@ -120,9 +130,19 @@ func (l Limits) withDefaults() Limits {
 	return l
 }
 
+// streamBudgetBytes returns the size of the stream buffer budget: the total of
+// StreamBudget when it is set, and StreamBufferBudget otherwise.
+func (l Limits) streamBudgetBytes() int64 {
+	if l.StreamBudget != nil {
+		return l.StreamBudget.Total()
+	}
+	return l.StreamBufferBudget
+}
+
 // validate reports whether l is internally consistent. It expects defaults
 // to have been applied.
 func (l Limits) validate() error {
+	budget := l.streamBudgetBytes()
 	switch {
 	case l.MaxFrameSize < minFrameSize || l.MaxFrameSize > 1<<30:
 		return fmt.Errorf("uniwire: MaxFrameSize %d out of range [%d, 1 GiB]", l.MaxFrameSize, minFrameSize)
@@ -132,8 +152,8 @@ func (l Limits) validate() error {
 		return fmt.Errorf("uniwire: connection and concurrency limits must be at least 1")
 	case l.MaxStreamConnsPerPeer < 1 || l.MaxInboundConns < 1:
 		return fmt.Errorf("uniwire: stream and inbound connection limits must be at least 1")
-	case l.StreamBufferSize <= 0 || int64(l.StreamBufferSize) > l.StreamBufferBudget:
-		return fmt.Errorf("uniwire: StreamBufferSize %d must be positive and within the budget %d", l.StreamBufferSize, l.StreamBufferBudget)
+	case l.StreamBufferSize <= 0 || int64(l.StreamBufferSize) > budget:
+		return fmt.Errorf("uniwire: StreamBufferSize %d must be positive and within the budget %d", l.StreamBufferSize, budget)
 	case l.HandshakeTimeout <= 0 || l.DialTimeout <= 0 || l.WriteTimeout <= 0 || l.IdleTimeout <= 0 || l.StreamTimeout <= 0:
 		return fmt.Errorf("uniwire: timeouts must be positive")
 	}
