@@ -38,11 +38,15 @@ func shardRef(id ids.ShardID) *uniov1.ShardRef {
 // references that a conforming peer would never send.
 func shardIDOf(r *uniov1.ShardRef) (ids.ShardID, error) {
 	var id ids.ShardID
-	if len(r.GetData()) != len(id.Data) || r.GetIndex() > math.MaxUint16 {
+	if len(r.GetData()) != len(id.Data) {
+		return id, badRequest("shard")
+	}
+	index := r.GetIndex()
+	if index > math.MaxUint16 {
 		return id, badRequest("shard")
 	}
 	copy(id.Data[:], r.GetData())
-	id.Index = uint16(r.GetIndex())
+	id.Index = uint16(index)
 	return id, nil
 }
 
