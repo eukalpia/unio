@@ -21,6 +21,15 @@ type AccessKey struct {
 	Created time.Time
 }
 
+// Policy is a managed policy: a named document that can be attached to any
+// number of users. Document is the policy JSON as stored, and it has been
+// validated. Attachments is the number of users it is attached to.
+type Policy struct {
+	Name        string
+	Document    []byte
+	Attachments int
+}
+
 // IAM manages users, keys and policies on top of meta.SystemKV. Secrets
 // are stored encrypted.
 type IAM interface {

@@ -31,12 +31,13 @@ type userLookup struct {
 	entry userEntry
 }
 
-// userEntry is a user with the policy that applies to it. pol is nil when
+// userEntry is a user with the policies that apply to it: the inline policy
+// first, then each attached managed policy that is live. pols is empty when
 // the user has none.
 type userEntry struct {
 	id      string
 	enabled bool
-	pol     *policy.Policy
+	pols    []*policy.Policy
 }
 
 // Lookup implements sigv4.CredentialStore. It returns the secret for an
@@ -127,8 +128,8 @@ func (s *Store) userLookup(ctx context.Context, name string) (userLookup, error)
 	return ul, nil
 }
 
-// loadUser reads a user and the policy that belongs to the same incarnation.
-// A policy written for an earlier user of the same name is ignored.
+// loadUser reads a user and the policies that apply to it. Policies that
+// belong to an earlier user of the same name are ignored.
 func (s *Store) loadUser(ctx context.Context, name string) (userLookup, error) {
 	if !validUserName(name) {
 		return userLookup{}, nil
@@ -149,14 +150,48 @@ func (s *Store) loadUser(ctx context.Context, name string) (userLookup, error) {
 		// or be authorized while its records are removed.
 		return userLookup{}, nil
 	}
-	pol, err := s.loadPolicy(ctx, name, rec.ID)
+	pols, err := s.loadPolicies(ctx, name, rec)
 	if err != nil {
 		return userLookup{}, err
 	}
-	return userLookup{found: true, entry: userEntry{id: rec.ID, enabled: rec.Enabled, pol: pol}}, nil
+	return userLookup{found: true, entry: userEntry{id: rec.ID, enabled: rec.Enabled, pols: pols}}, nil
 }
 
-// loadPolicy reads the policy of a user incarnation. It returns nil when the
+// loadPolicies returns the policies that apply to the user incarnation rec: its
+// inline policy, then every attached managed policy. A managed policy that is
+// missing, being deleted, or of another incarnation grants nothing, and is
+// skipped. Attachments are decided here only, so the listing and the deletion
+// check in policies.go agree with evaluation.
+func (s *Store) loadPolicies(ctx context.Context, name string, rec userRecord) ([]*policy.Policy, error) {
+	inline, err := s.loadPolicy(ctx, name, rec.ID)
+	if err != nil {
+		return nil, err
+	}
+	var pols []*policy.Policy
+	if inline != nil {
+		pols = append(pols, inline)
+	}
+	for _, a := range rec.Attached {
+		cur, err := s.readPolicy(ctx, a.Name)
+		if errors.Is(err, ErrPolicyNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if cur.ID != a.PolicyID {
+			continue
+		}
+		p, err := policy.Parse([]byte(cur.Document))
+		if err != nil {
+			return nil, fmt.Errorf("iam: stored policy is invalid: %w", err)
+		}
+		pols = append(pols, p)
+	}
+	return pols, nil
+}
+
+// loadPolicy reads the inline policy of a user incarnation. It returns nil when the
 // user has no policy or the stored policy belongs to another incarnation.
 func (s *Store) loadPolicy(ctx context.Context, name, userID string) (*policy.Policy, error) {
 	raw, _, err := s.kv.Get(ctx, policyPath(name))

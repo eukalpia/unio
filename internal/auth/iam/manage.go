@@ -18,7 +18,7 @@ func (s *Store) CreateUser(ctx context.Context, name string) (auth.UserInfo, err
 	if !validUserName(name) {
 		return auth.UserInfo{}, ErrInvalidUserName
 	}
-	id, err := newUserID()
+	id, err := newIncarnationID()
 	if err != nil {
 		return auth.UserInfo{}, fmt.Errorf("iam: generate user id: %w", err)
 	}
@@ -256,12 +256,17 @@ func (s *Store) ListAccessKeys(ctx context.Context, user string) ([]auth.AccessK
 	return out, nil
 }
 
-// SetUserPolicy replaces the user's policy with doc, after validating it. An
-// empty document detaches the policy.
+// SetUserPolicy replaces the user's inline policy with doc, after validating
+// it. An empty document removes the inline policy. Managed policies are
+// separate: see AttachUserPolicy.
 //
 // As in CreateAccessKey, the owner is checked after the write, and the policy
-// is removed if the user was deleted meanwhile.
+// is removed if the user was deleted meanwhile. The root identity cannot have
+// policies, so ErrRootPolicy is returned for it.
 func (s *Store) SetUserPolicy(ctx context.Context, user string, doc []byte) error {
+	if user == s.rootKey {
+		return ErrRootPolicy
+	}
 	owner, err := s.requireUser(ctx, user)
 	if err != nil {
 		return err

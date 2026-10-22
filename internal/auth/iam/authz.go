@@ -9,8 +9,10 @@ import (
 )
 
 // Authorize implements auth.Authorizer. Root is always allowed. Anonymous
-// requests, disabled or unknown users, and users without an Allow that
-// matches the action and resource are denied. An explicit Deny also denies.
+// requests and disabled or unknown users are denied. Otherwise the user's
+// inline policy and attached managed policies are evaluated together: the
+// request is allowed when one of their statements allows it, and no statement
+// in any of them denies it. Everything else is denied.
 func (s *Store) Authorize(ctx context.Context, id auth.Identity, action auth.Action, bucket, key string) error {
 	if id.Root {
 		return nil
@@ -22,10 +24,10 @@ func (s *Store) Authorize(ctx context.Context, id auth.Identity, action auth.Act
 	if err != nil {
 		return err
 	}
-	if !ul.found || !ul.entry.enabled || ul.entry.pol == nil {
+	if !ul.found || !ul.entry.enabled {
 		return accessDenied()
 	}
-	if ul.entry.pol.Evaluate(action, resourceARN(bucket, key)) != policy.Allow {
+	if policy.EvaluateAll(ul.entry.pols, action, resourceARN(bucket, key)) != policy.Allow {
 		return accessDenied()
 	}
 	return nil
