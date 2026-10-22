@@ -73,6 +73,14 @@ type Transport struct {
 	streamHandlers map[string]StreamHandler
 }
 
+// copyIdleBuffers is how many idle copy buffers each copy pool keeps for reuse.
+// A stream transfer holds a buffer for the length of its body copy, and under
+// load more transfers than the pool's default idle limit run at once, so a
+// smaller limit allocates and zeroes a buffer for most of them. The buffers
+// are charged to the budget while idle, so this bounds the memory kept between
+// bursts to copyIdleBuffers buffers per pool.
+const copyIdleBuffers = 64
+
 // New returns a Transport. It starts the idle-connection janitor and does not
 // listen until Listen is called.
 func New(cfg Config) (*Transport, error) {
@@ -98,8 +106,8 @@ func New(cfg Config) (*Transport, error) {
 		resolv:         cfg.Resolve,
 		lim:            lim,
 		log:            log,
-		clientBuffers:  bufpool.NewPool(lim.StreamBufferSize, clientBudget),
-		serveBuffers:   bufpool.NewPool(lim.StreamBufferSize, serveBudget),
+		clientBuffers:  bufpool.NewPool(lim.StreamBufferSize, clientBudget, bufpool.WithMaxIdle(copyIdleBuffers)),
+		serveBuffers:   bufpool.NewPool(lim.StreamBufferSize, serveBudget, bufpool.WithMaxIdle(copyIdleBuffers)),
 		inbound:        semaphore.NewWeighted(int64(lim.MaxInboundConns)),
 		conns:          map[net.Conn]struct{}{},
 		peers:          map[ids.NodeID]*peer{},
