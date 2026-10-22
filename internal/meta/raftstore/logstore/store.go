@@ -7,26 +7,10 @@ import (
 	"sync"
 
 	"github.com/cockroachdb/pebble/v2"
-	"github.com/cockroachdb/pebble/v2/vfs"
+
 	"github.com/eukalpia/unio/internal/ids"
+	"github.com/eukalpia/unio/internal/meta/raftstore/pebbleopt"
 )
-
-// quietLogger is the pebble.Logger of every store. It drops informational
-// messages and forwards errors and fatal messages to Pebble's default logger.
-type quietLogger struct{}
-
-// Infof implements pebble.Logger by dropping the message.
-func (quietLogger) Infof(string, ...any) {}
-
-// Errorf implements pebble.Logger.
-func (quietLogger) Errorf(format string, args ...any) {
-	pebble.DefaultLogger.Errorf(format, args...)
-}
-
-// Fatalf implements pebble.Logger. Pebble calls it on an invariant violation.
-func (quietLogger) Fatalf(format string, args ...any) {
-	pebble.DefaultLogger.Fatalf(format, args...)
-}
 
 // closedError is the error returned by every operation after Store.Close.
 type closedError string
@@ -76,11 +60,7 @@ func Open(dir string, cache *pebble.Cache) (*Store, error) {
 	if dir == "" {
 		return nil, errors.New("logstore: open: empty directory")
 	}
-	db, err := pebble.Open(dir, &pebble.Options{
-		Cache:  cache,
-		FS:     vfs.Default,
-		Logger: quietLogger{},
-	})
+	db, err := pebble.Open(dir, pebbleopt.Options(cache))
 	if err != nil {
 		return nil, fmt.Errorf("logstore: open %s: %w", dir, err)
 	}
