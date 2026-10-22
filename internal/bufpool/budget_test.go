@@ -4,6 +4,7 @@ import (
 	"context"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -149,22 +150,32 @@ func TestMaxIdleZeroDisablesReuse(t *testing.T) {
 	}
 }
 
+// TestChargedNeverExceedsTotalUnderLoad hammers three pools sharing one
+// budget. The bytes handed out and the bytes kept idle each stay within the
+// budget at every moment, and once every buffer is released, reclaiming the
+// idle buffers returns the whole budget, so no charge leaks.
+//
+// The two counters are checked separately: their sum, read with two loads,
+// can count a buffer twice while it moves between in use and idle, which
+// says nothing about the budget. The bound on the sum is the semaphore's,
+// and the final acquisition of the whole budget checks it.
 func TestChargedNeverExceedsTotalUnderLoad(t *testing.T) {
 	const total = 64 << 10
 	b := NewBudget(total)
 	pools := []*Pool{NewPool(1<<10, b), NewPool(4<<10, b), NewPool(8<<10, b, WithAlignment(4096))}
 	var wg sync.WaitGroup
 	stop := make(chan struct{})
-	var violation sync.Once
-	var violated bool
+	monitorDone := make(chan struct{})
+	var violated atomic.Bool
 	go func() {
+		defer close(monitorDone)
 		for {
 			select {
 			case <-stop:
 				return
 			default:
-				if charged(b) > total {
-					violation.Do(func() { violated = true })
+				if b.InUse() > total || b.Idle() > total {
+					violated.Store(true)
 				}
 			}
 		}
@@ -189,10 +200,18 @@ func TestChargedNeverExceedsTotalUnderLoad(t *testing.T) {
 	}
 	wg.Wait()
 	close(stop)
-	if violated {
-		t.Fatal("charged bytes exceeded the budget")
+	<-monitorDone
+	if violated.Load() {
+		t.Fatal("bytes in use or idle exceeded the budget")
 	}
 	if b.InUse() != 0 {
 		t.Fatalf("inUse %d after all releases", b.InUse())
+	}
+	b.reclaim()
+	if b.Idle() != 0 {
+		t.Fatalf("idle %d after reclaim", b.Idle())
+	}
+	if !b.sem.TryAcquire(total) {
+		t.Fatal("the whole budget is not available after every buffer was released and reclaimed")
 	}
 }
