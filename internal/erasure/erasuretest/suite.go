@@ -30,6 +30,9 @@ const stripeSize = int64(erasure.DefaultStripeSize)
 // first block of every shard the suite writes.
 const corruptOffset = 7
 
+// midStreamBytes is how far into a shard a mid-stream write fault fires.
+const midStreamBytes = 1000
+
 // RunSetSuite runs the conformance suite against the sets built by newSet.
 // Every erasure.Set implementation must pass it. Under -short the 100 MiB
 // round trip is skipped.
@@ -93,13 +96,6 @@ func newFixture(t *testing.T, newSet SetFactory, k, m int) *fixture {
 	})
 	f.set = newSet(t, drives, k, m)
 	return f
-}
-
-// fresh returns a new fixture of the same shape, for a sub-case that needs
-// empty drives.
-func (f *fixture) fresh(t *testing.T) *fixture {
-	t.Helper()
-	return newFixture(t, f.newSet, f.k, f.m)
 }
 
 // write stores data under a new id.
@@ -299,14 +295,15 @@ func testReadWithFailedDrives(t *testing.T, newSet SetFactory, k, m int) {
 }
 
 // writeWithFailures makes the first n drives fail writes, either at once or
-// after half a stripe.
+// after midStreamBytes bytes.
 func writeWithFailures(t *testing.T, newSet SetFactory, k, m, n int, midStream bool) (*fixture, error) {
 	t.Helper()
 	f := newFixture(t, newSet, k, m)
 	for i := range n {
 		fault := Faults{WriteErr: drive.ErrFaulty}
 		if midStream {
-			fault.WriteErrAfter = stripeSize / 2
+			// Shards of the test object are a few hundred bytes, so fail early.
+			fault.WriteErrAfter = midStreamBytes
 		}
 		f.mem[i].SetFaults(fault)
 	}
