@@ -12,7 +12,7 @@ Metadata records, Raft commands and RPC messages need:
 
 ## Decision
 
-Schemas live in `api/proto/uniio/v1`. Code is generated with
+Schemas live in `api/proto/unio/v1`. Code is generated with
 `protoc-gen-go` and `protoc-gen-go-vtproto`, and committed under
 `internal/pb`.
 

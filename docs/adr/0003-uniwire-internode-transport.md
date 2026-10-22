@@ -15,13 +15,13 @@ encrypted and mutually authenticated by default.
 
 ## Decision
 
-UniIO uses its own protocol, UniWire, over `crypto/tls` (TLS 1.3, mTLS) on a
+Unio uses its own protocol, UniWire, over `crypto/tls` (TLS 1.3, mTLS) on a
 single port.
 
 - A connection preamble selects RPC (multiplexed protobuf requests), Stream
   (one shard stream per pooled connection) or Raft (an implementation of
   `raft.Transport`).
-- Trust is bootstrapped from `UNIIO_CLUSTER_SECRET`: an Ed25519 cluster CA
+- Trust is bootstrapped from `UNIO_CLUSTER_SECRET`: an Ed25519 cluster CA
   key is derived via HKDF, and every node issues itself a certificate from
   it. Operator-provided certificates are also supported.
 - Plaintext is possible only with `--insecure-internode`, which is intended

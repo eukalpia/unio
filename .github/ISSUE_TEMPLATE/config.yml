@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/eukalpia/uniio/security/advisories/new
+    url: https://github.com/eukalpia/unio/security/advisories/new
     about: Report security issues privately.
   - name: Questions and discussion
-    url: https://github.com/eukalpia/uniio/discussions
+    url: https://github.com/eukalpia/unio/discussions
     about: Ask questions and share ideas.

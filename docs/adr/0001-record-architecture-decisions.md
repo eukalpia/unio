@@ -5,7 +5,7 @@
 
 ## Context
 
-UniIO is a distributed storage system that many contributors will work on in
+Unio is a distributed storage system that many contributors will work on in
 parallel. The reasoning behind decisions must survive beyond the people who
 made them.
 

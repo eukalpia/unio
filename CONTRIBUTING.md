@@ -1,6 +1,6 @@
-# Contributing to UniIO
+# Contributing to Unio
 
-Thank you for your interest in UniIO. This guide explains how we work. Please
+Thank you for your interest in Unio. This guide explains how we work. Please
 read it before opening a pull request.
 
 ## Ground rules
@@ -34,7 +34,7 @@ go install github.com/securego/gosec/v2/cmd/gosec@latest
 
 ## Workflow
 
-UniIO uses **trunk-based development**. `main` is always releasable and
+Unio uses **trunk-based development**. `main` is always releasable and
 protected. Every change lands through a pull request that passes CI and
 review.
 
