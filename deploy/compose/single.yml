@@ -1,0 +1,92 @@
+# Local single-node Unio: 1 node x 4 drives in one container.
+#
+# With four drives the node uses the erasure path, the same as one set of the
+# 4x4 cluster, so a single container exercises erasure coding and healing.
+#
+# LOCAL TESTING ONLY. The credentials are local test values for this stack on
+# your own machine. test/e2e/run.sh generates them for each run. A manual run
+# reads them from deploy/compose/.env. Do not use this stack for anything else.
+#
+# Usage, from the repository root:
+#   cp deploy/compose/.env.example deploy/compose/.env   # then set the values (see .env.example)
+#   docker compose -f deploy/compose/single.yml up -d --build
+#
+# Ports: S3 is published on the host loopback interface only, at
+# 127.0.0.1:9001, the same host port as node1 in cluster-4x4.yml. Readiness is
+# served on the S3 port at /unio/health/ready.
+#
+# Internode traffic (port 9100) is always mutual TLS, with certificates derived
+# from the cluster secret. The S3 endpoint serves plain HTTP in this local
+# stack, because no UNIO_TLS_* variable is set.
+#
+# Do not run this together with cluster-4x4.yml or rustfs-4x4.yml: they publish
+# the same host ports.
+
+name: unio-single
+
+x-unio-node: &unio-node
+  image: unio:single-local
+  pull_policy: never
+  command: ["server"]
+  stop_grace_period: 30s
+  # The root filesystem is not read-only. Compose rejects environment-sourced
+  # secrets on a read-only service, and this stack passes its secrets that way.
+  # The process runs as the nonroot user from the image, with no capabilities
+  # and no way to gain new ones.
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  node1:
+    <<: *unio-node
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    environment:
+      # The four drives of this node, as local paths behind its own endpoint.
+      UNIO_ENDPOINTS: "https://node1:9100/data{1...4}"
+      UNIO_NODE_ID: node1
+      UNIO_CLUSTER_SECRET_FILE: /run/secrets/unio_cluster_secret
+      UNIO_ROOT_USER_FILE: /run/secrets/unio_root_user
+      UNIO_ROOT_PASSWORD_FILE: /run/secrets/unio_root_password
+    secrets:
+      - unio_cluster_secret
+      - unio_root_user
+      - unio_root_password
+    networks:
+      - internal
+      - public
+    ports:
+      - "127.0.0.1:9001:9000"
+    volumes:
+      - node1-data1:/data1
+      - node1-data2:/data2
+      - node1-data3:/data3
+      - node1-data4:/data4
+
+# Secret values come from the environment of the compose process (populated
+# from deploy/compose/.env, or from the variables that test/e2e/run.sh exports).
+# Compose writes each one to /run/secrets/<name>.
+secrets:
+  unio_cluster_secret:
+    environment: UNIO_CLUSTER_SECRET
+  unio_root_user:
+    environment: UNIO_ROOT_USER
+  unio_root_password:
+    environment: UNIO_ROOT_PASSWORD
+
+networks:
+  # Node-to-node traffic (UniWire on 9100). No external connectivity, nothing published.
+  internal:
+    internal: true
+  # Default bridge network, used only to publish the S3 port.
+  public:
+    driver: bridge
+
+volumes:
+  node1-data1:
+  node1-data2:
+  node1-data3:
+  node1-data4:
