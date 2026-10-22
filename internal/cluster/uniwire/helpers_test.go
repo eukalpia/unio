@@ -11,7 +11,7 @@ import (
 	"github.com/eukalpia/unio/internal/ids"
 )
 
-var testSecret = []byte("uniwire-test-secret-0123456789abcdef")
+const testSecret = "uniwire-test-secret-0123456789abcdef"
 
 // testNet is a set of loopback transports that share one cluster CA and
 // resolve each other through a table of listen addresses.
@@ -26,7 +26,7 @@ type testNet struct {
 // newTestNet returns an empty network for one test.
 func newTestNet(t testing.TB) *testNet {
 	t.Helper()
-	ca, err := pki.DeriveCA(testSecret)
+	ca, err := pki.DeriveCA([]byte(testSecret))
 	if err != nil {
 		t.Fatal(err)
 	}
