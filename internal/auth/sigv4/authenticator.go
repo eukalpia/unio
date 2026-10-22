@@ -129,7 +129,13 @@ func (a *Authenticator) verifyHeader(ctx context.Context, req *auth.Request, que
 	if err := a.checkSkew(when.t); err != nil {
 		return nil, err
 	}
-	if err := requireSigned(hdr.signedHeaders, "host", when.header, "x-amz-content-sha256"); err != nil {
+	required := []string{"host"}
+	if when.header == "date" {
+		// Without X-Amz-Date the Date header is the signing time, so it must
+		// be signed.
+		required = append(required, "date")
+	}
+	if err := requireSigned(hdr.signedHeaders, required...); err != nil {
 		return nil, err
 	}
 	pv := req.Header.Values("X-Amz-Content-Sha256")
@@ -138,6 +144,9 @@ func (a *Authenticator) verifyHeader(ctx context.Context, req *auth.Request, que
 	}
 	if len(pv) > 1 {
 		return nil, malformed("duplicate x-amz-content-sha256")
+	}
+	if err := requireHeadersSigned(req.Header, hdr.signedHeaders); err != nil {
+		return nil, err
 	}
 	pl, err := parsePayloadHash(pv[0])
 	if err != nil {
@@ -236,9 +245,10 @@ func errTimeSkew() error {
 	return s3err.Errorf(s3err.RequestTimeTooSkewed, "the difference between the request time and the server's time is too large")
 }
 
-// requireSigned checks that each named header is covered by the signature.
-// The host, the time and the payload hash must be signed, or a client could
-// change them in transit without invalidating the signature.
+// requireSigned checks that each named header is in the signed list. The
+// host must always be signed, or a client could change it in transit without
+// invalidating the signature. Headers that are present in the request are
+// checked against the signed list by requireHeadersSigned.
 func requireSigned(signed []string, required ...string) error {
 	for _, n := range required {
 		if !slices.Contains(signed, n) {
