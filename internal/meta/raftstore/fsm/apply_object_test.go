@@ -322,7 +322,7 @@ func TestUpdateLayout(t *testing.T) {
 	dataV1P1 := bytes.Repeat([]byte{1}, 16)
 	dataV1P2 := bytes.Repeat([]byte{2}, 16)
 	dataV2P1 := bytes.Repeat([]byte{3}, 16)
-	newLayout := &pb.ErasureLayout{Set: 7, DataShards: 4, ParityShards: 2}
+	newLayout := &pb.ErasureLayout{Set: 7, DataShards: 4, ParityShards: 2, StripeSize: 1 << 20, Drives: [][]byte{dataID(1), dataID(2), dataID(3), dataID(4), dataID(5), dataID(6)}}
 
 	h := newHarness(t, KindData)
 	h.mustApply(versioningCmd(testBucket, enabled))
@@ -330,8 +330,8 @@ func TestUpdateLayout(t *testing.T) {
 		rec := objRec("k", version, etagA)
 		rec.Multipart = true
 		rec.Parts = []*pb.PartRecord{
-			{Number: 1, Size: 5, Etag: "p1", Data: p1, Layout: &pb.ErasureLayout{Set: 1}},
-			{Number: 2, Size: 6, Etag: "p2", Data: dataV1P2, Layout: &pb.ErasureLayout{Set: 1}},
+			{Number: 1, Size: 5, Etag: "p1", Data: p1, Layout: goodLayout()},
+			{Number: 2, Size: 6, Etag: "p2", Data: dataV1P2, Layout: goodLayout()},
 		}
 		return rec
 	}

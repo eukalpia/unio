@@ -56,10 +56,13 @@ func (f *FSM) uploadParts(bucket ids.BucketID, uploadID string) ([]*pb.PartRecor
 // createUpload registers an upload. Upload ids are random, so an id that is
 // already claimed in the bucket is a bug and is rejected, whatever the key.
 func (f *FSM) createUpload(b *pebble.Batch, c *pb.CreateUpload) (*pb.ApplyResult, error) {
+	if err := validBucketID(c.BucketId); err != nil {
+		return nil, err
+	}
 	bucket := ids.BucketID(c.BucketId)
 	up := c.GetUpload()
-	if up == nil || up.Key == "" || up.UploadId == "" {
-		return nil, errMalformed("create upload")
+	if err := validUpload(up); err != nil {
+		return nil, err
 	}
 	ctrl, err := f.control(bucket)
 	if err != nil {
@@ -75,7 +78,7 @@ func (f *FSM) createUpload(b *pebble.Batch, c *pb.CreateUpload) (*pb.ApplyResult
 	if claimed {
 		return nil, errInvalid("upload id already in use")
 	}
-	v, err := up.MarshalVT()
+	v, err := marshalStored(up)
 	if err != nil {
 		return nil, fmt.Errorf("fsm: encode upload: %w", err)
 	}
@@ -91,10 +94,19 @@ func (f *FSM) createUpload(b *pebble.Batch, c *pb.CreateUpload) (*pb.ApplyResult
 // putPart stores a part, replacing the part with the same number. The
 // replaced part is returned as garbage.
 func (f *FSM) putPart(b *pebble.Batch, c *pb.PutPart) (*pb.ApplyResult, error) {
+	if err := validBucketID(c.BucketId); err != nil {
+		return nil, err
+	}
 	bucket := ids.BucketID(c.BucketId)
 	part := c.GetPart()
-	if part == nil || c.UploadId == "" {
-		return nil, errMalformed("put part")
+	if err := validKey(c.Key); err != nil {
+		return nil, err
+	}
+	if err := validUploadID(c.UploadId); err != nil {
+		return nil, err
+	}
+	if err := validPart(part, 1); err != nil {
+		return nil, err
 	}
 	ctrl, err := f.control(bucket)
 	if err != nil {
@@ -139,10 +151,25 @@ func (f *FSM) putPart(b *pebble.Batch, c *pb.PutPart) (*pb.ApplyResult, error) {
 // copies of the parts are used in the new record, and parts that are not
 // used are returned as garbage.
 func (f *FSM) completeUpload(b *pebble.Batch, c *pb.CompleteUpload) (*pb.ApplyResult, error) {
+	if err := validBucketID(c.BucketId); err != nil {
+		return nil, err
+	}
 	bucket := ids.BucketID(c.BucketId)
 	rec := c.GetRecord()
-	if rec == nil || rec.Key != c.Key || c.UploadId == "" {
-		return nil, errMalformed("complete upload")
+	if err := validKey(c.Key); err != nil {
+		return nil, err
+	}
+	if err := validUploadID(c.UploadId); err != nil {
+		return nil, err
+	}
+	if err := validRecordFields(rec); err != nil {
+		return nil, err
+	}
+	if err := validParts(rec.Parts, 1, false); err != nil {
+		return nil, err
+	}
+	if rec.Key != c.Key {
+		return nil, errMalformed("complete upload: record key differs from the upload key")
 	}
 	ctrl, err := f.control(bucket)
 	if err != nil {
@@ -216,6 +243,15 @@ func (f *FSM) completeUpload(b *pebble.Batch, c *pb.CompleteUpload) (*pb.ApplyRe
 
 // abortUpload removes an upload and returns all of its parts as garbage.
 func (f *FSM) abortUpload(b *pebble.Batch, c *pb.AbortUpload) (*pb.ApplyResult, error) {
+	if err := validBucketID(c.BucketId); err != nil {
+		return nil, err
+	}
+	if err := validKey(c.Key); err != nil {
+		return nil, err
+	}
+	if err := validUploadID(c.UploadId); err != nil {
+		return nil, err
+	}
 	bucket := ids.BucketID(c.BucketId)
 	up, err := f.uploadRecord(bucket, []byte(c.Key), c.UploadId)
 	if err != nil {

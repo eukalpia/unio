@@ -89,7 +89,7 @@ func (f *FSM) resolveVersion(bucket ids.BucketID, key []byte, versionID string) 
 
 // writeVersion stores rec as the version with commit timestamp ts in batch b.
 func writeVersion(b *pebble.Batch, bucket ids.BucketID, key []byte, ts uint64, rec *pb.ObjectRecord) error {
-	v, err := rec.MarshalVT()
+	v, err := marshalStored(rec)
 	if err != nil {
 		return fmt.Errorf("fsm: encode object: %w", err)
 	}

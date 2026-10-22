@@ -32,6 +32,7 @@ func putPartCmd(bucket ids.BucketID, key, uploadID string, number uint32, etag s
 		Key:      key,
 		UploadId: uploadID,
 		Part: &pb.PartRecord{
+			Layout:          goodLayout(),
 			Number:          number,
 			Size:            int64(number) * 100,
 			Etag:            etag,
@@ -67,7 +68,7 @@ func abortCmd(bucket ids.BucketID, key, uploadID string) *pb.Command {
 // listedPart names a part for a CompleteUpload record: its number, its DataID,
 // and the etag that putPartCmd stored with that number.
 func listedPart(number uint32, data []byte) *pb.PartRecord {
-	return &pb.PartRecord{Number: number, Data: data, Etag: fmt.Sprintf("p%d", number)}
+	return &pb.PartRecord{Number: number, Data: data, Etag: fmt.Sprintf("p%d", number), Layout: goodLayout()}
 }
 
 // uploadPartKeys counts the stored part keys of an upload.

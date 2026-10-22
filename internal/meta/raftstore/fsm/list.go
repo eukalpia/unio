@@ -35,8 +35,11 @@ func seekTo(it *pebble.Iterator, target []byte) bool {
 // item returned by the previous page, so one comparison of an item with the
 // cursor decides whether it was already returned.
 func (f *FSM) readListObjects(q *pb.ListObjectsQuery) (*pb.ReadResult, error) {
-	if q.Limit == 0 {
-		return nil, errBadLimit
+	if q == nil {
+		return nil, errMalformed("read query")
+	}
+	if err := validListLimit(q.Limit); err != nil {
+		return nil, err
 	}
 	bucket := ids.BucketID(q.BucketId)
 	limit := int(q.Limit)
@@ -115,8 +118,11 @@ func (f *FSM) readListObjects(q *pb.ListObjectsQuery) (*pb.ReadResult, error) {
 // readListObjects. The cursor is the (key marker, upload id marker) pair; an
 // upload is returned only when it is strictly after the pair.
 func (f *FSM) readListUploads(q *pb.ListUploadsQuery) (*pb.ReadResult, error) {
-	if q.Limit == 0 {
-		return nil, errBadLimit
+	if q == nil {
+		return nil, errMalformed("read query")
+	}
+	if err := validListLimit(q.Limit); err != nil {
+		return nil, err
 	}
 	bucket := ids.BucketID(q.BucketId)
 	limit := int(q.Limit)

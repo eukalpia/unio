@@ -17,6 +17,9 @@ var errNoBucket = s3err.Errorf(s3err.NoSuchBucket, "bucket does not exist")
 
 // fenceBucket sets or clears the fence of a bucket in a data partition.
 func (f *FSM) fenceBucket(b *pebble.Batch, c *pb.FenceBucket) (*pb.ApplyResult, error) {
+	if err := validBucketID(c.BucketId); err != nil {
+		return nil, err
+	}
 	bucket := ids.BucketID(c.BucketId)
 	ctrl, err := f.control(bucket)
 	if err != nil {
@@ -32,6 +35,12 @@ func (f *FSM) fenceBucket(b *pebble.Batch, c *pb.FenceBucket) (*pb.ApplyResult, 
 // setPartitionVersioning copies a bucket's versioning state into a data
 // partition.
 func (f *FSM) setPartitionVersioning(b *pebble.Batch, c *pb.SetPartitionVersioning) (*pb.ApplyResult, error) {
+	if err := validBucketID(c.BucketId); err != nil {
+		return nil, err
+	}
+	if err := validVersioning(c.Versioning); err != nil {
+		return nil, err
+	}
 	bucket := ids.BucketID(c.BucketId)
 	ctrl, err := f.control(bucket)
 	if err != nil {
@@ -73,8 +82,14 @@ func putBucket(b *pebble.Batch, rec *pb.BucketRecord) error {
 // createBucket adds a bucket and assigns its id from a counter that never
 // reuses values, so a re-created bucket never resurrects old data.
 func (f *FSM) createBucket(b *pebble.Batch, c *pb.CreateBucket) (*pb.ApplyResult, error) {
-	if c.Name == "" {
-		return nil, errMalformed("create bucket")
+	if err := validBucketName(c.Name); err != nil {
+		return nil, err
+	}
+	if err := validOwner(c.Owner); err != nil {
+		return nil, err
+	}
+	if err := validVersioning(c.Versioning); err != nil {
+		return nil, err
 	}
 	existing, err := f.bucketRecord(c.Name)
 	if err != nil {
@@ -121,6 +136,12 @@ func (f *FSM) currentBucket(name string, id uint64) (*pb.BucketRecord, error) {
 
 // markBucketDeleting sets or clears the deleting flag of a bucket.
 func (f *FSM) markBucketDeleting(b *pebble.Batch, c *pb.MarkBucketDeleting) (*pb.ApplyResult, error) {
+	if err := validBucketName(c.Name); err != nil {
+		return nil, err
+	}
+	if err := validBucketID(c.BucketId); err != nil {
+		return nil, err
+	}
 	rec, err := f.currentBucket(c.Name, c.BucketId)
 	if err != nil {
 		return nil, err
@@ -135,6 +156,12 @@ func (f *FSM) markBucketDeleting(b *pebble.Batch, c *pb.MarkBucketDeleting) (*pb
 // deleteBucket removes a bucket that is marked deleting. The caller has
 // already verified that the bucket holds no data.
 func (f *FSM) deleteBucket(b *pebble.Batch, c *pb.DeleteBucket) (*pb.ApplyResult, error) {
+	if err := validBucketName(c.Name); err != nil {
+		return nil, err
+	}
+	if err := validBucketID(c.BucketId); err != nil {
+		return nil, err
+	}
 	rec, err := f.currentBucket(c.Name, c.BucketId)
 	if err != nil {
 		return nil, err
@@ -151,6 +178,15 @@ func (f *FSM) deleteBucket(b *pebble.Batch, c *pb.DeleteBucket) (*pb.ApplyResult
 // setBucketVersioning changes the versioning state of a bucket that is not
 // being deleted.
 func (f *FSM) setBucketVersioning(b *pebble.Batch, c *pb.SetBucketVersioning) (*pb.ApplyResult, error) {
+	if err := validBucketName(c.Name); err != nil {
+		return nil, err
+	}
+	if err := validBucketID(c.BucketId); err != nil {
+		return nil, err
+	}
+	if err := validVersioning(c.Versioning); err != nil {
+		return nil, err
+	}
 	rec, err := f.currentBucket(c.Name, c.BucketId)
 	if err != nil {
 		return nil, err

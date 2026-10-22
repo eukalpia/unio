@@ -177,7 +177,7 @@ func buildObjectFixture(t *testing.T) *objectFixture {
 			}
 		}
 	}
-	special := []string{"k\x00x", "k\x01", "k\x00\x01", "\x01", "k\x00/z", "é/ü", "日本/語", "x/\xff", "x/\xff\xff"}
+	special := []string{"k\x02x", "k\x01", "k\x02\x01", "\x01", "k\x02/z", "é/ü", "日本/語", "x/\x7f", "x/\x7f\x7f"}
 	for _, key := range special {
 		h.mustApply(putCmd(testBucket, objRec(key, "v1", "e1"), nil))
 		h.mustApply(putCmd(testBucket, objRec(key, "v2", "e2"), nil))
@@ -228,7 +228,7 @@ func TestListObjects(t *testing.T) {
 			{name: "all keys, pages of 13", limit: 13},
 			{name: "delimiter, one at a time", delim: "/", limit: 1},
 			{name: "delimiter, pages of 5", delim: "/", limit: 5},
-			{name: "delimiter, single page", delim: "/", limit: 100000},
+			{name: "delimiter, single page", delim: "/", limit: maxReadLimit},
 			{name: "prefix ends at a level", prefix: "dir02/", delim: "/", limit: 3},
 			{name: "prefix inside a level", prefix: "dir02/sub03/", limit: 7},
 			{name: "prefix cuts a name", prefix: "dir0", delim: "/", limit: 2},
@@ -249,7 +249,7 @@ func TestListObjects(t *testing.T) {
 		// dir03/ sorts before this cursor, so the group is not returned again,
 		// and the keys under it are not returned either.
 		after := "dir03/sub02/obj005"
-		res := f.h.listObjects("", "/", after, 100000)
+		res := f.h.listObjects("", "/", after, maxReadLimit)
 		var got []listed
 		for _, item := range res.GetItems() {
 			if item.GetObject() != nil {
@@ -267,8 +267,8 @@ func TestListObjects(t *testing.T) {
 
 	t.Run("cursors across the whole keyspace", func(t *testing.T) {
 		all := groupItems(f.visible, "", "")
-		for _, after := range []string{"", "dir00/sub00/obj000", "dir00/sub00/obj004", "dir05/sub04/obj039", "k\x00", "k\x00\x01", "zzz"} {
-			res := f.h.listObjects("", "", after, 100000)
+		for _, after := range []string{"", "dir00/sub00/obj000", "dir00/sub00/obj004", "dir05/sub04/obj039", "k\x02", "k\x02\x01", "zzz"} {
+			res := f.h.listObjects("", "", after, maxReadLimit)
 			var got []listed
 			for _, item := range res.GetItems() {
 				got = append(got, listed{name: item.GetObject().GetKey()})
@@ -278,7 +278,7 @@ func TestListObjects(t *testing.T) {
 	})
 
 	t.Run("delete markers are not listed", func(t *testing.T) {
-		res := f.h.listObjects("dir00/sub00/", "", "", 100000)
+		res := f.h.listObjects("dir00/sub00/", "", "", maxReadLimit)
 		for _, item := range res.GetItems() {
 			if item.GetObject().GetKey() == "dir00/sub00/obj004" {
 				t.Fatal("deleted key listed")
@@ -288,7 +288,7 @@ func TestListObjects(t *testing.T) {
 
 	t.Run("a common prefix is emitted once", func(t *testing.T) {
 		n := 0
-		for _, item := range f.h.listObjects("", "/", "", 100000).GetItems() {
+		for _, item := range f.h.listObjects("", "/", "", maxReadLimit).GetItems() {
 			if item.GetCommonPrefix() == "dir00/" {
 				n++
 			}
@@ -337,7 +337,7 @@ func buildUploadFixture(t *testing.T) *uploadFixture {
 		add(key, 1+i%3)
 	}
 	add("p1/", 2)
-	add("k\x00", 1)
+	add("k\x02", 1)
 	add("k\x01", 2)
 	add("é/ü", 1)
 	return f
@@ -398,7 +398,7 @@ func TestListUploads(t *testing.T) {
 				{name: "p2/q06"},
 			}
 			for _, m := range markers {
-				res := f.h.listUploads("", delim, m.name, m.id, 100000)
+				res := f.h.listUploads("", delim, m.name, m.id, maxReadLimit)
 				assertListing(t, listedFromUploads(res), filterAfter(all, m.name, m.id))
 			}
 		}
@@ -412,7 +412,7 @@ func TestListUploads(t *testing.T) {
 				cp = it
 			}
 		}
-		res := f.h.listUploads("", "/", cp.name, "", 100000)
+		res := f.h.listUploads("", "/", cp.name, "", maxReadLimit)
 		for _, item := range res.GetItems() {
 			if item.GetCommonPrefix() == "p2/" {
 				t.Fatal("common prefix returned again after its own marker")
