@@ -13,7 +13,7 @@ import (
 
 // secret is the cluster secret of every test cluster. Tests are hermetic, so
 // a fixed value is fine.
-var secret = []byte("clustertest-secret-0123456789abcdef")
+const secret = "clustertest-secret-0123456789abcdef"
 
 // Cluster is a set of UniWire transports on loopback that trust one cluster
 // CA. Tests use it to exercise real mutual TLS between nodes. Every transport
@@ -33,7 +33,7 @@ func NewCluster(tb testing.TB, nodes ...ids.NodeID) *Cluster {
 		Nodes: map[ids.NodeID]*uniwire.Transport{},
 		addrs: map[ids.NodeID]string{},
 	}
-	ca, err := pki.DeriveCA(secret)
+	ca, err := pki.DeriveCA([]byte(secret))
 	if err != nil {
 		tb.Fatal(err)
 	}
