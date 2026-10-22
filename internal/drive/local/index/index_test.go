@@ -210,6 +210,67 @@ func TestUncommittedBatchIsNotApplied(t *testing.T) {
 	}
 }
 
+func TestWalkPagesAcrossManyShards(t *testing.T) {
+	x, _ := openIndex(t)
+	const n = 1300 // more than two pages
+	b := x.Batch()
+	for i := 1; i <= n; i++ {
+		if err := b.PutShard(testID(i), Location{Kind: KindBlob, Length: int64(i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	commit(t, b)
+
+	count := 0
+	seen := make(map[ids.ShardID]bool, n)
+	if err := x.Walk(func(id ids.ShardID, loc Location) error {
+		count++
+		if seen[id] {
+			t.Fatalf("shard %s visited twice", id)
+		}
+		seen[id] = true
+		if loc.Length != int64(id.Index) {
+			t.Fatalf("shard %s has length %d", id, loc.Length)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	if count != n {
+		t.Fatalf("walk visited %d shards, want %d", count, n)
+	}
+}
+
+func TestPageStartsAtOrAfterStart(t *testing.T) {
+	x, _ := openIndex(t)
+	b := x.Batch()
+	for i := 1; i <= 5; i++ {
+		_ = b.PutShard(testID(i), Location{Kind: KindBlob})
+	}
+	commit(t, b)
+	page, err := x.Page(testID(3), 10)
+	if err != nil || len(page) != 3 || page[0].ID != testID(3) {
+		t.Fatalf("page from 3: %d entries, first %v, err %v", len(page), page[0].ID, err)
+	}
+}
+
+func TestSuccessorBoundaries(t *testing.T) {
+	var last ids.ShardID
+	for i := range last.Data {
+		last.Data[i] = 0xff
+	}
+	last.Index = 0xffff
+	if _, ok := successor(last); ok {
+		t.Fatal("successor of the maximum id must not exist")
+	}
+	// Index 0xffff carries into the last byte of Data, the least significant
+	// part of the big-endian key.
+	next, ok := successor(ids.ShardID{Index: 0xffff})
+	if !ok || next.Index != 0 || next.Data[15] != 1 {
+		t.Fatalf("successor of index 0xffff = %+v, %v", next, ok)
+	}
+}
+
 // FuzzDecodeLocation checks that arbitrary index values never panic the
 // decoder and that accepted values re-encode to the same bytes.
 func FuzzDecodeLocation(f *testing.F) {

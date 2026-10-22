@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/eukalpia/unio/internal/bufpool"
 	"github.com/eukalpia/unio/internal/ids"
@@ -130,7 +131,7 @@ func (s *Store) Remove(path string) error {
 
 // Walk calls fn for every blob file, in no particular order. Entries whose
 // names are not shard names are skipped.
-func (s *Store) Walk(fn func(id ids.ShardID, path string, size int64) error) error {
+func (s *Store) Walk(fn func(id ids.ShardID, path string, size int64, modTime time.Time) error) error {
 	dirs, err := os.ReadDir(s.blobs)
 	if err != nil {
 		return fmt.Errorf("blob: list %s: %w", s.blobs, err)
@@ -152,7 +153,7 @@ func (s *Store) Walk(fn func(id ids.ShardID, path string, size int64) error) err
 			if err != nil {
 				return fmt.Errorf("blob: stat %s: %w", f.Name(), err)
 			}
-			if err := fn(id, filepath.Join(s.blobs, d.Name(), f.Name()), info.Size()); err != nil {
+			if err := fn(id, filepath.Join(s.blobs, d.Name(), f.Name()), info.Size(), info.ModTime()); err != nil {
 				return err
 			}
 		}

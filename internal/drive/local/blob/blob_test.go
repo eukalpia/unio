@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/eukalpia/unio/internal/bufpool"
 	"github.com/eukalpia/unio/internal/ids"
@@ -152,7 +153,7 @@ func TestPlaceRemoveAndWalk(t *testing.T) {
 	}
 
 	seen := map[ids.ShardID]int64{}
-	if err := s.Walk(func(id ids.ShardID, _ string, size int64) error {
+	if err := s.Walk(func(id ids.ShardID, _ string, size int64, _ time.Time) error {
 		seen[id] = size
 		return nil
 	}); err != nil {

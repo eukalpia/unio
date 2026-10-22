@@ -109,19 +109,27 @@ func (x *Index) Get(id ids.ShardID) (Location, error) {
 	return loc, err
 }
 
-// Walk calls fn for every shard in key order. It stops at the first error
-// returned by fn.
-func (x *Index) Walk(fn func(ids.ShardID, Location) error) error {
-	return x.read(func(db *pebble.DB) error {
+// Entry is one shard and its location.
+type Entry struct {
+	ID  ids.ShardID
+	Loc Location
+}
+
+// Page returns up to limit shards in key order, starting at the first shard
+// whose id is at least start. Pages are read under the index lock and
+// returned, so callers can process them without holding it.
+func (x *Index) Page(start ids.ShardID, limit int) ([]Entry, error) {
+	var out []Entry
+	err := x.read(func(db *pebble.DB) error {
 		iter, err := db.NewIter(&pebble.IterOptions{
-			LowerBound: []byte{prefixShard},
+			LowerBound: shardKey(start),
 			UpperBound: []byte{prefixSegment},
 		})
 		if err != nil {
 			return fmt.Errorf("index: iterate: %w", err)
 		}
 		defer iter.Close()
-		for ok := iter.First(); ok; ok = iter.Next() {
+		for ok := iter.First(); ok && len(out) < limit; ok = iter.Next() {
 			id, err := parseShardKey(iter.Key())
 			if err != nil {
 				return err
@@ -130,15 +138,59 @@ func (x *Index) Walk(fn func(ids.ShardID, Location) error) error {
 			if err != nil {
 				return fmt.Errorf("index: shard %s: %w", id, err)
 			}
-			if err := fn(id, loc); err != nil {
-				return err
-			}
+			out = append(out, Entry{ID: id, Loc: loc})
 		}
 		if err := iter.Error(); err != nil {
 			return fmt.Errorf("index: iterate: %w", err)
 		}
 		return nil
 	})
+	return out, err
+}
+
+// walkPage is the number of entries Walk reads per lock acquisition.
+const walkPage = 512
+
+// Walk calls fn for every shard in key order. It holds no lock while fn runs,
+// so fn may use the index. It stops at the first error returned by fn.
+func (x *Index) Walk(fn func(ids.ShardID, Location) error) error {
+	start := ids.ShardID{}
+	for {
+		page, err := x.Page(start, walkPage)
+		if err != nil {
+			return err
+		}
+		for _, e := range page {
+			if err := fn(e.ID, e.Loc); err != nil {
+				return err
+			}
+		}
+		if len(page) < walkPage {
+			return nil
+		}
+		next, ok := successor(page[len(page)-1].ID)
+		if !ok {
+			return nil
+		}
+		start = next
+	}
+}
+
+// successor returns the shard id that follows id in key order, or false when
+// id is the largest possible id.
+func successor(id ids.ShardID) (ids.ShardID, bool) {
+	raw := id.AppendBinary(nil)
+	for i := len(raw) - 1; i >= 0; i-- {
+		if raw[i] != 0xff {
+			raw[i]++
+			for j := i + 1; j < len(raw); j++ {
+				raw[j] = 0
+			}
+			next, err := ids.ParseShardIDBinary(raw)
+			return next, err == nil
+		}
+	}
+	return ids.ShardID{}, false
 }
 
 // Segments returns the metadata of every segment the index knows.
