@@ -50,11 +50,14 @@ func New(store meta.Store, sets erasure.Registry, opts Options) (*Engine, error)
 	if err != nil {
 		return nil, err
 	}
+	pool, err := newInlinePool(r.inlineThreshold, r.bufferBudget)
+	if err != nil {
+		return nil, err
+	}
 	queue, err := gc.New(r.gc)
 	if err != nil {
 		return nil, fmt.Errorf("engine: %w", err)
 	}
-	budget := bufpool.NewBudget(r.bufferBudget)
 	return &Engine{
 		store:      store,
 		sets:       sets,
@@ -62,10 +65,29 @@ func New(store meta.Store, sets erasure.Registry, opts Options) (*Engine, error)
 		clock:      r.clock,
 		logger:     r.logger,
 		gc:         queue,
-		inlinePool: bufpool.NewPool(int(r.inlineThreshold), budget),
+		inlinePool: pool,
 		writes:     semaphore.NewWeighted(int64(r.maxConcurrentWrites)),
 		deleteConc: r.deleteConcurrency,
 	}, nil
+}
+
+// newInlinePool returns the pool of buffers for inline payloads, charged to a
+// private budget of bufferBudget bytes. It returns nil when the inline tier is
+// disabled, because nothing then needs a buffer. A budget that cannot hold one
+// inline payload is an error here, since the pool would refuse to exist.
+func newInlinePool(inline, bufferBudget int64) (*bufpool.Pool, error) {
+	if inline == inlineDisabled {
+		return nil, nil
+	}
+	if bufferBudget < inline {
+		return nil, fmt.Errorf("engine: buffer budget %d is smaller than the inline threshold %d", bufferBudget, inline)
+	}
+	return bufpool.NewPool(int(inline), bufpool.NewBudget(bufferBudget)), nil
+}
+
+// inlineFits reports whether a payload of size bytes is stored inline.
+func (e *Engine) inlineFits(size int64) bool {
+	return e.inline != inlineDisabled && size <= e.inline
 }
 
 // Flush waits until every queued data deletion has finished or ctx is done.
