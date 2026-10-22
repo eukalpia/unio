@@ -9,7 +9,8 @@ import (
 
 func TestValidateBucketName(t *testing.T) {
 	good := []string{"abc", "my-bucket", "my.bucket.1", strings.Repeat("a", 63)}
-	bad := []string{ReservedBucketName, "ab", strings.Repeat("a", 64), "Abc", "-abc", "abc-", "a..b", "a.-b", "192.168.1.1", "xn--abc", "abc-s3alias", "a_b"}
+	bad := []string{ReservedBucketName, "ab", strings.Repeat("a", 64), "Abc", "-abc", "abc-", "a..b", "a.-b", "192.168.1.1", "xn--abc", "abc-s3alias", "a_b",
+		"sthree-abc", "amzn-s3-demo-bucket", "bucket.mrap", "bucket--x-s3", "bucket--table-s3", "bucket--ol-s3"}
 	for _, n := range good {
 		if err := ValidateBucketName(n); err != nil {
 			t.Fatalf("%q: unexpected %v", n, err)

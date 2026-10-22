@@ -8,6 +8,13 @@ import (
 	"github.com/eukalpia/unio/internal/s3err"
 )
 
+// Prefixes and suffixes that Amazon S3 reserves for general purpose bucket
+// names (S3 bucket naming rules).
+var (
+	reservedPrefixes = []string{"xn--", "sthree-", "amzn-s3-demo-"}
+	reservedSuffixes = []string{"-s3alias", "--ol-s3", ".mrap", "--x-s3", "--table-s3"}
+)
+
 // ReservedBucketName is the path prefix of Unio's service endpoints
 // (/unio/health, /unio/metrics, /unio/admin). It can never be a bucket.
 const ReservedBucketName = "unio"
@@ -39,9 +46,15 @@ func ValidateBucketName(name string) error {
 	if _, err := netip.ParseAddr(name); err == nil {
 		return s3err.Errorf(s3err.InvalidBucketName, "bucket name must not be an IP address")
 	}
-	if strings.HasPrefix(name, "xn--") || strings.HasPrefix(name, "sthree-") ||
-		strings.HasSuffix(name, "-s3alias") || strings.HasSuffix(name, "--ol-s3") {
-		return s3err.Errorf(s3err.InvalidBucketName, "bucket name uses a reserved prefix or suffix")
+	for _, p := range reservedPrefixes {
+		if strings.HasPrefix(name, p) {
+			return s3err.Errorf(s3err.InvalidBucketName, "bucket name uses the reserved prefix %q", p)
+		}
+	}
+	for _, s := range reservedSuffixes {
+		if strings.HasSuffix(name, s) {
+			return s3err.Errorf(s3err.InvalidBucketName, "bucket name uses the reserved suffix %q", s)
+		}
 	}
 	return nil
 }
