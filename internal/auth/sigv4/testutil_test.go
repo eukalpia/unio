@@ -132,3 +132,8 @@ func presignURL(t *testing.T, r *http.Request, expires int, when time.Time) stri
 	}
 	return signed
 }
+
+// newSDKSigner returns the SDK signer configured as S3 requires.
+func newSDKSigner() *v4.Signer {
+	return v4.NewSigner(func(o *v4.SignerOptions) { o.DisableURIPathEscaping = true })
+}

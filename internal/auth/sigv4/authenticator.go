@@ -161,7 +161,7 @@ func (a *Authenticator) verifyHeader(ctx context.Context, req *auth.Request, que
 	if err := verifySignature(key, when.amz, hdr, canon); err != nil {
 		return nil, err
 	}
-	return buildResult(req, id, pl, when.t)
+	return buildResult(req, verified{id: id, pl: pl, t: when.t, amz: when.amz, scope: hdr.scope.String(), key: key, seed: hdr.signature})
 }
 
 // resolve looks up the access key and derives its signing key.
@@ -186,33 +186,6 @@ func verifySignature(key [32]byte, amzDate string, hdr authorization, canon stri
 		return s3err.Errorf(s3err.SignatureDoesNotMatch, "the request signature does not match")
 	}
 	return nil
-}
-
-// buildResult builds the Result for a verified header-signed request whose
-// body is not aws-chunked.
-func buildResult(req *auth.Request, id auth.Identity, pl payload, signed time.Time) (*auth.Result, error) {
-	res := &auth.Result{
-		Identity:      id,
-		Body:          req.Body,
-		DecodedLength: req.ContentLength,
-		SignedTime:    signed,
-	}
-	switch pl.kind {
-	case payloadUnsigned:
-	case payloadDigest:
-		res.PayloadSHA256 = pl.digest[:]
-		if req.Body == nil {
-			if err := checkEmptyDigest(pl.digest); err != nil {
-				return nil, err
-			}
-			res.Body = nil
-			break
-		}
-		res.Body = newDigestReader(req.Body, pl.digest)
-	default:
-		return nil, s3err.Errorf(s3err.NotImplemented, "aws-chunked payloads are not yet supported")
-	}
-	return res, nil
 }
 
 // checkScope rejects credential scopes for another region. The service is
