@@ -70,6 +70,11 @@ func (e *Env) Handle(op router.Op, c *Call) error {
 			return err
 		}
 	}
+	if unsupportedRefused(op) {
+		if err := headers.RejectUnsupported(c.Header); err != nil {
+			return err
+		}
+	}
 	switch op {
 	case router.OpListBuckets:
 		return e.ListBuckets(c)
@@ -158,6 +163,18 @@ func queryInt(q url.Values, name string, def, lo, hi int) (int, error) {
 // httpTime formats t as an RFC 9110 HTTP date.
 func httpTime(t time.Time) string {
 	return t.UTC().Format(http.TimeFormat)
+}
+
+// unsupportedRefused reports whether requests of op are refused when they carry
+// a header for a feature outside the v0.1 scope, such as an ACL grant or Object
+// Lock. These are the operations that create buckets, objects and uploads.
+func unsupportedRefused(op router.Op) bool {
+	switch op {
+	case router.OpCreateBucket, router.OpPutObject, router.OpCopyObject,
+		router.OpCreateMultipartUpload, router.OpUploadPartCopy:
+		return true
+	}
+	return false
 }
 
 // encryptionRefused reports whether requests of op are refused when they carry

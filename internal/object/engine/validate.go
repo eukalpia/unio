@@ -87,12 +87,14 @@ func normalizeETag(etag string) string {
 }
 
 // checkPartNumberOpt validates GetOptions.PartNumber, where zero means that no
-// part was requested.
+// part was requested. A positive number is not checked against the range of
+// part numbers here: a number that names no part of the object is reported by
+// selectPart as InvalidPartNumber, which is the answer S3 gives for it.
 func checkPartNumberOpt(n int) error {
-	if n == 0 {
-		return nil
+	if n < 0 {
+		return s3err.Errorf(s3err.InvalidArgument, "part number must be positive")
 	}
-	return validatePartNumber(n)
+	return nil
 }
 
 // checkBody rejects a missing request body. A nil body is a caller error, and

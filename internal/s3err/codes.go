@@ -29,6 +29,7 @@ const (
 	InvalidLocationConstraint          Code = "InvalidLocationConstraint"
 	InvalidObjectState                 Code = "InvalidObjectState"
 	InvalidPart                        Code = "InvalidPart"
+	InvalidPartNumber                  Code = "InvalidPartNumber"
 	InvalidPartOrder                   Code = "InvalidPartOrder"
 	InvalidRange                       Code = "InvalidRange"
 	InvalidRequest                     Code = "InvalidRequest"

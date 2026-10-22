@@ -23,7 +23,7 @@ func (e *Engine) GetObject(ctx context.Context, bucket, key string, opts object.
 		return nil, err
 	}
 	info := infoOf(rec, opts.VersionID == "")
-	if err := opts.Conditions.EvaluateRead(info); err != nil {
+	if err := evaluateRead(opts.Conditions, info); err != nil {
 		return nil, err
 	}
 	c, err := selectPart(rec, contentOf(rec), opts.PartNumber)
@@ -46,7 +46,11 @@ func (e *Engine) GetObject(ctx context.Context, bucket, key string, opts object.
 // reported as NoSuchKey, with the marker in the error's cause. An explicit
 // request for a delete marker's version is MethodNotAllowed, as in S3.
 func (e *Engine) lookupRead(ctx context.Context, bucket, key, versionID string) (meta.ObjectRecord, error) {
-	rec, err := e.store.GetObject(ctx, bucket, key, versionID)
+	storeID, err := e.nullVersionOf(ctx, bucket, versionID)
+	if err != nil {
+		return meta.ObjectRecord{}, err
+	}
+	rec, err := e.store.GetObject(ctx, bucket, key, storeID)
 	if err != nil {
 		return meta.ObjectRecord{}, err
 	}

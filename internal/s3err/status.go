@@ -27,6 +27,7 @@ var httpStatus = map[Code]int{
 	InvalidLocationConstraint:          http.StatusBadRequest,
 	InvalidObjectState:                 http.StatusForbidden,
 	InvalidPart:                        http.StatusBadRequest,
+	InvalidPartNumber:                  http.StatusRequestedRangeNotSatisfiable,
 	InvalidPartOrder:                   http.StatusBadRequest,
 	InvalidRange:                       http.StatusRequestedRangeNotSatisfiable,
 	InvalidRequest:                     http.StatusBadRequest,

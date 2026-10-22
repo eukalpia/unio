@@ -46,7 +46,10 @@ type ListObjectsV2Result struct {
 	// StartAfter is the key the listing started after, if any.
 	StartAfter string
 	// ContinuationToken is the token supplied by the request, if any.
-	ContinuationToken string
+	// EchoContinuationToken reports that the request carried the parameter, so
+	// the element is sent even when the token is empty, as S3 does.
+	ContinuationToken     string
+	EchoContinuationToken bool
 	// NextContinuationToken is the token for the next page, if any.
 	NextContinuationToken string
 	// EncodingType is "url" when key-like values are percent-encoded.
@@ -99,11 +102,17 @@ type Bucket struct {
 }
 
 // ListBucketsResult is a ListAllMyBuckets response.
+//
+// ContinuationToken and Prefix are emitted only when non-empty.
 type ListBucketsResult struct {
 	// Owner is the account that owns the buckets.
 	Owner Owner
 	// Buckets lists the buckets of the account.
 	Buckets []Bucket
+	// ContinuationToken is the token for the next page, if there is one.
+	ContinuationToken string
+	// Prefix is the prefix the listing was filtered by, if any.
+	Prefix string
 }
 
 // ErrorResponse is the body of every S3 error. Fields are always emitted, even

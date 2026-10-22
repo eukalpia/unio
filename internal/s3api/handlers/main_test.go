@@ -16,6 +16,7 @@ import (
 	"go.uber.org/goleak"
 
 	"github.com/eukalpia/unio/internal/auth"
+	"github.com/eukalpia/unio/internal/object"
 	"github.com/eukalpia/unio/internal/s3api"
 	"github.com/eukalpia/unio/internal/s3api/internal/fakes"
 )
@@ -65,8 +66,14 @@ type uploadResult struct {
 // an empty in-memory layer and by authz, and it is stopped when the test ends.
 func newServer(t *testing.T, authz auth.Authorizer) *server {
 	t.Helper()
+	return newServerWithLayer(t, fakes.NewLayer(), authz)
+}
+
+// newServerWithLayer is newServer over the given layer.
+func newServerWithLayer(t *testing.T, layer object.Layer, authz auth.Authorizer) *server {
+	t.Helper()
 	srv, err := s3api.New(s3api.Config{Addr: "127.0.0.1:0", Region: "us-east-1"},
-		fakes.NewLayer(), &fakes.Authenticator{}, authz,
+		layer, &fakes.Authenticator{}, authz,
 		slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)

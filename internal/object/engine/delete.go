@@ -19,7 +19,11 @@ func (e *Engine) DeleteObject(ctx context.Context, bucket, key string, opts obje
 	if err := checkCtx(ctx); err != nil {
 		return object.DeleteResult{}, err
 	}
-	res, garbage, err := e.store.DeleteObject(ctx, bucket, key, opts.VersionID, opts.Conditions)
+	versionID, err := e.nullVersionOf(ctx, bucket, opts.VersionID)
+	if err != nil {
+		return object.DeleteResult{}, err
+	}
+	res, garbage, err := e.store.DeleteObject(ctx, bucket, key, versionID, opts.Conditions)
 	if err != nil {
 		return object.DeleteResult{}, err
 	}
@@ -40,7 +44,8 @@ func (e *Engine) DeleteObjects(ctx context.Context, bucket string, objects []obj
 	if len(objects) > object.MaxDeleteObjects {
 		return nil, s3err.Errorf(s3err.MalformedXML, "more than %d objects in one request", object.MaxDeleteObjects)
 	}
-	if _, err := e.store.GetBucket(ctx, bucket); err != nil {
+	info, err := e.store.GetBucket(ctx, bucket)
+	if err != nil {
 		return nil, err
 	}
 	results := make([]object.DeleteResult, len(objects))
@@ -48,7 +53,7 @@ func (e *Engine) DeleteObjects(ctx context.Context, bucket string, objects []obj
 	group.SetLimit(e.deleteConc)
 	for i := range objects {
 		group.Go(func() error {
-			results[i] = e.deleteOne(ctx, bucket, objects[i])
+			results[i] = e.deleteOne(ctx, bucket, info, objects[i])
 			return nil
 		})
 	}
@@ -59,14 +64,15 @@ func (e *Engine) DeleteObjects(ctx context.Context, bucket string, objects []obj
 	return results, nil
 }
 
-// deleteOne deletes one key of a DeleteObjects request.
-func (e *Engine) deleteOne(ctx context.Context, bucket string, o object.ToDelete) object.DeleteResult {
+// deleteOne deletes one key of a DeleteObjects request. info is the state of
+// the bucket, read once for the whole request.
+func (e *Engine) deleteOne(ctx context.Context, bucket string, info object.BucketInfo, o object.ToDelete) object.DeleteResult {
 	res := object.DeleteResult{Key: o.Key, VersionID: o.VersionID}
 	if err := object.ValidateKey(o.Key); err != nil {
 		res.Err = err
 		return res
 	}
-	out, garbage, err := e.store.DeleteObject(ctx, bucket, o.Key, o.VersionID, object.Conditions{})
+	out, garbage, err := e.store.DeleteObject(ctx, bucket, o.Key, storeVersion(info, o.VersionID), object.Conditions{})
 	if err != nil {
 		res.Err = err
 		return res
