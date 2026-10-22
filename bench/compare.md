@@ -1,9 +1,23 @@
-# Comparing Unio with MinIO
+# Comparing Unio with MinIO (or RustFS while MinIO is unavailable)
 
 This document describes how to measure Unio and MinIO on the same hardware
 with the same workloads. It is a procedure, not a result. No number in this
 repository is a claim about Unio or MinIO until someone has run this procedure,
 recorded the environment, and kept the raw output.
+
+## Baseline availability
+
+The baseline in architecture section 1.1 is MinIO. The MinIO images could not be
+pulled from Docker Hub or quay.io when this was written, so this procedure uses
+RustFS (rustfs/rustfs) as the comparison target. A RustFS result is not a MinIO
+result. Report it as Unio against RustFS, and keep the MinIO targets open until
+a MinIO image can be run.
+
+The RustFS cluster sets RUSTFS_UNSAFE_BYPASS_DISK_CHECK, because RustFS refuses
+drives that share a physical device and Docker Desktop puts every named volume on
+one disk. Unio has no such check, so on Docker Desktop both clusters share one disk.
+A fair comparison needs a separate physical disk for every drive. Without it, both
+results describe the same disk, and the numbers say little about either system.
 
 ## 1. What the targets mean
 
@@ -36,14 +50,15 @@ Both systems use the 4-node by 4-drive layout: 4 nodes, each with 4 drives. The
 Compose files are:
 
 - `deploy/compose/cluster-4x4.yml` for Unio;
-- `deploy/compose/minio-4x4.yml` for MinIO.
+- `deploy/compose/rustfs-4x4.yml` for RustFS, the comparison target used while
+  MinIO images cannot be pulled (see the note below).
 
 Both files publish host ports 9001 to 9004, so only one stack may run at a time.
 Stop one before starting the other:
 
 ```sh
 docker compose -f deploy/compose/cluster-4x4.yml down -v
-docker compose -f deploy/compose/minio-4x4.yml up -d
+docker compose -f deploy/compose/rustfs-4x4.yml up -d
 ```
 
 The `-v` flag removes the named volumes, so each run starts with empty drives.
@@ -64,7 +79,7 @@ not store it in the repository unless it is a deliberate report.
 | Docker resource limits | CPU and memory limits per container, and the Docker Desktop allocation |
 | Filesystem for volumes | named volumes inside the WSL VM, or Windows bind mounts (bind mounts are much slower on Windows and must not be mixed between runs) |
 | Unio | commit hash, build flags, `unio` image tag |
-| MinIO | image tag, for example `minio/minio:RELEASE.<date>` |
+| RustFS | image digest pinned in `deploy/docker/rustfs.Dockerfile` |
 | Go and tools | `go version`, `warp --version`, `benchstat` version |
 | Harness | `git rev-parse HEAD` of this repository and the exact command line |
 | Date and time | start and end of each run, timezone |
