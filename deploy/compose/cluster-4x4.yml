@@ -15,7 +15,7 @@
 # Secrets are mounted as files under /run/secrets/ and read through the *_FILE
 # variables. They are not passed as environment variables.
 #
-# Do not run this together with minio-4x4.yml: both publish host ports 9001 to 9004.
+# Do not run this together with rustfs-4x4.yml: both publish host ports 9001 to 9004.
 
 name: unio-4x4
 
