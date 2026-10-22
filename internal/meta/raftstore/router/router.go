@@ -155,6 +155,9 @@ func (r *Router) Propose(ctx context.Context, p ids.PartitionID, cmd *pb.Command
 		return nil, fmt.Errorf("router: encode command: %w", err)
 	}
 	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		target, ok := r.target(p, attempt)
 		if !ok {
 			return nil, meta.ErrNotLeader
@@ -210,6 +213,9 @@ func (r *Router) proposeTo(ctx context.Context, p ids.PartitionID, target ids.No
 func (r *Router) Read(ctx context.Context, p ids.PartitionID, q *pb.ReadQuery) (*pb.ReadResult, error) {
 	var lastErr error
 	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		target, ok := r.target(p, attempt)
 		if !ok {
 			return nil, meta.ErrNotLeader
