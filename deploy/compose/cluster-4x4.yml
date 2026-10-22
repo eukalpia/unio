@@ -26,7 +26,9 @@ x-unio-node: &unio-node
   image: unio:4x4-local
   pull_policy: never
   command: ["server"]
-  restart: unless-stopped
+  # No restart policy on purpose: the chaos harness (test/chaos) kills nodes
+  # with SIGKILL and restarts them itself. A restart policy would bring a
+  # killed node back before the harness checks that it stayed down.
   stop_grace_period: 30s
   environment: &unio-env
     # Every drive in the cluster: https://node1:9100/data1 ... https://node4:9100/data4
