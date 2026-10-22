@@ -29,6 +29,7 @@ var genericMessages = map[s3err.Code]string{
 	s3err.InvalidLocationConstraint:          "The specified location constraint is not valid.",
 	s3err.InvalidObjectState:                 "The operation is not valid for the current state of the object.",
 	s3err.InvalidPart:                        "One or more of the specified parts could not be found.",
+	s3err.InvalidPartNumber:                  "The requested partnumber is not satisfiable.",
 	s3err.InvalidPartOrder:                   "The list of parts was not in ascending order.",
 	s3err.InvalidRange:                       "The requested range is not satisfiable",
 	s3err.InvalidRequest:                     "The request is not valid.",
