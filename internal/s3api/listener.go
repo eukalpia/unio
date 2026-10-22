@@ -12,6 +12,8 @@ import (
 type deadlineListener struct {
 	net.Listener
 	headerTimeout time.Duration
+	// conns tracks the accepted connections for draining.
+	conns *connTracker
 }
 
 // Accept returns the next connection with the request-head deadline set.
@@ -24,5 +26,5 @@ func (l deadlineListener) Accept() (net.Conn, error) {
 		_ = conn.Close()
 		return nil, err
 	}
-	return conn, nil
+	return l.conns.add(conn), nil
 }

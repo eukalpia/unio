@@ -117,7 +117,7 @@ func New(cfg Config, layer object.Layer, authn auth.Authenticator, authz auth.Au
 		stop:    make(chan struct{}),
 		done:    make(chan struct{}),
 	}
-	s.engine = s.newHertz(nil).Engine
+	s.engine = s.newHertz(nil, nil).Engine
 	return s, nil
 }
 
@@ -159,7 +159,8 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	s.mu.Unlock()
 	defer close(s.done)
 
-	h := s.newHertz(deadlineListener{Listener: ln, headerTimeout: s.cfg.ReadHeaderTimeout})
+	conns := newConnTracker()
+	h := s.newHertz(deadlineListener{Listener: ln, headerTimeout: s.cfg.ReadHeaderTimeout, conns: conns}, conns)
 	errCh := make(chan error, 1)
 	go func() { errCh <- h.Run() }()
 
@@ -170,14 +171,23 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	case <-ctx.Done():
 	case <-s.stop:
 	}
-	// Closing the listener stops new connections even when Hertz has not
-	// reached its running state yet; Shutdown then drains the active ones.
-	_ = ln.Close()
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), s.cfg.ShutdownTimeout)
-	defer cancel()
-	if err := h.Shutdown(shutdownCtx); err != nil {
-		s.logger.Warn("graceful shutdown did not complete", "error", err)
+	// Hertz's Shutdown closes the listener and then waits for the requests
+	// in flight to finish. Closing the listener first would make Run return
+	// at once, and Shutdown would find the engine stopped and return without
+	// waiting, cutting responses that were still being written. Before Hertz
+	// reaches its running state nothing is served yet, and closing the
+	// listener is what makes Run return.
+	if h.IsRunning() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), s.cfg.ShutdownTimeout)
+		defer cancel()
+		// Idle keep-alive connections are closed at once; busy ones close
+		// after their response.
+		go conns.drain(shutdownCtx)
+		if err := h.Shutdown(shutdownCtx); err != nil {
+			s.logger.Warn("graceful shutdown did not complete", "error", err.Error())
+		}
 	}
+	_ = ln.Close()
 	<-errCh
 	return nil
 }
@@ -203,7 +213,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // newHertz builds the Hertz engine: the standard transport with streamed
 // request bodies, the timeouts and limits of cfg, the middleware chain and
 // the catch-all route. ln is nil for the test engine.
-func (s *Server) newHertz(ln net.Listener) *server.Hertz {
+func (s *Server) newHertz(ln net.Listener, conns *connTracker) *server.Hertz {
 	opts := []config.Option{
 		server.WithTransport(standard.NewTransporter),
 		server.WithStreamBody(true),
@@ -221,6 +231,9 @@ func (s *Server) newHertz(ln net.Listener) *server.Hertz {
 		opts = append(opts, server.WithTLS(s.tls))
 	}
 	h := server.New(opts...)
+	if conns != nil {
+		h.Use(conns.trackRequests)
+	}
 	if s.cfg.Observer != nil {
 		// Outermost, so that its duration covers every inner rejection too.
 		h.Use(middleware.Observe(s.cfg.Observer.ObserveHTTPRequest))
