@@ -286,6 +286,8 @@ message PartsResult {
   repeated PartRecord parts = 1;
   // True when more parts follow the last returned part.
   bool more = 2;
+  // The checksum algorithm of the upload, reported with every page.
+  ChecksumAlgorithm checksum_algorithm = 3;
 }
 
 // ListItem is one entry of an object listing batch.

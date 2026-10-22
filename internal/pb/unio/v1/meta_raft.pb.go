@@ -2363,9 +2363,11 @@ type PartsResult struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Parts []*PartRecord          `protobuf:"bytes,1,rep,name=parts,proto3" json:"parts,omitempty"`
 	// True when more parts follow the last returned part.
-	More          bool `protobuf:"varint,2,opt,name=more,proto3" json:"more,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	More bool `protobuf:"varint,2,opt,name=more,proto3" json:"more,omitempty"`
+	// The checksum algorithm of the upload, reported with every page.
+	ChecksumAlgorithm ChecksumAlgorithm `protobuf:"varint,3,opt,name=checksum_algorithm,json=checksumAlgorithm,proto3,enum=unio.v1.ChecksumAlgorithm" json:"checksum_algorithm,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *PartsResult) Reset() {
@@ -2410,6 +2412,13 @@ func (x *PartsResult) GetMore() bool {
 		return x.More
 	}
 	return false
+}
+
+func (x *PartsResult) GetChecksumAlgorithm() ChecksumAlgorithm {
+	if x != nil {
+		return x.ChecksumAlgorithm
+	}
+	return ChecksumAlgorithm_CHECKSUM_ALGORITHM_NONE
 }
 
 // ListItem is one entry of an object listing batch.
@@ -3533,10 +3542,11 @@ const file_unio_v1_meta_raft_proto_rawDesc = "" +
 	"\fObjectResult\x12-\n" +
 	"\x06record\x18\x01 \x01(\v2\x15.unio.v1.ObjectRecordR\x06record\"=\n" +
 	"\fUploadResult\x12-\n" +
-	"\x06upload\x18\x01 \x01(\v2\x15.unio.v1.UploadRecordR\x06upload\"L\n" +
+	"\x06upload\x18\x01 \x01(\v2\x15.unio.v1.UploadRecordR\x06upload\"\x97\x01\n" +
 	"\vPartsResult\x12)\n" +
 	"\x05parts\x18\x01 \x03(\v2\x13.unio.v1.PartRecordR\x05parts\x12\x12\n" +
-	"\x04more\x18\x02 \x01(\bR\x04more\"j\n" +
+	"\x04more\x18\x02 \x01(\bR\x04more\x12I\n" +
+	"\x12checksum_algorithm\x18\x03 \x01(\x0e2\x1a.unio.v1.ChecksumAlgorithmR\x11checksumAlgorithm\"j\n" +
 	"\bListItem\x12/\n" +
 	"\x06object\x18\x01 \x01(\v2\x15.unio.v1.ObjectRecordH\x00R\x06object\x12%\n" +
 	"\rcommon_prefix\x18\x02 \x01(\tH\x00R\fcommonPrefixB\x06\n" +
@@ -3662,6 +3672,7 @@ var file_unio_v1_meta_raft_proto_goTypes = []any{
 	(*PartRecord)(nil),             // 49: unio.v1.PartRecord
 	(VersioningState)(0),           // 50: unio.v1.VersioningState
 	(*BucketRecord)(nil),           // 51: unio.v1.BucketRecord
+	(ChecksumAlgorithm)(0),         // 52: unio.v1.ChecksumAlgorithm
 }
 var file_unio_v1_meta_raft_proto_depIdxs = []int32{
 	2,  // 0: unio.v1.Command.put_object:type_name -> unio.v1.PutObject
@@ -3707,28 +3718,29 @@ var file_unio_v1_meta_raft_proto_depIdxs = []int32{
 	46, // 40: unio.v1.ObjectResult.record:type_name -> unio.v1.ObjectRecord
 	48, // 41: unio.v1.UploadResult.upload:type_name -> unio.v1.UploadRecord
 	49, // 42: unio.v1.PartsResult.parts:type_name -> unio.v1.PartRecord
-	46, // 43: unio.v1.ListItem.object:type_name -> unio.v1.ObjectRecord
-	32, // 44: unio.v1.ListObjectsResult.items:type_name -> unio.v1.ListItem
-	48, // 45: unio.v1.UploadListItem.upload:type_name -> unio.v1.UploadRecord
-	34, // 46: unio.v1.ListUploadsResult.items:type_name -> unio.v1.UploadListItem
-	51, // 47: unio.v1.BucketResult.bucket:type_name -> unio.v1.BucketRecord
-	51, // 48: unio.v1.BucketsResult.buckets:type_name -> unio.v1.BucketRecord
-	40, // 49: unio.v1.KVResult.entries:type_name -> unio.v1.KVEntry
-	29, // 50: unio.v1.ReadResult.object:type_name -> unio.v1.ObjectResult
-	30, // 51: unio.v1.ReadResult.upload:type_name -> unio.v1.UploadResult
-	31, // 52: unio.v1.ReadResult.parts:type_name -> unio.v1.PartsResult
-	33, // 53: unio.v1.ReadResult.list_objects:type_name -> unio.v1.ListObjectsResult
-	35, // 54: unio.v1.ReadResult.list_uploads:type_name -> unio.v1.ListUploadsResult
-	36, // 55: unio.v1.ReadResult.bucket_has_data:type_name -> unio.v1.BucketHasDataResult
-	37, // 56: unio.v1.ReadResult.bucket:type_name -> unio.v1.BucketResult
-	38, // 57: unio.v1.ReadResult.buckets:type_name -> unio.v1.BucketsResult
-	39, // 58: unio.v1.ReadResult.kv:type_name -> unio.v1.KVResult
-	27, // 59: unio.v1.ReadRequest.query:type_name -> unio.v1.ReadQuery
-	60, // [60:60] is the sub-list for method output_type
-	60, // [60:60] is the sub-list for method input_type
-	60, // [60:60] is the sub-list for extension type_name
-	60, // [60:60] is the sub-list for extension extendee
-	0,  // [0:60] is the sub-list for field type_name
+	52, // 43: unio.v1.PartsResult.checksum_algorithm:type_name -> unio.v1.ChecksumAlgorithm
+	46, // 44: unio.v1.ListItem.object:type_name -> unio.v1.ObjectRecord
+	32, // 45: unio.v1.ListObjectsResult.items:type_name -> unio.v1.ListItem
+	48, // 46: unio.v1.UploadListItem.upload:type_name -> unio.v1.UploadRecord
+	34, // 47: unio.v1.ListUploadsResult.items:type_name -> unio.v1.UploadListItem
+	51, // 48: unio.v1.BucketResult.bucket:type_name -> unio.v1.BucketRecord
+	51, // 49: unio.v1.BucketsResult.buckets:type_name -> unio.v1.BucketRecord
+	40, // 50: unio.v1.KVResult.entries:type_name -> unio.v1.KVEntry
+	29, // 51: unio.v1.ReadResult.object:type_name -> unio.v1.ObjectResult
+	30, // 52: unio.v1.ReadResult.upload:type_name -> unio.v1.UploadResult
+	31, // 53: unio.v1.ReadResult.parts:type_name -> unio.v1.PartsResult
+	33, // 54: unio.v1.ReadResult.list_objects:type_name -> unio.v1.ListObjectsResult
+	35, // 55: unio.v1.ReadResult.list_uploads:type_name -> unio.v1.ListUploadsResult
+	36, // 56: unio.v1.ReadResult.bucket_has_data:type_name -> unio.v1.BucketHasDataResult
+	37, // 57: unio.v1.ReadResult.bucket:type_name -> unio.v1.BucketResult
+	38, // 58: unio.v1.ReadResult.buckets:type_name -> unio.v1.BucketsResult
+	39, // 59: unio.v1.ReadResult.kv:type_name -> unio.v1.KVResult
+	27, // 60: unio.v1.ReadRequest.query:type_name -> unio.v1.ReadQuery
+	61, // [61:61] is the sub-list for method output_type
+	61, // [61:61] is the sub-list for method input_type
+	61, // [61:61] is the sub-list for extension type_name
+	61, // [61:61] is the sub-list for extension extendee
+	0,  // [0:61] is the sub-list for field type_name
 }
 
 func init() { file_unio_v1_meta_raft_proto_init() }
