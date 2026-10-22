@@ -883,6 +883,7 @@ func (m *PartsResult) CloneVT() *PartsResult {
 	}
 	r := new(PartsResult)
 	r.More = m.More
+	r.ChecksumAlgorithm = m.ChecksumAlgorithm
 	if rhs := m.Parts; rhs != nil {
 		tmpContainer := make([]*PartRecord, len(rhs))
 		for k, v := range rhs {
@@ -2778,6 +2779,9 @@ func (this *PartsResult) EqualVT(that *PartsResult) bool {
 		}
 	}
 	if this.More != that.More {
+		return false
+	}
+	if this.ChecksumAlgorithm != that.ChecksumAlgorithm {
 		return false
 	}
 	return string(this.unknownFields) == string(that.unknownFields)
@@ -5667,6 +5671,11 @@ func (m *PartsResult) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.ChecksumAlgorithm != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.ChecksumAlgorithm))
+		i--
+		dAtA[i] = 0x18
+	}
 	if m.More {
 		i--
 		if m.More {
@@ -7563,6 +7572,9 @@ func (m *PartsResult) SizeVT() (n int) {
 	}
 	if m.More {
 		n += 2
+	}
+	if m.ChecksumAlgorithm != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.ChecksumAlgorithm))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -13169,6 +13181,25 @@ func (m *PartsResult) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.More = bool(v != 0)
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ChecksumAlgorithm", wireType)
+			}
+			m.ChecksumAlgorithm = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ChecksumAlgorithm |= ChecksumAlgorithm(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
