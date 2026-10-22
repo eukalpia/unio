@@ -1,0 +1,67 @@
+package config
+
+import "time"
+
+// Built-in defaults. They are the values used when no source sets a key.
+const (
+	// DefaultS3Address is the default S3 listen address.
+	DefaultS3Address = ":9000"
+	// DefaultInternodeAddress is the default internode listen address.
+	DefaultInternodeAddress = ":9100"
+	// DefaultPartitions is the default number of metadata partitions.
+	DefaultPartitions = 16
+	// DefaultInlineThreshold is the default largest inline object (ADR-0005).
+	DefaultInlineThreshold = 4 * kiB
+	// DefaultMemoryBudget is the default buffer memory budget.
+	DefaultMemoryBudget = 1 * giB
+	// DefaultMaxRequests is the default number of concurrent S3 requests.
+	DefaultMaxRequests = 1024
+	// DefaultRequestQueue is the default number of queued S3 requests.
+	DefaultRequestQueue = 4096
+	// DefaultBackgroundConcurrency is the default number of background jobs.
+	DefaultBackgroundConcurrency = 4
+	// DefaultReadHeaderTimeout is the default header read timeout.
+	DefaultReadHeaderTimeout = 10 * time.Second
+	// DefaultReadTimeout is the default whole-request read timeout.
+	DefaultReadTimeout = 10 * time.Minute
+	// DefaultWriteTimeout is the default response write timeout.
+	DefaultWriteTimeout = 10 * time.Minute
+	// DefaultIdleTimeout is the default keep-alive idle timeout.
+	DefaultIdleTimeout = 2 * time.Minute
+	// DefaultShutdownTimeout is the default graceful shutdown deadline.
+	DefaultShutdownTimeout = 30 * time.Second
+	// DefaultLogLevel is the default log level.
+	DefaultLogLevel = "info"
+	// DefaultLogFormat is the default log format.
+	DefaultLogFormat = "json"
+)
+
+// Defaults returns the configuration before any source is applied. Keys
+// with no default (node id, endpoints, secrets) are left empty and must be
+// set by the operator.
+func Defaults() Config {
+	return Config{
+		Node: NodeConfig{
+			S3Address:        DefaultS3Address,
+			InternodeAddress: DefaultInternodeAddress,
+		},
+		Metadata: MetadataConfig{Partitions: DefaultPartitions},
+		Storage: StorageConfig{
+			InlineThreshold: DefaultInlineThreshold,
+			MemoryBudget:    DefaultMemoryBudget,
+		},
+		Limits: LimitsConfig{
+			MaxRequests:           DefaultMaxRequests,
+			RequestQueue:          DefaultRequestQueue,
+			BackgroundConcurrency: DefaultBackgroundConcurrency,
+		},
+		Timeouts: TimeoutsConfig{
+			ReadHeader: DefaultReadHeaderTimeout,
+			Read:       DefaultReadTimeout,
+			Write:      DefaultWriteTimeout,
+			Idle:       DefaultIdleTimeout,
+			Shutdown:   DefaultShutdownTimeout,
+		},
+		Log: LogConfig{Level: DefaultLogLevel, Format: DefaultLogFormat},
+	}
+}
