@@ -40,7 +40,12 @@ type Limits struct {
 	// connection.
 	MaxHandlersPerConn int
 	// MaxStreamConnsPerPeer bounds stream connections a client holds to one
-	// peer, busy or idle.
+	// peer, busy or idle. A stream connection carries one transfer at a time,
+	// and an erasure-coded write sends a shard to every drive of the peer in
+	// its set, so a node writing many objects at once needs many transfers to
+	// each peer in parallel; too few connections queue the shards behind each
+	// other. The default of 64 keeps 32 concurrent 1 MiB writes on a four-node
+	// cluster from waiting on connections.
 	MaxStreamConnsPerPeer int
 	// MaxInboundConns bounds accepted connections, across all peers.
 	MaxInboundConns int
@@ -93,7 +98,7 @@ func DefaultLimits() Limits {
 		MaxRPCConnsPerPeer:    4,
 		MaxInflightPerConn:    256,
 		MaxHandlersPerConn:    64,
-		MaxStreamConnsPerPeer: 8,
+		MaxStreamConnsPerPeer: 64,
 		MaxInboundConns:       1024,
 		StreamBufferSize:      256 << 10,
 		StreamBufferBudget:    64 << 20,
