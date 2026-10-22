@@ -101,6 +101,15 @@ func (d *Drive) Corrupt(id ids.ShardID, offset int) error {
 	return nil
 }
 
+// Replace stores a copy of data as shard id, bypassing the write path. It
+// simulates a misdirected write or a stale copy: the bytes are a valid shard,
+// but of another position.
+func (d *Drive) Replace(id ids.ShardID, data []byte) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.shards[id] = storedShard{data: bytes.Clone(data), created: time.Now()}
+}
+
 // ID returns the drive id.
 func (d *Drive) ID() ids.DriveID {
 	return d.id
