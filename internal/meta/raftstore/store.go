@@ -13,10 +13,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/cockroachdb/pebble/v2"
@@ -36,13 +37,21 @@ import (
 type Store struct {
 	cfg       Config
 	opts      Options
+	logger    *slog.Logger
 	parts     map[ids.PartitionID]cluster.PartitionInfo
 	dataParts []ids.PartitionID
 	cache     *pebble.Cache
 	logs      *logstore.Store
 	fsms      map[ids.PartitionID]*fsm.FSM
-	groups    map[ids.PartitionID]*group.Group
 	router    *router.Router
+
+	// mu guards groups and closed. Ready reads them while Close changes them.
+	mu     sync.RWMutex
+	groups map[ids.PartitionID]*group.Group
+	closed bool
+
+	closeOnce sync.Once
+	closeErr  error
 }
 
 // Compile-time interface checks.
@@ -88,8 +97,15 @@ type Options struct {
 	// CacheSize is the Pebble block cache size in bytes, shared by all
 	// databases of the node. Default 64 MiB.
 	CacheSize int64
-	// Log receives Raft diagnostics. Nil discards them.
-	Log io.Writer
+	// TransferTimeout bounds the leadership handover that Close performs for
+	// every group this node leads, in total. A handover that does not finish
+	// in time is logged, and Close goes on. Default 5s.
+	TransferTimeout time.Duration
+	// Logger receives Raft's diagnostics and the store's warnings. Every line
+	// carries component=raft and partition=<id>. Raft's info lines are
+	// written at debug level. Lines carry metadata only, never object data or
+	// secrets. Nil discards them.
+	Logger *slog.Logger
 }
 
 // Defaults applied by Options.withDefaults.
@@ -98,6 +114,7 @@ const (
 	defaultSnapshotInterval  = 2 * time.Minute
 	defaultSnapshotThreshold = 8192
 	defaultCacheSize         = 64 << 20
+	defaultTransferTimeout   = 5 * time.Second
 	snapshotsRetained        = 2
 )
 
@@ -114,6 +131,12 @@ func (o Options) withDefaults() Options {
 	}
 	if o.CacheSize <= 0 {
 		o.CacheSize = defaultCacheSize
+	}
+	if o.TransferTimeout <= 0 {
+		o.TransferTimeout = defaultTransferTimeout
+	}
+	if o.Logger == nil {
+		o.Logger = slog.New(slog.DiscardHandler)
 	}
 	return o
 }
@@ -153,9 +176,11 @@ func Open(ctx context.Context, cfg Config) (*Store, error) {
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
+	opts := cfg.Options.withDefaults()
 	s := &Store{
 		cfg:    cfg,
-		opts:   cfg.Options.withDefaults(),
+		opts:   opts,
+		logger: opts.Logger,
 		parts:  make(map[ids.PartitionID]cluster.PartitionInfo, len(cfg.Map.Partitions)),
 		fsms:   make(map[ids.PartitionID]*fsm.FSM),
 		groups: make(map[ids.PartitionID]*group.Group),
@@ -167,7 +192,9 @@ func Open(ctx context.Context, cfg Config) (*Store, error) {
 		}
 	}
 	if err := s.openAll(ctx); err != nil {
-		return nil, errors.Join(err, s.Close())
+		// Nothing is serving yet, so the replicas that did start stop without a
+		// leadership handover.
+		return nil, errors.Join(err, s.closeWith(false))
 	}
 	return s, nil
 }
@@ -228,7 +255,8 @@ func (s *Store) startReplica(info cluster.PartitionInfo) error {
 	if err != nil {
 		return fmt.Errorf("raftstore: partition %d transport: %w", info.ID, err)
 	}
-	snaps, err := raft.NewFileSnapshotStore(filepath.Join(s.cfg.DataDir, "snapshots", name), snapshotsRetained, io.Discard)
+	logger := s.partitionLogger(info.ID)
+	snaps, err := raft.NewFileSnapshotStoreWithLogger(filepath.Join(s.cfg.DataDir, "snapshots", name), snapshotsRetained, group.NewHCLogger(logger))
 	if err != nil {
 		return fmt.Errorf("raftstore: partition %d snapshots: %w", info.ID, err)
 	}
@@ -247,7 +275,7 @@ func (s *Store) startReplica(info cluster.PartitionInfo) error {
 		SnapshotInterval:  s.opts.SnapshotInterval,
 		SnapshotThreshold: s.opts.SnapshotThreshold,
 		HeartbeatTimeout:  s.opts.HeartbeatTimeout,
-		Log:               s.cfg.Options.Log,
+		Logger:            logger,
 	})
 	if err != nil {
 		return err
@@ -257,27 +285,9 @@ func (s *Store) startReplica(info cluster.PartitionInfo) error {
 	return nil
 }
 
-// Close stops the Raft groups, then closes the state machines, the logs and
-// the cache. It returns the first error and is safe to call more than once.
-func (s *Store) Close() error {
-	var errs []error
-	for _, g := range s.groups {
-		errs = append(errs, g.Close())
-	}
-	s.groups = map[ids.PartitionID]*group.Group{}
-	for _, f := range s.fsms {
-		errs = append(errs, f.Close())
-	}
-	s.fsms = map[ids.PartitionID]*fsm.FSM{}
-	if s.logs != nil {
-		errs = append(errs, s.logs.Close())
-		s.logs = nil
-	}
-	if s.cache != nil {
-		s.cache.Unref()
-		s.cache = nil
-	}
-	return errors.Join(errs...)
+// partitionLogger returns the logger of one partition's Raft group.
+func (s *Store) partitionLogger(p ids.PartitionID) *slog.Logger {
+	return s.logger.With("component", "raft", "partition", uint32(p))
 }
 
 // replicasOf returns the nodes that host a partition, voters first.

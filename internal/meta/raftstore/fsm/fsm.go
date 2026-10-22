@@ -52,8 +52,13 @@ type FSM struct {
 	db   *pebble.DB
 
 	// applied is the index of the last command reflected in the database.
-	// Only the Raft goroutine touches it.
-	applied uint64
+	// Only the Raft goroutine writes it; readers on other goroutines use
+	// Applied to decide whether a read can be served from the state.
+	applied atomic.Uint64
+
+	// applyHook, when set, runs at the start of every Apply. Tests use it to
+	// hold the state machine behind the log; see SetApplyHookForTesting.
+	applyHook atomic.Pointer[func(index uint64)]
 
 	mu    sync.Mutex
 	fatal error
@@ -83,7 +88,7 @@ func Open(dir string, cache *pebble.Cache, kind Kind) (*FSM, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("fsm: read applied index: %w", err)
 	}
-	f.applied = applied
+	f.applied.Store(applied)
 	return f, nil
 }
 
@@ -101,8 +106,11 @@ func (f *FSM) Close() error {
 	return nil
 }
 
-// Applied returns the index of the last command reflected in the state.
-func (f *FSM) Applied() uint64 { return f.applied }
+// Applied returns the index of the last command reflected in the state. It
+// is safe to call from any goroutine. Unlike raft's AppliedIndex, which
+// advances when an entry is handed to the state machine, it advances only
+// once the entry's effect is in the database.
+func (f *FSM) Applied() uint64 { return f.applied.Load() }
 
 // Apply implements raft.FSM. It decodes a Command, applies it atomically and
 // returns an *Outcome. Entries at or below the persisted applied index are
@@ -118,7 +126,10 @@ func (f *FSM) Apply(l *raft.Log) (out interface{}) {
 	if err := f.failure(); err != nil {
 		return &Outcome{Err: err}
 	}
-	if l.Index <= f.applied {
+	if h := f.applyHook.Load(); h != nil {
+		(*h)(l.Index)
+	}
+	if l.Index <= f.applied.Load() {
 		return &Outcome{}
 	}
 	defer func() {
@@ -160,7 +171,7 @@ func (f *FSM) commitOutcome(index uint64, b *pebble.Batch, appErr error, res ...
 	if err := b.Commit(pebble.NoSync); err != nil {
 		return f.fail(fmt.Errorf("fsm: commit %d: %w", index, err))
 	}
-	f.applied = index
+	f.applied.Store(index)
 	out := &Outcome{Err: appErr}
 	if appErr == nil && len(res) > 0 {
 		out.Result = res[0]
