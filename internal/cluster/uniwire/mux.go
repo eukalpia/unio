@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -263,13 +264,18 @@ func (c *rpcConn) pingLoop() {
 
 // splitRequest separates a request payload into its deadline and body. The
 // deadline is the caller's remaining time in nanoseconds; zero means none.
+//
+// The peer's value is untrusted. A value above the largest int64 is clamped to
+// it rather than wrapped into a negative deadline. The server caps every
+// deadline at StreamTimeout anyway, so the clamp never grants more time than the
+// server allows.
 func splitRequest(payload []byte) (timeout int64, body []byte, err error) {
 	if len(payload) < 8 {
 		return 0, nil, fmt.Errorf("%w: request without deadline prefix", errMalformedFrame)
 	}
-	timeout = int64(binary.BigEndian.Uint64(payload[:8]))
-	if timeout < 0 {
-		return 0, nil, fmt.Errorf("%w: negative deadline", errMalformedFrame)
+	raw := binary.BigEndian.Uint64(payload[:8])
+	if raw > math.MaxInt64 {
+		raw = math.MaxInt64
 	}
-	return timeout, payload[8:], nil
+	return int64(raw), payload[8:], nil
 }
