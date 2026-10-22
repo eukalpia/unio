@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"runtime/debug"
+	"sync"
 	"time"
 
 	"github.com/eukalpia/unio/internal/ids"
@@ -193,7 +194,7 @@ func (t *Transport) exchange(ctx context.Context, p *peer, sc *streamConn, metho
 // copyBody writes exactly n bytes from body to nc. fromSource reports whether
 // a read from body, rather than a write to nc, caused the failure.
 func (t *Transport) copyBody(ctx context.Context, nc net.Conn, body io.Reader, n int64) (fromSource bool, err error) {
-	buf, err := t.buffers.Get(ctx)
+	buf, err := t.clientBuffers.Get(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -376,7 +377,7 @@ func (t *Transport) serveTransfer(nc net.Conn, from ids.NodeID, hdr *uniov1.Stre
 	body := &bodyReader{r: nc, remaining: hdr.Length}
 	h := t.streamHandler(hdr.Method)
 	if h == nil {
-		return t.drain(ctx, body) && t.writeFailure(nc, hdr.Id, ErrUnknownMethod)
+		return t.drain(body) && t.writeFailure(nc, hdr.Id, ErrUnknownMethod)
 	}
 	resp, err := t.invokeStream(ctx, h, hdr.Method, &StreamRequest{
 		From:    from,
@@ -388,7 +389,7 @@ func (t *Transport) serveTransfer(nc net.Conn, from ids.NodeID, hdr *uniov1.Stre
 		if resp != nil && resp.Body != nil {
 			_ = resp.Body.Close()
 		}
-		return t.drain(ctx, body) && t.writeFailure(nc, hdr.Id, err)
+		return t.drain(body) && t.writeFailure(nc, hdr.Id, err)
 	}
 	if resp == nil {
 		resp = &StreamResponse{}
@@ -401,7 +402,7 @@ func (t *Transport) serveTransfer(nc net.Conn, from ids.NodeID, hdr *uniov1.Stre
 	if resp.BodyLen < 0 || (resp.Body == nil && resp.BodyLen > 0) {
 		return false
 	}
-	if !t.drain(ctx, body) {
+	if !t.drain(body) {
 		return false
 	}
 	return t.writeSuccess(ctx, nc, hdr.Id, resp)
@@ -423,7 +424,7 @@ func (t *Transport) writeSuccess(ctx context.Context, nc net.Conn, id uint64, re
 		return false
 	}
 	if resp.BodyLen > 0 {
-		buf, err := t.buffers.Get(ctx)
+		buf, err := t.serveBuffers.Get(ctx)
 		if err != nil {
 			return false
 		}
@@ -463,19 +464,36 @@ func (t *Transport) writeTrailer(nc net.Conn, id uint64, status error) bool {
 	return err == nil
 }
 
+// drainBufferSize is the size of the scratch buffer that drain discards an
+// unread request body through.
+const drainBufferSize = 32 << 10
+
+// drainBuffers holds the scratch buffers of drain, so that a drain does not
+// allocate. The buffers come from no budget.
+var drainBuffers = sync.Pool{
+	New: func() any {
+		b := make([]byte, drainBufferSize)
+		return &b
+	},
+}
+
 // drain reads and discards whatever part of body the handler left unread, so
-// that the caller can finish sending before it reads the reply.
-func (t *Transport) drain(ctx context.Context, body *bodyReader) bool {
+// that the caller can finish sending before it reads the reply. It takes no
+// buffer from a budget, because a drain on the inbound side must never wait
+// for memory that outbound transfers hold. The connection deadline set by
+// serveTransfer bounds how long it runs.
+func (t *Transport) drain(body *bodyReader) bool {
 	if body.remaining == 0 {
 		return true
 	}
-	buf, err := t.buffers.Get(ctx)
-	if err != nil {
-		return false
+	bp := drainBuffers.Get().(*[]byte)
+	defer drainBuffers.Put(bp)
+	for body.remaining > 0 {
+		if _, err := body.Read(*bp); err != nil && !errors.Is(err, io.EOF) {
+			return false
+		}
 	}
-	defer buf.Release()
-	_, err = io.CopyBuffer(io.Discard, body, buf.Bytes())
-	return err == nil && body.remaining == 0
+	return true
 }
 
 // invokeStream runs a stream handler, recovering from panics the same way as
