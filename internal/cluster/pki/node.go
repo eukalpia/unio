@@ -18,13 +18,6 @@ import (
 )
 
 const (
-	// NodeCertValidity is the validity of a node certificate issued by IssueNode.
-	NodeCertValidity = 365 * 24 * time.Hour
-
-	// clockSkew lets a freshly issued certificate be accepted by peers whose
-	// clocks run slightly behind.
-	clockSkew = time.Minute
-
 	nodeURIScheme = "unio"
 	nodeURIHost   = "node"
 	maxNodeIDLen  = 64
@@ -49,14 +42,14 @@ func ValidateNodeID(id ids.NodeID) error {
 	return nil
 }
 
-// IssueNode generates a fresh Ed25519 key and a certificate for node id. The
-// certificate carries CN and URI SAN "unio://node/<id>", which is how peers
-// learn the node's identity, plus the given hosts as DNS or IP SANs. It is
-// valid for NodeCertValidity and usable for both server and client
-// authentication.
+// IssueNode generates a fresh Ed25519 key and a one-shot certificate for node
+// id, valid for DefaultLifetime. The certificate carries CN and URI SAN
+// "unio://node/<id>", which is how peers learn the node's identity, plus the
+// given hosts as DNS or IP SANs. A node that stays up should use an Issuer,
+// which renews the certificate before it expires.
 func (ca *CA) IssueNode(id ids.NodeID, hosts []string) (tls.Certificate, error) {
 	now := time.Now()
-	return ca.issueAt(id, hosts, now.Add(-clockSkew), now.Add(NodeCertValidity))
+	return ca.issueAt(id, hosts, now.Add(-clockSkew), now.Add(DefaultLifetime))
 }
 
 // issueAt is IssueNode with explicit validity bounds, for tests.

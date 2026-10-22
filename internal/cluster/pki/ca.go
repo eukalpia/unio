@@ -11,8 +11,6 @@ import (
 	"fmt"
 	"math/big"
 	"time"
-
-	"github.com/eukalpia/unio/internal/ids"
 )
 
 const (
@@ -93,14 +91,4 @@ func (ca *CA) CertPool() *x509.CertPool {
 	pool := x509.NewCertPool()
 	pool.AddCert(ca.cert)
 	return pool
-}
-
-// Identity issues a certificate for node id and bundles it with the CA roots
-// as an Identity ready for ServerConfig and ClientConfig.
-func (ca *CA) Identity(id ids.NodeID, hosts []string) (*Identity, error) {
-	cert, err := ca.IssueNode(id, hosts)
-	if err != nil {
-		return nil, err
-	}
-	return &Identity{Certificate: cert, Roots: ca.CertPool()}, nil
 }
