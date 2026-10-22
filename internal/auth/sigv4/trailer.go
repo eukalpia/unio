@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"strings"
 
 	"github.com/eukalpia/unio/internal/object"
 )
@@ -17,12 +18,13 @@ const (
 	// maxTrailerLines bounds the trailer section. At most one checksum and
 	// one signature are valid, so a few lines are enough.
 	maxTrailerLines = 8
-	// trailerSignatureName is the header that carries the trailer signature.
+	// trailerSignatureName is the header that carries the trailer signature,
+	// in lower case. Field names are matched case-insensitively.
 	trailerSignatureName = "x-amz-trailer-signature"
 )
 
-// trailerChecksum maps a trailing checksum header name to its algorithm and
-// digest size. Unknown names return false.
+// trailerChecksum maps a lower-case trailing checksum header name to its
+// algorithm and digest size. Unknown names return false.
 func trailerChecksum(name string) (object.ChecksumAlgorithm, int, bool) {
 	switch name {
 	case "x-amz-checksum-crc32":
@@ -37,6 +39,41 @@ func trailerChecksum(name string) (object.ChecksumAlgorithm, int, bool) {
 		return object.ChecksumSHA256, 32, true
 	}
 	return object.ChecksumNone, 0, false
+}
+
+// parseTrailerField splits one trailer line, without its CRLF, into a
+// lower-case field name and a trimmed value.
+//
+// Field names are case-insensitive and may contain only letters, digits and
+// hyphens, so whitespace before the colon is refused. The value may carry
+// optional whitespace (spaces or tabs) on either side, which HTTP ignores.
+// It is trimmed here, so that the decoded checksum and the canonical trailer
+// both see the same bytes. The canonical trailer uses lower-case names and
+// trimmed values, as SigV4 canonicalizes headers.
+func parseTrailerField(line []byte) (string, []byte, error) {
+	rawName, value, ok := cutBytes(line, ':')
+	if !ok {
+		return "", nil, framing("malformed trailer line")
+	}
+	if len(rawName) == 0 || !allBytes(rawName, isFieldNameByte) {
+		return "", nil, framing("malformed trailer name")
+	}
+	return strings.ToLower(string(rawName)), bytes.Trim(value, " \t"), nil
+}
+
+// isFieldNameByte reports whether c may appear in a trailer field name.
+func isFieldNameByte(c byte) bool {
+	return 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' || c == '-'
+}
+
+// allBytes reports whether every byte of b satisfies ok.
+func allBytes(b []byte, ok func(byte) bool) bool {
+	for _, c := range b {
+		if !ok(c) {
+			return false
+		}
+	}
+	return true
 }
 
 // readTrailers parses the trailer section that follows the final chunk. It
@@ -68,11 +105,11 @@ func (c *chunkedReader) readTrailers() error {
 		if sigSeen {
 			return framing("trailer signature must be the last trailer")
 		}
-		name, value, ok := cutBytes(line, ':')
-		if !ok {
-			return framing("malformed trailer line")
+		name, value, err := parseTrailerField(line)
+		if err != nil {
+			return err
 		}
-		if signed && string(name) == trailerSignatureName {
+		if signed && name == trailerSignatureName {
 			s, ok := decodeSignature(value)
 			if !ok {
 				return framing("malformed trailer signature")
@@ -83,7 +120,9 @@ func (c *chunkedReader) readTrailers() error {
 		if err := c.acceptChecksum(name, value, &checksumName); err != nil {
 			return err
 		}
-		canon = append(canon, line...)
+		canon = append(canon, name...)
+		canon = append(canon, ':')
+		canon = append(canon, value...)
 		canon = append(canon, '\n')
 	}
 	c.buf = canon
@@ -103,8 +142,9 @@ func (c *chunkedReader) readTrailers() error {
 
 // acceptChecksum decodes a trailing checksum and records it. A second
 // checksum, an unknown header, or a value of the wrong length is malformed.
-func (c *chunkedReader) acceptChecksum(name, value []byte, recorded *string) error {
-	alg, size, ok := trailerChecksum(string(name))
+// The value must already be trimmed.
+func (c *chunkedReader) acceptChecksum(name string, value []byte, recorded *string) error {
+	alg, size, ok := trailerChecksum(name)
 	if !ok || *recorded != "" {
 		return framing("unsupported or duplicate trailer")
 	}
@@ -114,7 +154,7 @@ func (c *chunkedReader) acceptChecksum(name, value []byte, recorded *string) err
 	}
 	c.trailer = object.Checksum{Algorithm: alg, Type: object.ChecksumFullObject, Value: raw}
 	c.hasTrailer = true
-	*recorded = string(name)
+	*recorded = name
 	return nil
 }
 
