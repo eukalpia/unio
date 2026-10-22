@@ -34,7 +34,13 @@ func (e *Env) CreateBucket(c *Call) error {
 		return s3err.Errorf(s3err.InvalidLocationConstraint, "the specified location constraint is not valid for this deployment")
 	}
 	if _, err := e.Layer.MakeBucket(c.Ctx, c.Route.Bucket, object.MakeBucketOptions{Owner: c.ownerName()}); err != nil {
-		return err
+		// The default region of S3 accepts a request for a bucket the caller
+		// already owns and answers 200. Other regions answer with
+		// BucketAlreadyOwnedByYou, which is what this deployment does outside
+		// us-east-1.
+		if e.Region != usEast1 || !s3err.Is(err, s3err.BucketAlreadyOwnedByYou) {
+			return err
+		}
 	}
 	c.RC.Response.Header.Set("Location", "/"+c.Route.Bucket)
 	writeStatus(c, 200)
