@@ -1,0 +1,43 @@
+name: Bug report
+description: Report incorrect behaviour, a crash or a compatibility problem.
+labels: ["kind/bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Security issues must be reported privately, see SECURITY.md.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Commands, client and SDK used, request examples.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: UniIO version or commit
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: OS, number of nodes and drives, deployment method.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      render: text

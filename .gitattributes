@@ -1,0 +1,5 @@
+* text=auto eol=lf
+*.pb.go linguist-generated=true
+*_vtproto.pb.go linguist-generated=true
+*.png binary
+*.jpg binary

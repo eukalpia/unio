@@ -1,0 +1,29 @@
+# Binaries
+/uniio
+/uniio.exe
+/bin/
+/dist/
+*.test
+*.out
+*.prof
+
+# Coverage and benchmarks
+coverage.*
+*.bench
+
+# Fuzzing cache
+testdata/fuzz/**/corpus-cache/
+
+# Local data and secrets
+/data/
+*.pem
+*.key
+.env
+.env.*
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

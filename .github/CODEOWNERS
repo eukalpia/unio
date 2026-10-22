@@ -1,0 +1,11 @@
+# Default owners
+*                       @eukalpia
+
+# Contracts and security-sensitive areas always need a maintainer review
+/internal/core/         @eukalpia
+/api/proto/             @eukalpia
+/internal/auth/         @eukalpia
+/internal/cluster/      @eukalpia
+/go.mod                 @eukalpia
+/go.sum                 @eukalpia
+/.github/               @eukalpia

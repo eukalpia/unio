@@ -1,0 +1,28 @@
+name: Feature request
+description: Propose new functionality or an improvement.
+labels: ["kind/feature", "needs-triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and why is it hard today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: s3
+    attributes:
+      label: Is this part of the S3 API?
+      options:
+        - "Yes"
+        - "No"

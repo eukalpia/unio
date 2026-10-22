@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "release/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('go.mod') != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Verify formatting
+        run: test -z "$(gofmt -l .)"
+      - name: Build
+        run: go build ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Test (race)
+        run: go test -race -count=1 ./...
+      - name: Cross-compile
+        run: |
+          GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./...
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build ./...
+
+  lint:
+    name: Lint and security
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('go.mod') != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+      - name: gosec
+        run: go run github.com/securego/gosec/v2/cmd/gosec@latest -quiet -exclude-generated ./...
