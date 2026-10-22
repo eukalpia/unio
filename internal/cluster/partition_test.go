@@ -24,7 +24,12 @@ func TestPartitionOf(t *testing.T) {
 	if a, b := PartitionOf(7, "a", 16), PartitionOf(7, "a", 16); a != b {
 		t.Fatal("not deterministic")
 	}
-	if PartitionOf(1, "a", 0) != ids.SystemPartition {
-		t.Fatal("zero partitions must map to the system group")
+	for _, n := range []int{0, -1, MaxPartitions + 1} {
+		if PartitionOf(1, "a", n) != ids.SystemPartition {
+			t.Fatalf("%d partitions must map to the system group", n)
+		}
+	}
+	if p := PartitionOf(1, "a", MaxPartitions); p < 1 || p > MaxPartitions {
+		t.Fatalf("partition %d out of range", p)
 	}
 }
