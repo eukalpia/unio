@@ -2,7 +2,8 @@
 *                       @eukalpia
 
 # Contracts and security-sensitive areas always need a maintainer review
-/internal/core/         @eukalpia
+/internal/ids/          @eukalpia
+/internal/s3err/        @eukalpia
 /api/proto/             @eukalpia
 /internal/auth/         @eukalpia
 /internal/cluster/      @eukalpia

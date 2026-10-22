@@ -365,46 +365,83 @@ Planned for later milestones (see [ROADMAP](../../ROADMAP.md)):
 
 ## 13. Module layout
 
+Packages are organised by domain, following the standard library pattern
+of `io/fs`, `io/fs/fstest` and its implementations. A domain package defines
+its contract: interfaces, the types they exchange, and errors. Implementations
+live in subpackages, and test fakes with conformance suites live in a
+`*test` subpackage. See [ADR-0007](../adr/0007-domain-package-layout.md).
+
 ```
-cmd/unio/                   CLI: server, init, admin
-api/proto/unio/v1/          Protobuf: metadata records, Raft commands, RPC
-internal/pb/                 Generated protobuf / vtprotobuf code
-internal/core/               Shared types, errors and interfaces (contracts)
-internal/core/coretest/      In-memory fakes and conformance suites
-internal/bufpool/            Bounded buffer pool
-internal/hashreader/         Verifying reader: MD5 / SHA-256 / CRC*
-internal/s3api/              Hertz server, routing, XML, S3 errors
-internal/auth/               SigV4 (all variants), IAM, policies
-internal/erasure/            EC pipeline, bitrot, quorums, heal-on-read
-internal/storage/            Drive engine
-internal/meta/               Multi-Raft, state machines, Pebble schema, LIST
-internal/cluster/            UniWire, PKI, remote drives, Raft transport,
-                             cluster map, health
-internal/object/             Object layer orchestration
-internal/config/             Configuration
-internal/obs/                Logging and metrics
-test/integration/            End-to-end tests (AWS SDK for Go v2, s3-tests)
-test/chaos/                  Crash, partition and fault-injection tests
-bench/                       Benchmark harness
-deploy/                      Docker and Compose files
+cmd/unio/                       CLI: server, init, config, version
+api/proto/unio/v1/              Protobuf: stored records, Raft commands, wire messages
+internal/
+  ids/                          Identifiers: DataID, DriveID, ShardID, NodeID, ...
+  s3err/                        S3 error codes, HTTP status, typed and sentinel errors
+  bufpool/                      Bounded buffer pool with a shared memory budget
+  pb/                           Generated protobuf / vtprotobuf code
+  object/                       Object API: Layer, Info, options, Body, limits, validation
+    engine/                     Layer implementation: tiers, multipart, GC queue
+    objecttest/                 Fake Layer and conformance suite
+  drive/                        Drive contract: shards by ShardID
+    local/                      On-disk engine: segment/, blob/, index/, compact/
+    drivetest/                  In-memory drive and conformance suite
+  erasure/                      Layout, Set, Registry, quorum errors
+    bitrot/                     Shard block framing with xxh3-128
+    rs/                         Reed-Solomon Set: pipelined write, verified read, heal
+    erasuretest/                Fault-injecting drives and conformance suite
+  meta/                         Records, Store, SystemKV
+    raftstore/                  Multi-Raft on Pebble: keys/, fsm/, logstore/, group/,
+                                router/, listing/
+    recordpb/                   Record <-> protobuf conversion
+    metatest/                   Fake store, conformance and linearizability suites
+  auth/                         Identity, Authenticator, Authorizer, IAM
+    sigv4/                      Signature V4: header, presigned, aws-chunked, trailers
+    policy/                     IAM policy evaluation
+    iam/                        Users and keys on SystemKV, secrets encrypted at rest
+    authtest/                   Fakes
+  cluster/                      Map, Topology, RPC, RaftNetwork, PartitionOf
+    uniwire/                    mTLS transport: RPC multiplexing, shard streams
+    pki/                        Cluster CA derived from the cluster secret
+    remotedrive/                drive.Drive over UniWire
+    raftnet/                    raft.Transport over UniWire
+    topology/                   Topology implementation and initial map builder
+    mappb/                      Cluster map <-> protobuf conversion
+    clustertest/                In-process network and topology fakes
+  s3api/                        Hertz front end: router/, handlers/, xmlenc/, xmldec/,
+                                headers/, payload/, middleware/
+  config/                       Configuration loading and validation
+  obs/                          Logging, metrics, health, pprof
+  server/                       Node assembly (wires implementations together)
+test/integration/               Black-box S3 suite, ceph/s3-tests runner
+test/chaos/                     Crash, partition and fault-injection scenarios
+bench/                          Benchmark harness
+deploy/                         Dockerfile and Compose clusters
 ```
 
-### 13.1 Contracts
+### 13.1 Dependency rules
 
-`internal/core` defines the interfaces between modules:
+- Contract packages depend only on lower contract packages:
+  `ids`, `s3err` -> `drive` -> `erasure` -> `object` -> `meta` -> `cluster`;
+  `auth` depends on `object` and `s3err`.
+- Implementation packages depend on contracts, never on each other. Only
+  `internal/server` imports implementations and wires them together.
+- Sentinel errors are declared with `s3err.NewSentinel`, so they carry their
+  S3 code and `s3err.CodeOf` classifies any error without knowing domains.
 
-| Interface | Purpose | Implemented by |
+### 13.2 Contracts
+
+| Contract | Purpose | Implemented by |
 |---|---|---|
-| `ObjectLayer` | Buckets, objects, multipart and listing, as called by `s3api` | `object` |
-| `Drive` | Write, read and delete a shard by `ShardID`; stats; shard enumeration for GC and repair | `storage` (local), `cluster` (remote over UniWire) |
-| `ErasureSet` | Streaming write and read of objects and parts across a set of `Drive`s with quorums | `erasure` |
-| `MetaStore` | Buckets, object versions, multipart state, listing, conditional commits | `meta` |
-| `Authenticator` / `IAM` | Verify a request and hand out the body reader; users and keys | `auth` |
-| `Topology` | Cluster map, erasure sets, partition routing | `cluster` |
+| `object.Layer` | Buckets, objects, multipart and listing, as called by `s3api` | `object/engine` |
+| `drive.Drive` | Write, read and delete a shard by `ShardID`; stats; enumeration for GC and repair | `drive/local`, `cluster/remotedrive` |
+| `erasure.Set` | Streaming write and read across a set of drives with quorums | `erasure/rs` |
+| `erasure.Registry` | Placement of new data and lookup of sets | `server` |
+| `meta.Store`, `meta.SystemKV` | Buckets, versions, multipart state, listing, conditional commits; small linearizable KV | `meta/raftstore` |
+| `auth.Authenticator`, `auth.Authorizer`, `auth.IAM` | Signature verification, policies, users and keys | `auth/sigv4`, `auth/policy`, `auth/iam` |
+| `cluster.Topology`, `cluster.RPC`, `cluster.RaftNetwork` | Cluster view, internode RPC, Raft transports | `cluster/topology`, `cluster/uniwire`, `cluster/raftnet` |
 
-Each interface ships with an in-memory fake and a conformance suite in
-`internal/core/coretest`, for example `coretest.RunDriveSuite(t, factory)`.
-Every real implementation must pass the same suite as its fake.
+Every contract ships with a fake and a conformance suite in its `*test`
+package. Every real implementation must pass the same suite as its fake.
 
 Changing a contract requires an ADR and maintainer review, because it affects
 every module that depends on it.
