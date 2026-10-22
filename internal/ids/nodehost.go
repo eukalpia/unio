@@ -20,14 +20,14 @@ const maxDNSNameLen = 253
 func NodeIDFromHost(host string) (NodeID, error) {
 	h := strings.ToLower(strings.TrimSpace(host))
 	if h == "" {
-		return "", errors.New("ids: node host is empty")
+		return "", errors.New("host is empty")
 	}
 	var id NodeID
 	switch {
 	case strings.Contains(h, ":"):
 		ip := net.ParseIP(h)
 		if ip == nil {
-			return "", fmt.Errorf("ids: host %q is not a valid IPv6 address", host)
+			return "", fmt.Errorf("host %q is not a valid IPv6 address", host)
 		}
 		id = NodeID("ip6-" + hex.EncodeToString(ip.To16()))
 	case net.ParseIP(h) != nil:
@@ -35,13 +35,13 @@ func NodeIDFromHost(host string) (NodeID, error) {
 		id = NodeID(fmt.Sprintf("ip-%d-%d-%d-%d", v4[0], v4[1], v4[2], v4[3]))
 	default:
 		if err := checkDNSName(h); err != nil {
-			return "", fmt.Errorf("ids: host %q: %w", host, err)
+			return "", fmt.Errorf("host %q: %w", host, err)
 		}
 		first, _, _ := strings.Cut(h, ".")
 		id = NodeID(first)
 	}
 	if err := ValidateNodeID(id); err != nil {
-		return "", fmt.Errorf("ids: host %q: %w", host, err)
+		return "", fmt.Errorf("host %q: %w", host, err)
 	}
 	return id, nil
 }
