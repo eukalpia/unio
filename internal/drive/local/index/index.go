@@ -15,6 +15,8 @@ import (
 	"sync"
 
 	"github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble/v2/vfs"
+
 	"github.com/eukalpia/unio/internal/ids"
 )
 
@@ -69,8 +71,13 @@ type Index struct {
 // Open opens or creates the index in dir. cache may be nil, in which case
 // Pebble uses its default block cache; a shared cache can be passed to bound
 // memory across several drives.
+//
+// The filesystem is set explicitly, which turns off Pebble's disk-health
+// ticker. That ticker only reports slow disks, and it keeps a goroutine alive
+// when Open fails, so an unusable index would leak it. Durability does not
+// depend on it.
 func Open(dir string, cache *pebble.Cache) (*Index, error) {
-	opts := &pebble.Options{Cache: cache}
+	opts := &pebble.Options{Cache: cache, FS: vfs.Default}
 	db, err := pebble.Open(dir, opts)
 	if err != nil {
 		return nil, fmt.Errorf("index: open %s: %w", dir, err)
