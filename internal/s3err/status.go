@@ -17,6 +17,7 @@ var httpStatus = map[Code]int{
 	ExpiredToken:                       http.StatusBadRequest,
 	IllegalLocationConstraintException: http.StatusBadRequest,
 	IncompleteBody:                     http.StatusBadRequest,
+	InsufficientStorage:                http.StatusInsufficientStorage,
 	InternalError:                      http.StatusInternalServerError,
 	InvalidAccessKeyID:                 http.StatusForbidden,
 	InvalidArgument:                    http.StatusBadRequest,

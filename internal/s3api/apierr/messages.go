@@ -19,6 +19,7 @@ var genericMessages = map[s3err.Code]string{
 	s3err.ExpiredToken:                       "The provided token has expired.",
 	s3err.IllegalLocationConstraintException: "The specified location constraint is not valid for this endpoint.",
 	s3err.IncompleteBody:                     "You did not provide the number of bytes specified by the Content-Length HTTP header.",
+	s3err.InsufficientStorage:                "There is not enough storage space to complete the request.",
 	s3err.InternalError:                      "We encountered an internal error. Please try again.",
 	s3err.InvalidAccessKeyID:                 "The access key ID you provided does not exist in our records.",
 	s3err.InvalidArgument:                    "Invalid argument.",

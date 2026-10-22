@@ -19,6 +19,7 @@ const (
 	ExpiredToken                       Code = "ExpiredToken"
 	IllegalLocationConstraintException Code = "IllegalLocationConstraintException"
 	IncompleteBody                     Code = "IncompleteBody"
+	InsufficientStorage                Code = "InsufficientStorage"
 	InternalError                      Code = "InternalError"
 	InvalidAccessKeyID                 Code = "InvalidAccessKeyId"
 	InvalidArgument                    Code = "InvalidArgument"
