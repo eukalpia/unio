@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/eukalpia/unio/internal/bufpool"
+	"github.com/eukalpia/unio/internal/drive/local/internal/faults"
 	"github.com/eukalpia/unio/internal/drive/local/internal/syncerr"
 	"github.com/eukalpia/unio/internal/ids"
 )
@@ -32,6 +33,13 @@ type Store struct {
 	blobs string
 	tmp   string
 	pool  *bufpool.Pool
+	hooks *faults.Hooks
+}
+
+// SetHooks installs fault hooks for the store's sync points. A nil value
+// injects nothing. Only the engine's tests call it.
+func (s *Store) SetHooks(h *faults.Hooks) {
+	s.hooks = h
 }
 
 // NewStore returns a store that keeps blobs under blobsDir and stages writes
@@ -85,7 +93,7 @@ func (s *Store) NewTemp() (string, error) {
 // Write creates tmpPath and writes exactly size bytes from r into it, then
 // makes the data durable. On any error the partial file is removed.
 func (s *Store) Write(ctx context.Context, tmpPath string, r io.Reader, size int64) error {
-	if err := writeFile(ctx, s.pool, tmpPath, r, size); err != nil {
+	if err := writeFile(ctx, s.pool, tmpPath, r, size, s.hooks); err != nil {
 		_ = os.Remove(tmpPath)
 		return err
 	}

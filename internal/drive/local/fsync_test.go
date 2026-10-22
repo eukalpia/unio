@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -136,6 +137,29 @@ func TestFailedDirectorySyncAtRollPoisonsDrive(t *testing.T) {
 	requireFaulty(t, writeShard(d, idOf(999), payload(10, 9)), "write after the fault")
 	if _, err := readShard(d, idOf(1)); err != nil {
 		t.Fatalf("read after the fault: %v", err)
+	}
+}
+
+// TestFailedBlobFsyncPoisonsDrive fails the fsync of a blob file. The blob
+// write must fail, nothing may be placed, and the drive must refuse packed
+// writes too.
+func TestFailedBlobFsyncPoisonsDrive(t *testing.T) {
+	dir := newTestDir(t)
+	d := openAt(t, dir, testOptions())
+	sf := &syncFailer{point: faults.BlobSync}
+	d.blobs.SetHooks(sf.hooks())
+	sf.fail.Store(true)
+
+	requireFaulty(t, writeShard(d, idOf(1), payload(2*testPacked, 3)), "blob write with a failed fsync")
+	if _, err := d.StatShard(context.Background(), idOf(1)); !errors.Is(err, drive.ErrShardNotFound) {
+		t.Fatalf("blob of the failed write is visible: %v", err)
+	}
+	if _, err := os.Stat(d.blobs.Path(idOf(1))); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("blob file of the failed write was placed: %v", err)
+	}
+	requireFaulty(t, writeShard(d, idOf(2), payload(100, 2)), "packed write after the fault")
+	if n := sf.calls.Load(); n != 1 {
+		t.Fatalf("blob fsync attempted %d times, want 1", n)
 	}
 }
 

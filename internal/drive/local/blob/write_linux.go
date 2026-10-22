@@ -10,6 +10,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/eukalpia/unio/internal/bufpool"
+	"github.com/eukalpia/unio/internal/drive/local/internal/faults"
 	"github.com/eukalpia/unio/internal/drive/local/internal/syncerr"
 )
 
@@ -18,11 +19,11 @@ import (
 // final partial block, if any, is written through a buffered descriptor
 // after the direct one is closed. Filesystems that reject O_DIRECT fall back
 // to buffered writes.
-func writeFile(ctx context.Context, pool *bufpool.Pool, path string, r io.Reader, size int64) error {
+func writeFile(ctx context.Context, pool *bufpool.Pool, path string, r io.Reader, size int64, hooks *faults.Hooks) error {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|unix.O_DIRECT, 0o600)
 	if err != nil {
 		if errors.Is(err, unix.EINVAL) {
-			return writeBuffered(ctx, pool, path, r, size)
+			return writeBuffered(ctx, pool, path, r, size, hooks)
 		}
 		return fmt.Errorf("blob: create %s: %w", path, err)
 	}
@@ -33,7 +34,7 @@ func writeFile(ctx context.Context, pool *bufpool.Pool, path string, r io.Reader
 	if err != nil {
 		return err
 	}
-	return finishBuffered(path, tailOff, tail)
+	return finishBuffered(path, tailOff, tail, hooks)
 }
 
 // writeDirect writes all whole blocks of the input through f. It returns the
@@ -72,7 +73,7 @@ func writeDirect(ctx context.Context, pool *bufpool.Pool, f *os.File, r io.Reade
 
 // finishBuffered writes the unaligned tail, if any, through a buffered
 // descriptor and makes the whole file durable.
-func finishBuffered(path string, off int64, tail []byte) error {
+func finishBuffered(path string, off int64, tail []byte, hooks *faults.Hooks) error {
 	f, err := os.OpenFile(path, os.O_WRONLY, 0)
 	if err != nil {
 		return fmt.Errorf("blob: reopen %s: %w", path, err)
@@ -82,6 +83,10 @@ func finishBuffered(path string, off int64, tail []byte) error {
 			_ = f.Close()
 			return fmt.Errorf("blob: write tail of %s: %w", path, err)
 		}
+	}
+	if err := hooks.Check(faults.BlobSync); err != nil {
+		_ = f.Close()
+		return syncerr.Wrap("fsync", path, err)
 	}
 	if err := f.Sync(); err != nil {
 		_ = f.Close()

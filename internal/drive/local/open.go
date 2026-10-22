@@ -54,6 +54,7 @@ func Open(ctx context.Context, path string, opts Options) (*Drive, error) {
 	if err != nil {
 		return nil, err
 	}
+	d.blobs.SetHooks(r.hooks)
 	if err := d.load(ctx); err != nil {
 		d.abortOpen()
 		return nil, err
