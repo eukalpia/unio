@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/cloudwego/hertz/pkg/protocol"
+
 	"github.com/eukalpia/unio/internal/s3err"
 )
 
@@ -46,22 +48,21 @@ func TestBoundedInt(t *testing.T) {
 	}
 }
 
-// TestIntLength checks the conversion of an object length, which the layer
-// reports as int64, to the int taken by the header setters. A negative length,
-// or one that does not fit in int, must be an error and never a wrapped value.
-func TestIntLength(t *testing.T) {
-	for _, n := range []int64{0, 1, 10, 5 << 40} {
-		got, err := intLength(n)
-		if err != nil || int64(got) != n {
-			t.Fatalf("intLength(%d) = %d, %v", n, got, err)
+// TestSetContentLength checks that object lengths, which the layer reports as
+// int64, reach the Content-Length header exactly, including sizes above 4 GiB,
+// and that a negative length is an internal error.
+func TestSetContentLength(t *testing.T) {
+	for _, n := range []int64{0, 1, 10, math.MaxInt32 + 1, 5 << 40} {
+		var h protocol.ResponseHeader
+		if err := setContentLength(&h, n); err != nil {
+			t.Fatalf("setContentLength(%d): %v", n, err)
+		}
+		if got := string(h.Peek("Content-Length")); got != strconv.FormatInt(n, 10) {
+			t.Fatalf("setContentLength(%d) wrote %q", n, got)
 		}
 	}
-	if _, err := intLength(-1); err == nil {
-		t.Fatal("intLength(-1) accepted a negative length")
-	}
-	if strconv.IntSize == 32 {
-		if _, err := intLength(math.MaxInt32 + 1); err == nil {
-			t.Fatal("intLength accepted a length that does not fit in a 32-bit int")
-		}
+	var h protocol.ResponseHeader
+	if err := setContentLength(&h, -1); !s3err.Is(err, s3err.InternalError) {
+		t.Fatalf("setContentLength(-1) = %v, want InternalError", err)
 	}
 }

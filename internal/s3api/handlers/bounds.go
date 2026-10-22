@@ -2,8 +2,9 @@ package handlers
 
 import (
 	"fmt"
-	"math"
 	"strconv"
+
+	"github.com/cloudwego/hertz/pkg/protocol"
 
 	"github.com/eukalpia/unio/internal/s3err"
 )
@@ -29,13 +30,14 @@ func boundedInt(s string, lo, hi int) (int, error) {
 	return int(n), nil
 }
 
-// intLength converts a byte count, as the layer reports it, to the int that the
-// header setters take. A negative count, or one that does not fit in int, is an
-// internal error: the layer broke its contract, and a wrapped length would
-// corrupt the response.
-func intLength(n int64) (int, error) {
-	if n < 0 || n > int64(math.MaxInt) {
-		return 0, s3err.Wrap(s3err.InternalError, fmt.Errorf("length %d does not fit a response header", n))
+// setContentLength writes a byte count, as the layer reports it, to the
+// Content-Length response header without narrowing it to int, so objects of
+// any size up to the protocol limit are described exactly. A negative count is
+// an internal error: the layer broke its contract.
+func setContentLength(h *protocol.ResponseHeader, n int64) error {
+	if n < 0 {
+		return s3err.Wrap(s3err.InternalError, fmt.Errorf("negative length %d", n))
 	}
-	return int(n), nil
+	h.SetContentLengthBytes(strconv.AppendInt(nil, n, 10))
+	return nil
 }

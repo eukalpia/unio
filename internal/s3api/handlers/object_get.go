@@ -48,25 +48,22 @@ func (e *Env) GetObject(c *Call, head bool) error {
 		if err != nil {
 			return err
 		}
-		length, err := intLength(info.Size)
-		if err != nil {
-			return err
+		if info.Size < 0 {
+			return setContentLength(&c.RC.Response.Header, info.Size)
 		}
 		setObjectHeaders(c, info, checksumMode)
 		applyOverrides(c)
 		c.RC.SetStatusCode(200)
-		c.RC.Response.Header.SetContentLength(length)
-		return nil
+		return setContentLength(&c.RC.Response.Header, info.Size)
 	}
 
 	reader, err := e.Layer.GetObject(c.Ctx, c.Route.Bucket, c.Route.Key, opts)
 	if err != nil {
 		return err
 	}
-	length, err := intLength(reader.Length)
-	if err != nil {
+	if reader.Length < 0 {
 		_ = reader.Close()
-		return err
+		return setContentLength(&c.RC.Response.Header, reader.Length)
 	}
 	if reader.Length == 0 {
 		_ = reader.Close()
@@ -86,7 +83,11 @@ func (e *Env) GetObject(c *Call, head bool) error {
 	setObjectHeaders(c, reader.Info, checksumMode)
 	applyOverrides(c)
 	c.RC.SetStatusCode(rangeStatus(c, rng, reader))
-	c.RC.Response.Header.SetContentLength(length)
+	if err := setContentLength(&c.RC.Response.Header, reader.Length); err != nil {
+		buf.Release()
+		_ = reader.Close()
+		return err
+	}
 	e.streamObject(c, reader, buf)
 	return nil
 }
