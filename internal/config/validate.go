@@ -288,21 +288,31 @@ func checkLimits(c *Config, r *report) {
 	}
 }
 
-// checkTimeouts validates that every timeout is positive and not absurdly large.
+// checkTimeouts validates that every timeout is positive and not absurdly
+// large. The one exception is timeouts.write, where zero means no cap.
 func checkTimeouts(c *Config, r *report) {
 	t := c.Timeouts
 	for _, item := range []struct {
-		name string
-		env  string
-		d    time.Duration
+		name   string
+		env    string
+		d      time.Duration
+		zeroOK bool
 	}{
-		{"timeouts.read_header", "UNIO_READ_HEADER_TIMEOUT", t.ReadHeader},
-		{"timeouts.read", "UNIO_READ_TIMEOUT", t.Read},
-		{"timeouts.write", "UNIO_WRITE_TIMEOUT", t.Write},
-		{"timeouts.idle", "UNIO_IDLE_TIMEOUT", t.Idle},
-		{"timeouts.shutdown", "UNIO_SHUTDOWN_TIMEOUT", t.Shutdown},
+		{"timeouts.read_header", "UNIO_READ_HEADER_TIMEOUT", t.ReadHeader, false},
+		{"timeouts.read_idle", "UNIO_READ_IDLE_TIMEOUT", t.ReadIdle, false},
+		{"timeouts.write", "UNIO_WRITE_TIMEOUT", t.Write, true},
+		{"timeouts.write_idle", "UNIO_WRITE_IDLE_TIMEOUT", t.WriteIdle, false},
+		{"timeouts.idle", "UNIO_IDLE_TIMEOUT", t.Idle, false},
+		{"timeouts.shutdown", "UNIO_SHUTDOWN_TIMEOUT", t.Shutdown, false},
 	} {
+		if item.zeroOK && item.d == 0 {
+			continue
+		}
 		if item.d <= 0 || item.d > maxTimeout {
+			if item.zeroOK {
+				r.errorf("%s %s must be 0 for no cap, or greater than 0 and at most %s (%s)", item.name, item.d, maxTimeout, item.env)
+				continue
+			}
 			r.errorf("%s %s must be greater than 0 and at most %s (%s)", item.name, item.d, maxTimeout, item.env)
 		}
 	}

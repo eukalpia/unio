@@ -35,6 +35,12 @@ func removedSettings() []removedSetting {
 			isBool:  true,
 			message: "was removed: internode traffic is always mutual TLS, so there is no plain HTTP option",
 		},
+		{
+			yaml:    "timeouts.read",
+			env:     "UNIO_READ_TIMEOUT",
+			flag:    "read-timeout",
+			message: "was replaced by timeouts.read_idle (UNIO_READ_IDLE_TIMEOUT, --read-idle-timeout), which bounds a stalled read rather than the whole request",
+		},
 	}
 }
 

@@ -24,10 +24,13 @@ const (
 	DefaultBackgroundConcurrency = 4
 	// DefaultReadHeaderTimeout is the default header read timeout.
 	DefaultReadHeaderTimeout = 10 * time.Second
-	// DefaultReadTimeout is the default whole-request read timeout.
-	DefaultReadTimeout = 10 * time.Minute
-	// DefaultWriteTimeout is the default response write timeout.
-	DefaultWriteTimeout = 10 * time.Minute
+	// DefaultReadIdleTimeout is the default bound on a stalled request read.
+	DefaultReadIdleTimeout = 60 * time.Second
+	// DefaultWriteTimeout is the default cap on one response write. Zero means
+	// no cap.
+	DefaultWriteTimeout = 0
+	// DefaultWriteIdleTimeout is the default bound on a stalled response write.
+	DefaultWriteIdleTimeout = 60 * time.Second
 	// DefaultIdleTimeout is the default keep-alive idle timeout.
 	DefaultIdleTimeout = 2 * time.Minute
 	// DefaultShutdownTimeout is the default graceful shutdown deadline.
@@ -60,8 +63,9 @@ func Defaults() Config {
 		},
 		Timeouts: TimeoutsConfig{
 			ReadHeader: DefaultReadHeaderTimeout,
-			Read:       DefaultReadTimeout,
+			ReadIdle:   DefaultReadIdleTimeout,
 			Write:      DefaultWriteTimeout,
+			WriteIdle:  DefaultWriteIdleTimeout,
 			Idle:       DefaultIdleTimeout,
 			Shutdown:   DefaultShutdownTimeout,
 		},

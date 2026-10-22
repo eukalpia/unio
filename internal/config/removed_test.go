@@ -70,3 +70,21 @@ func TestHiddenFlagSpecsAreRemovedSettings(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadNamesRenamedTimeoutRead(t *testing.T) {
+	env := validEnv()
+	env["UNIO_READ_TIMEOUT"] = "5m"
+	_, _, err := Load(context.Background(), Options{Env: env})
+	if err == nil || !strings.Contains(err.Error(), "UNIO_READ_TIMEOUT was replaced by timeouts.read_idle") {
+		t.Fatalf("Load error = %v, want the replacement named", err)
+	}
+	path := writeFile(t, "unio.yaml", "timeouts:\n  read: 5m\n")
+	_, _, err = Load(context.Background(), Options{Path: path, Env: validEnv()})
+	if err == nil || !strings.Contains(err.Error(), "timeouts.read was replaced by timeouts.read_idle") {
+		t.Fatalf("Load error = %v, want the replacement named", err)
+	}
+	_, _, err = Load(context.Background(), Options{Env: validEnv(), Flags: map[string]string{"read-timeout": "5m"}})
+	if err == nil || !strings.Contains(err.Error(), "flag --read-timeout was replaced by timeouts.read_idle") {
+		t.Fatalf("Load error = %v, want the replacement named", err)
+	}
+}

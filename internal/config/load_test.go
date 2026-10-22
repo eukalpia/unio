@@ -75,7 +75,7 @@ func TestLoadFromYAMLFileAndEnvironmentPath(t *testing.T) {
 node:
   id: node1
 timeouts:
-  read: 2m
+  read_idle: 2m
 log:
   level: debug
 `
@@ -88,7 +88,7 @@ log:
 		if err != nil {
 			t.Fatalf("Load: %v", err)
 		}
-		if cfg.Node.ID != "node1" || cfg.Timeouts.Read != 2*time.Minute || cfg.Log.Level != "debug" {
+		if cfg.Node.ID != "node1" || cfg.Timeouts.ReadIdle != 2*time.Minute || cfg.Log.Level != "debug" {
 			t.Fatalf("yaml values not applied: %+v", cfg)
 		}
 	})
@@ -99,8 +99,8 @@ log:
 		if err != nil {
 			t.Fatalf("Load: %v", err)
 		}
-		if cfg.Timeouts.Read != 2*time.Minute {
-			t.Fatalf("read timeout = %s", cfg.Timeouts.Read)
+		if cfg.Timeouts.ReadIdle != 2*time.Minute {
+			t.Fatalf("read timeout = %s", cfg.Timeouts.ReadIdle)
 		}
 	})
 }
@@ -218,7 +218,7 @@ func TestLoadFlagAndEnvErrors(t *testing.T) {
 		{name: "bad int from env", env: map[string]string{"UNIO_MAX_REQUESTS": "many"}, wantErr: "UNIO_MAX_REQUESTS"},
 		{name: "bad bool from env", env: map[string]string{"UNIO_REQUIRE_TLS": "maybe"}, wantErr: "UNIO_REQUIRE_TLS"},
 		{name: "bad size from env", env: map[string]string{"UNIO_MEMORY_BUDGET": "1 XB"}, wantErr: "UNIO_MEMORY_BUDGET"},
-		{name: "bad duration from env", env: map[string]string{"UNIO_READ_TIMEOUT": "soon"}, wantErr: "UNIO_READ_TIMEOUT"},
+		{name: "bad duration from env", env: map[string]string{"UNIO_READ_IDLE_TIMEOUT": "soon"}, wantErr: "UNIO_READ_IDLE_TIMEOUT"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

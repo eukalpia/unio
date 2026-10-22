@@ -120,10 +120,16 @@ type LimitsConfig struct {
 type TimeoutsConfig struct {
 	// ReadHeader bounds how long a client may take to send request headers.
 	ReadHeader time.Duration `yaml:"read_header"`
-	// Read bounds reading a whole request, including its body.
-	Read time.Duration `yaml:"read"`
-	// Write bounds writing a whole response.
+	// ReadIdle bounds how long reading a request may stall without any data
+	// arriving. It replaces the whole-request read timeout, which cut off large
+	// uploads on slow links.
+	ReadIdle time.Duration `yaml:"read_idle"`
+	// Write caps the time that writing one whole response may take. Zero means
+	// no cap, which is the default, because a cap cuts off large downloads.
 	Write time.Duration `yaml:"write"`
+	// WriteIdle bounds how long writing a response may stall without the client
+	// accepting any data.
+	WriteIdle time.Duration `yaml:"write_idle"`
 	// Idle bounds how long a keep-alive connection may stay idle.
 	Idle time.Duration `yaml:"idle"`
 	// Shutdown bounds the graceful drain on SIGINT or SIGTERM.
