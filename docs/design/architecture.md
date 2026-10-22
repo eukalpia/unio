@@ -269,7 +269,19 @@ compaction updates only the local index and never writes to Raft. See
   - cluster information;
   - triggering repair.
 - **Service endpoints:** `/unio/health/live`, `/unio/health/ready`, and
-  `/unio/metrics` (token-protected).
+  `/unio/metrics`.
+  - Health probes need no credentials.
+  - `/unio/metrics` accepts `Authorization: Bearer <token>` with the metrics
+    token (`Config.MetricsToken`), for scrapers that cannot sign SigV4. The
+    token is compared in constant time through SHA-256 digests. A Bearer
+    header with a wrong or empty token, or any Bearer header on a node with no
+    token configured, gets `403 AccessDenied` and never falls back to SigV4.
+    Without a Bearer header the endpoint takes the SigV4 path and needs the
+    admin action.
+  - Every request is reported once to `Config.Observer`, with its S3 API name
+    (`Health`, `Metrics` and `Unknown` for requests rejected before routing),
+    status, duration and body bytes in and out. A streamed GET is reported
+    after its last byte, and an aborted stream reports the bytes it wrote.
 
 Planned for later milestones (see [ROADMAP](../../ROADMAP.md)):
 
