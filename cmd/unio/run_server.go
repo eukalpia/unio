@@ -9,7 +9,7 @@ import (
 
 // serverNotAvailable is the message returned by runServer until the node
 // assembly exists. It is the only placeholder in the CLI.
-const serverNotAvailable = "unio server: the node assembly (internal/server) is not yet available in this build; " +
+const serverNotAvailable = "the node assembly (internal/server) is not yet available in this build; " +
 	"the configuration is valid, but the node cannot start yet"
 
 // runServer starts the node with the validated configuration and blocks until
