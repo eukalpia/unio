@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/eukalpia/unio/internal/bufpool"
 	"github.com/eukalpia/unio/internal/object"
 	"github.com/eukalpia/unio/internal/object/engine/gc"
 )
@@ -47,10 +48,16 @@ type Options struct {
 	// the engine. Writes wait for a slot or for their context. Zero selects
 	// DefaultMaxConcurrentWrites.
 	MaxConcurrentWrites int
-	// BufferBudget is the memory budget, in bytes, for pooled I/O buffers.
-	// It must be at least the inline threshold. Zero selects
-	// DefaultBufferBudget.
+	// BufferBudget is the memory budget, in bytes, for pooled I/O buffers
+	// that the engine creates for itself. It must be at least the inline
+	// threshold. Zero selects DefaultBufferBudget. It is ignored when Budget
+	// is set.
 	BufferBudget int64
+	// Budget is a memory budget shared with the caller, for example with the
+	// erasure sets and the rest of the node. When it is non-nil, every buffer
+	// the engine uses is charged to it instead of to a private budget of
+	// BufferBudget bytes. It must be at least the inline threshold.
+	Budget *bufpool.Budget
 }
 
 // inlineDisabled is the resolved inline threshold when the inline tier is

@@ -8,6 +8,7 @@ import (
 	"io"
 	"testing"
 
+	"github.com/eukalpia/unio/internal/bufpool"
 	"github.com/eukalpia/unio/internal/erasure"
 	"github.com/eukalpia/unio/internal/object"
 	"github.com/eukalpia/unio/internal/object/engine"
@@ -117,6 +118,7 @@ func TestOptionsValidation(t *testing.T) {
 		{"threshold above maximum", engine.Options{InlineThreshold: object.MaxInlineThreshold + 1}},
 		{"budget below threshold", engine.Options{InlineThreshold: 4096, BufferBudget: 1024}},
 		{"negative buffer budget", engine.Options{InlineThreshold: -1, BufferBudget: -1}},
+		{"shared budget below threshold", engine.Options{InlineThreshold: 4096, Budget: bufpool.NewBudget(1024)}},
 		{"negative gc queue", engine.Options{GCQueueSize: -1}},
 		{"negative gc workers", engine.Options{GCWorkers: -1}},
 		{"negative delete concurrency", engine.Options{DeleteConcurrency: -2}},

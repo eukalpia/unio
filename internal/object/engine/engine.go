@@ -50,7 +50,7 @@ func New(store meta.Store, sets erasure.Registry, opts Options) (*Engine, error)
 	if err != nil {
 		return nil, err
 	}
-	pool, err := newInlinePool(r.inlineThreshold, r.bufferBudget)
+	pool, err := newInlinePool(r.inlineThreshold, r.bufferBudget, opts.Budget)
 	if err != nil {
 		return nil, err
 	}
@@ -71,18 +71,25 @@ func New(store meta.Store, sets erasure.Registry, opts Options) (*Engine, error)
 	}, nil
 }
 
-// newInlinePool returns the pool of buffers for inline payloads, charged to a
-// private budget of bufferBudget bytes. It returns nil when the inline tier is
-// disabled, because nothing then needs a buffer. A budget that cannot hold one
-// inline payload is an error here, since the pool would refuse to exist.
-func newInlinePool(inline, bufferBudget int64) (*bufpool.Pool, error) {
+// newInlinePool returns the pool of buffers for inline payloads, charged to
+// shared when it is non-nil and to a private budget of bufferBudget bytes
+// otherwise. It returns nil when the inline tier is disabled, because nothing
+// then needs a buffer. A budget that cannot hold one inline payload is an
+// error here, since the pool would refuse to exist.
+func newInlinePool(inline, bufferBudget int64, shared *bufpool.Budget) (*bufpool.Pool, error) {
 	if inline == inlineDisabled {
 		return nil, nil
 	}
-	if bufferBudget < inline {
+	budget := shared
+	switch {
+	case budget == nil && bufferBudget < inline:
 		return nil, fmt.Errorf("engine: buffer budget %d is smaller than the inline threshold %d", bufferBudget, inline)
+	case budget == nil:
+		budget = bufpool.NewBudget(bufferBudget)
+	case budget.Total() < inline:
+		return nil, fmt.Errorf("engine: shared buffer budget %d is smaller than the inline threshold %d", budget.Total(), inline)
 	}
-	return bufpool.NewPool(int(inline), bufpool.NewBudget(bufferBudget)), nil
+	return bufpool.NewPool(int(inline), budget), nil
 }
 
 // inlineFits reports whether a payload of size bytes is stored inline.
