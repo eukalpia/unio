@@ -19,7 +19,9 @@ jobs:
     outputs:
       go: ${{ steps.check.outputs.go }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: check
         run: |
           if [ -f go.mod ]; then echo "go=true" >> "$GITHUB_OUTPUT"; else echo "go=false" >> "$GITHUB_OUTPUT"; fi
@@ -30,8 +32,10 @@ jobs:
     if: needs.detect.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       - name: Verify formatting
@@ -54,13 +58,52 @@ jobs:
     if: needs.detect.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      # Tools are built with the project toolchain so they can read its
+      # export data; `go run pkg@latest` may pick an incompatible build.
+      - name: Install tools
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+      # Released gosec binaries can lag behind the Go toolchain; when they
+      # cannot read the toolchain's export data they type-check nothing and
+      # still exit 0. Build it with a current golang.org/x/tools instead.
+      - name: Build gosec
+        env:
+          GOSEC_VERSION: v2.29.0
+        run: |
+          set -euo pipefail
+          src="$(mktemp -d)"
+          git clone --quiet --depth 1 --branch "$GOSEC_VERSION" https://github.com/securego/gosec "$src"
+          cd "$src"
+          go get golang.org/x/tools@latest
+          go mod tidy
+          go build -o "$(go env GOPATH)/bin/gosec" ./cmd/gosec
       - name: staticcheck
-        run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+        run: staticcheck ./...
       - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        run: govulncheck ./...
       - name: gosec
-        run: go run github.com/securego/gosec/v2/cmd/gosec@latest -quiet -exclude-generated ./...
+        run: |
+          set -uo pipefail
+          # No -quiet: it suppresses the report file when nothing is found.
+          gosec -exclude-generated -fmt=json -out=gosec.json ./... > /dev/null || true
+          test -s gosec.json || { echo "::error::gosec produced no report"; exit 1; }
+          type_errors=$(jq '(.["Golang errors"] // {}) | length' gosec.json)
+          issues=$(jq '(.Issues // []) | length' gosec.json)
+          files=$(jq '.Stats.files' gosec.json)
+          echo "gosec scanned $files files: $issues issues, $type_errors packages with type errors"
+          if [ "$type_errors" != "0" ]; then
+            jq -r '.["Golang errors"] | to_entries[] | "\(.key): \(.value[0].error)"' gosec.json
+            echo "::error::gosec could not type-check the module; its results would be incomplete"
+            exit 1
+          fi
+          if [ "$issues" != "0" ]; then
+            jq -r '.Issues[] | "::error file=\(.file),line=\(.line)::\(.rule_id) \(.details)"' gosec.json
+            exit 1
+          fi
