@@ -168,48 +168,84 @@ func (g *groupTransport) AppendEntriesPipeline(raft.ServerID, raft.ServerAddress
 
 // AppendEntries implements raft.Transport.
 func (g *groupTransport) AppendEntries(_ raft.ServerID, target raft.ServerAddress, args *raft.AppendEntriesRequest, resp *raft.AppendEntriesResponse) error {
-	var out uniov1.RaftAppendEntriesResponse
-	if err := g.call(target, MethodAppendEntries, appendEntriesToPB(g.group, args), &out); err != nil {
+	req, err := appendEntriesToPB(g.group, args)
+	if err != nil {
 		return err
 	}
-	*resp = *appendEntriesRespFromPB(&out)
+	var out uniov1.RaftAppendEntriesResponse
+	if err := g.call(target, MethodAppendEntries, req, &out); err != nil {
+		return err
+	}
+	decoded, err := appendEntriesRespFromPB(&out)
+	if err != nil {
+		return err
+	}
+	*resp = *decoded
 	return nil
 }
 
 // RequestVote implements raft.Transport.
 func (g *groupTransport) RequestVote(_ raft.ServerID, target raft.ServerAddress, args *raft.RequestVoteRequest, resp *raft.RequestVoteResponse) error {
-	var out uniov1.RaftRequestVoteResponse
-	if err := g.call(target, MethodRequestVote, requestVoteToPB(g.group, args), &out); err != nil {
+	req, err := requestVoteToPB(g.group, args)
+	if err != nil {
 		return err
 	}
-	*resp = *requestVoteRespFromPB(&out)
+	var out uniov1.RaftRequestVoteResponse
+	if err := g.call(target, MethodRequestVote, req, &out); err != nil {
+		return err
+	}
+	decoded, err := requestVoteRespFromPB(&out)
+	if err != nil {
+		return err
+	}
+	*resp = *decoded
 	return nil
 }
 
 // RequestPreVote implements raft.WithPreVote.
 func (g *groupTransport) RequestPreVote(_ raft.ServerID, target raft.ServerAddress, args *raft.RequestPreVoteRequest, resp *raft.RequestPreVoteResponse) error {
-	var out uniov1.RaftRequestPreVoteResponse
-	if err := g.call(target, MethodRequestPreVote, preVoteToPB(g.group, args), &out); err != nil {
+	req, err := preVoteToPB(g.group, args)
+	if err != nil {
 		return err
 	}
-	*resp = *preVoteRespFromPB(&out)
+	var out uniov1.RaftRequestPreVoteResponse
+	if err := g.call(target, MethodRequestPreVote, req, &out); err != nil {
+		return err
+	}
+	decoded, err := preVoteRespFromPB(&out)
+	if err != nil {
+		return err
+	}
+	*resp = *decoded
 	return nil
 }
 
 // TimeoutNow implements raft.Transport.
 func (g *groupTransport) TimeoutNow(_ raft.ServerID, target raft.ServerAddress, args *raft.TimeoutNowRequest, resp *raft.TimeoutNowResponse) error {
-	var out uniov1.RaftTimeoutNowResponse
-	if err := g.call(target, MethodTimeoutNow, timeoutNowToPB(g.group, args), &out); err != nil {
+	req, err := timeoutNowToPB(g.group, args)
+	if err != nil {
 		return err
 	}
-	*resp = *timeoutNowRespFromPB(&out)
+	var out uniov1.RaftTimeoutNowResponse
+	if err := g.call(target, MethodTimeoutNow, req, &out); err != nil {
+		return err
+	}
+	decoded, err := timeoutNowRespFromPB(&out)
+	if err != nil {
+		return err
+	}
+	*resp = *decoded
 	return nil
 }
 
 // InstallSnapshot implements raft.Transport. The snapshot streams from data as
 // exactly args.Size bytes.
 func (g *groupTransport) InstallSnapshot(_ raft.ServerID, target raft.ServerAddress, args *raft.InstallSnapshotRequest, resp *raft.InstallSnapshotResponse, data io.Reader) error {
-	payload, err := installSnapshotToPB(g.group, args).MarshalVT()
+	msg, err := installSnapshotToPB(g.group, args)
+	if err != nil {
+		return err
+	}
+	payload, err := msg.MarshalVT()
 	if err != nil {
 		return fmt.Errorf("raftnet: encode snapshot request: %w", err)
 	}
@@ -230,7 +266,11 @@ func (g *groupTransport) InstallSnapshot(_ raft.ServerID, target raft.ServerAddr
 	if err := out.UnmarshalVT(rep.Payload); err != nil {
 		return fmt.Errorf("raftnet: decode snapshot reply: %w", err)
 	}
-	*resp = *installSnapshotRespFromPB(&out)
+	decoded, err := installSnapshotRespFromPB(&out)
+	if err != nil {
+		return err
+	}
+	*resp = *decoded
 	return nil
 }
 

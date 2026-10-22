@@ -69,7 +69,10 @@ func (n *Network) handleAppendEntries(ctx context.Context, from ids.NodeID, req 
 	if err != nil {
 		return nil, err
 	}
-	cmd := appendEntriesFromPB(&p)
+	cmd, err := appendEntriesFromPB(&p)
+	if err != nil {
+		return nil, malformed()
+	}
 	out, err := n.deliver(ctx, g, cmd, nil, isHeartbeat(cmd))
 	if err != nil {
 		return nil, err
@@ -78,7 +81,11 @@ func (n *Network) handleAppendEntries(ctx context.Context, from ids.NodeID, req 
 	if !ok {
 		return nil, fmt.Errorf("raftnet: append entries answered with %T", out)
 	}
-	return appendEntriesRespToPB(resp).MarshalVT()
+	msg, err := appendEntriesRespToPB(resp)
+	if err != nil {
+		return nil, err
+	}
+	return msg.MarshalVT()
 }
 
 // handleRequestVote serves a RequestVote RPC.
@@ -94,7 +101,11 @@ func (n *Network) handleRequestVote(ctx context.Context, from ids.NodeID, req []
 	if err != nil {
 		return nil, err
 	}
-	out, err := n.deliver(ctx, g, requestVoteFromPB(&p), nil, false)
+	cmd, err := requestVoteFromPB(&p)
+	if err != nil {
+		return nil, malformed()
+	}
+	out, err := n.deliver(ctx, g, cmd, nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +113,11 @@ func (n *Network) handleRequestVote(ctx context.Context, from ids.NodeID, req []
 	if !ok {
 		return nil, fmt.Errorf("raftnet: request vote answered with %T", out)
 	}
-	return requestVoteRespToPB(resp).MarshalVT()
+	msg, err := requestVoteRespToPB(resp)
+	if err != nil {
+		return nil, err
+	}
+	return msg.MarshalVT()
 }
 
 // handleRequestPreVote serves a RequestPreVote RPC.
@@ -118,7 +133,11 @@ func (n *Network) handleRequestPreVote(ctx context.Context, from ids.NodeID, req
 	if err != nil {
 		return nil, err
 	}
-	out, err := n.deliver(ctx, g, preVoteFromPB(&p), nil, false)
+	cmd, err := preVoteFromPB(&p)
+	if err != nil {
+		return nil, malformed()
+	}
+	out, err := n.deliver(ctx, g, cmd, nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +145,11 @@ func (n *Network) handleRequestPreVote(ctx context.Context, from ids.NodeID, req
 	if !ok {
 		return nil, fmt.Errorf("raftnet: pre-vote answered with %T", out)
 	}
-	return preVoteRespToPB(resp).MarshalVT()
+	msg, err := preVoteRespToPB(resp)
+	if err != nil {
+		return nil, err
+	}
+	return msg.MarshalVT()
 }
 
 // handleTimeoutNow serves a TimeoutNow RPC, which starts a leadership transfer.
@@ -142,7 +165,11 @@ func (n *Network) handleTimeoutNow(ctx context.Context, from ids.NodeID, req []b
 	if err != nil {
 		return nil, err
 	}
-	out, err := n.deliver(ctx, g, timeoutNowFromPB(&p), nil, false)
+	cmd, err := timeoutNowFromPB(&p)
+	if err != nil {
+		return nil, malformed()
+	}
+	out, err := n.deliver(ctx, g, cmd, nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +177,11 @@ func (n *Network) handleTimeoutNow(ctx context.Context, from ids.NodeID, req []b
 	if !ok {
 		return nil, fmt.Errorf("raftnet: timeout-now answered with %T", out)
 	}
-	return timeoutNowRespToPB(resp).MarshalVT()
+	msg, err := timeoutNowRespToPB(resp)
+	if err != nil {
+		return nil, err
+	}
+	return msg.MarshalVT()
 }
 
 // handleInstallSnapshot serves an InstallSnapshot stream. The body is the
@@ -170,12 +201,16 @@ func (n *Network) handleInstallSnapshot(ctx context.Context, req *uniwire.Stream
 	if err != nil {
 		return nil, err
 	}
+	cmd, err := installSnapshotFromPB(&p)
+	if err != nil {
+		return nil, malformed()
+	}
 	// Raft may still hold the body when this handler gives up, and the
 	// transport drains the body afterwards. The guard ensures that raft cannot
 	// read after the handler returns, so the two never touch it concurrently.
 	guard := &guardedReader{r: req.Body}
 	defer guard.close()
-	out, err := n.deliver(ctx, g, installSnapshotFromPB(&p), guard, false)
+	out, err := n.deliver(ctx, g, cmd, guard, false)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +218,11 @@ func (n *Network) handleInstallSnapshot(ctx context.Context, req *uniwire.Stream
 	if !ok {
 		return nil, fmt.Errorf("raftnet: install snapshot answered with %T", out)
 	}
-	payload, err := installSnapshotRespToPB(resp).MarshalVT()
+	msg, err := installSnapshotRespToPB(resp)
+	if err != nil {
+		return nil, err
+	}
+	payload, err := msg.MarshalVT()
 	if err != nil {
 		return nil, fmt.Errorf("raftnet: encode snapshot reply: %w", err)
 	}

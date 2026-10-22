@@ -1,8 +1,9 @@
 package raftnet
 
-//lint:file-ignore SA1019 Leader and Candidate are carried because hashicorp/raft 1.8 still reads them when Addr is empty; dropping them would make the wire mapping lossy.
+//lint:file-ignore SA1019 the tests build raft requests with Leader and Candidate, which raft 1.8 still reads.
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -19,15 +20,14 @@ func header(id string) raft.RPCHeader {
 	return raft.RPCHeader{ProtocolVersion: raft.ProtocolVersionMax, ID: []byte(id), Addr: []byte(id)}
 }
 
-// roundTrip marshals a protobuf message and decodes it into out.
-func roundTrip(t *testing.T, in interface {
-	MarshalVT() ([]byte, error)
-}, out interface {
-	UnmarshalVT([]byte) error
-},
-) {
+// roundTrip marshals msg, which an encoder produced with err, and decodes it
+// into out. Any encoder error fails the test.
+func roundTrip(t *testing.T, msg interface{ MarshalVT() ([]byte, error) }, err error, out interface{ UnmarshalVT([]byte) error }) {
 	t.Helper()
-	b, err := in.MarshalVT()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := msg.MarshalVT()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,12 +68,16 @@ func TestAppendEntriesRoundTrip(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			pb, err := appendEntriesToPB(4, tc.req)
 			var p uniov1.RaftAppendEntries
-			roundTrip(t, appendEntriesToPB(4, tc.req), &p)
+			roundTrip(t, pb, err, &p)
 			if p.GetGroup() != 4 {
 				t.Fatalf("group = %d", p.GetGroup())
 			}
-			got := appendEntriesFromPB(&p)
+			got, err := appendEntriesFromPB(&p)
+			if err != nil {
+				t.Fatal(err)
+			}
 			if d := cmp.Diff(tc.req, got, cmpopts.EquateEmpty()); d != "" {
 				t.Fatalf("round trip differs:\n%s", d)
 			}
@@ -83,39 +87,64 @@ func TestAppendEntriesRoundTrip(t *testing.T) {
 
 func TestAppendEntriesResponseRoundTrip(t *testing.T) {
 	in := &raft.AppendEntriesResponse{RPCHeader: header("follower"), Term: 9, LastLog: 88, Success: true, NoRetryBackoff: true}
+	pb, err := appendEntriesRespToPB(in)
 	var p uniov1.RaftAppendEntriesResponse
-	roundTrip(t, appendEntriesRespToPB(in), &p)
-	if d := cmp.Diff(in, appendEntriesRespFromPB(&p)); d != "" {
+	roundTrip(t, pb, err, &p)
+	got, err := appendEntriesRespFromPB(&p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := cmp.Diff(in, got); d != "" {
 		t.Fatalf("round trip differs:\n%s", d)
 	}
 }
 
 func TestVoteMessagesRoundTrip(t *testing.T) {
 	rv := &raft.RequestVoteRequest{RPCHeader: header("c1"), Term: 5, Candidate: []byte("c1"), LastLogIndex: 10, LastLogTerm: 4, LeadershipTransfer: true}
-	var pv uniov1.RaftRequestVote
-	roundTrip(t, requestVoteToPB(2, rv), &pv)
-	if d := cmp.Diff(rv, requestVoteFromPB(&pv)); d != "" {
+	pv, err := requestVoteToPB(2, rv)
+	var pvm uniov1.RaftRequestVote
+	roundTrip(t, pv, err, &pvm)
+	gotRV, err := requestVoteFromPB(&pvm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := cmp.Diff(rv, gotRV); d != "" {
 		t.Fatalf("request vote differs:\n%s", d)
 	}
 
 	rvr := &raft.RequestVoteResponse{RPCHeader: header("v1"), Term: 5, Peers: []byte("p"), Granted: true}
-	var pvr uniov1.RaftRequestVoteResponse
-	roundTrip(t, requestVoteRespToPB(rvr), &pvr)
-	if d := cmp.Diff(rvr, requestVoteRespFromPB(&pvr)); d != "" {
+	pvr, err := requestVoteRespToPB(rvr)
+	var pvrm uniov1.RaftRequestVoteResponse
+	roundTrip(t, pvr, err, &pvrm)
+	gotRVR, err := requestVoteRespFromPB(&pvrm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := cmp.Diff(rvr, gotRVR); d != "" {
 		t.Fatalf("vote response differs:\n%s", d)
 	}
 
 	pre := &raft.RequestPreVoteRequest{RPCHeader: header("c1"), Term: 6, LastLogIndex: 1, LastLogTerm: 2}
-	var pp uniov1.RaftRequestPreVote
-	roundTrip(t, preVoteToPB(0, pre), &pp)
-	if d := cmp.Diff(pre, preVoteFromPB(&pp)); d != "" {
+	pp, err := preVoteToPB(0, pre)
+	var ppm uniov1.RaftRequestPreVote
+	roundTrip(t, pp, err, &ppm)
+	gotPre, err := preVoteFromPB(&ppm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := cmp.Diff(pre, gotPre); d != "" {
 		t.Fatalf("pre-vote differs:\n%s", d)
 	}
 
 	prer := &raft.RequestPreVoteResponse{RPCHeader: header("v2"), Term: 6, Granted: true}
-	var ppr uniov1.RaftRequestPreVoteResponse
-	roundTrip(t, preVoteRespToPB(prer), &ppr)
-	if d := cmp.Diff(prer, preVoteRespFromPB(&ppr)); d != "" {
+	ppr, err := preVoteRespToPB(prer)
+	var pprm uniov1.RaftRequestPreVoteResponse
+	roundTrip(t, ppr, err, &pprm)
+	gotPreR, err := preVoteRespFromPB(&pprm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := cmp.Diff(prer, gotPreR); d != "" {
 		t.Fatalf("pre-vote response differs:\n%s", d)
 	}
 }
@@ -133,32 +162,202 @@ func TestInstallSnapshotRoundTrip(t *testing.T) {
 		ConfigurationIndex: 12,
 		Size:               1 << 30,
 	}
+	pb, err := installSnapshotToPB(1, in)
 	var p uniov1.RaftInstallSnapshot
-	roundTrip(t, installSnapshotToPB(1, in), &p)
-	if d := cmp.Diff(in, installSnapshotFromPB(&p), cmpopts.EquateEmpty()); d != "" {
+	roundTrip(t, pb, err, &p)
+	got, err := installSnapshotFromPB(&p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := cmp.Diff(in, got, cmpopts.EquateEmpty()); d != "" {
 		t.Fatalf("snapshot request differs:\n%s", d)
 	}
 
 	resp := &raft.InstallSnapshotResponse{RPCHeader: header("f"), Term: 8, Success: true}
-	var pr uniov1.RaftInstallSnapshotResponse
-	roundTrip(t, installSnapshotRespToPB(resp), &pr)
-	if d := cmp.Diff(resp, installSnapshotRespFromPB(&pr)); d != "" {
+	pr, err := installSnapshotRespToPB(resp)
+	var prm uniov1.RaftInstallSnapshotResponse
+	roundTrip(t, pr, err, &prm)
+	gotResp, err := installSnapshotRespFromPB(&prm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := cmp.Diff(resp, gotResp); d != "" {
 		t.Fatalf("snapshot response differs:\n%s", d)
 	}
 }
 
 func TestTimeoutNowRoundTrip(t *testing.T) {
 	req := &raft.TimeoutNowRequest{RPCHeader: header("old-leader")}
+	pb, err := timeoutNowToPB(3, req)
 	var p uniov1.RaftTimeoutNow
-	roundTrip(t, timeoutNowToPB(3, req), &p)
-	if d := cmp.Diff(req, timeoutNowFromPB(&p)); d != "" {
+	roundTrip(t, pb, err, &p)
+	got, err := timeoutNowFromPB(&p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := cmp.Diff(req, got); d != "" {
 		t.Fatalf("timeout-now differs:\n%s", d)
 	}
 	resp := &raft.TimeoutNowResponse{RPCHeader: header("new")}
-	var pr uniov1.RaftTimeoutNowResponse
-	roundTrip(t, timeoutNowRespToPB(resp), &pr)
-	if d := cmp.Diff(resp, timeoutNowRespFromPB(&pr)); d != "" {
+	pr, err := timeoutNowRespToPB(resp)
+	var prm uniov1.RaftTimeoutNowResponse
+	roundTrip(t, pr, err, &prm)
+	gotResp, err := timeoutNowRespFromPB(&prm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := cmp.Diff(resp, gotResp); d != "" {
 		t.Fatalf("timeout-now response differs:\n%s", d)
+	}
+}
+
+// TestProtocolVersionBoundaries checks both directions of the protocol version
+// conversion at the edges of what raft supports.
+func TestProtocolVersionBoundaries(t *testing.T) {
+	encode := []struct {
+		name string
+		v    raft.ProtocolVersion
+		ok   bool
+	}{
+		{name: "minimum", v: raft.ProtocolVersionMin, ok: true},
+		{name: "maximum", v: raft.ProtocolVersionMax, ok: true},
+		{name: "below minimum", v: raft.ProtocolVersionMin - 1, ok: false},
+		{name: "above maximum", v: raft.ProtocolVersionMax + 1, ok: false},
+		{name: "int max", v: math.MaxInt, ok: false},
+	}
+	for _, tc := range encode {
+		t.Run("encode "+tc.name, func(t *testing.T) {
+			got, err := protocolVersionToWire(tc.v)
+			if (err == nil) != tc.ok {
+				t.Fatalf("encode %d: err = %v, want ok=%v", tc.v, err, tc.ok)
+			}
+			if err == nil && got != uint32(tc.v) {
+				t.Fatalf("encode %d = %d", tc.v, got)
+			}
+		})
+	}
+	decode := []struct {
+		name string
+		v    uint32
+		ok   bool
+	}{
+		{name: "zero", v: 0, ok: true},
+		{name: "maximum", v: raft.ProtocolVersionMax, ok: true},
+		{name: "above maximum", v: raft.ProtocolVersionMax + 1, ok: false},
+		{name: "uint32 max", v: math.MaxUint32, ok: false},
+	}
+	for _, tc := range decode {
+		t.Run("decode "+tc.name, func(t *testing.T) {
+			got, err := protocolVersionFromWire(tc.v)
+			if (err == nil) != tc.ok {
+				t.Fatalf("decode %d: err = %v, want ok=%v", tc.v, err, tc.ok)
+			}
+			if err == nil && uint32(got) != tc.v {
+				t.Fatalf("decode %d = %d", tc.v, got)
+			}
+		})
+	}
+}
+
+// TestSnapshotVersionBoundaries checks the snapshot version conversion.
+func TestSnapshotVersionBoundaries(t *testing.T) {
+	if _, err := snapshotVersionToWire(raft.SnapshotVersionMin); err != nil {
+		t.Fatalf("minimum rejected: %v", err)
+	}
+	if _, err := snapshotVersionToWire(raft.SnapshotVersionMax); err != nil {
+		t.Fatalf("maximum rejected: %v", err)
+	}
+	if _, err := snapshotVersionToWire(raft.SnapshotVersionMin - 1); err == nil {
+		t.Fatal("negative snapshot version encoded")
+	}
+	if _, err := snapshotVersionToWire(raft.SnapshotVersionMax + 1); err == nil {
+		t.Fatal("unsupported snapshot version encoded")
+	}
+	if _, err := snapshotVersionFromWire(raft.SnapshotVersionMax); err != nil {
+		t.Fatalf("maximum decode rejected: %v", err)
+	}
+	if _, err := snapshotVersionFromWire(raft.SnapshotVersionMax + 1); err == nil {
+		t.Fatal("unsupported snapshot version decoded")
+	}
+	if _, err := snapshotVersionFromWire(math.MaxUint32); err == nil {
+		t.Fatal("uint32 max snapshot version decoded")
+	}
+}
+
+// TestLogTypeBoundaries checks that a log type decodes only within one byte.
+func TestLogTypeBoundaries(t *testing.T) {
+	cases := []struct {
+		name string
+		v    uint32
+		ok   bool
+	}{
+		{name: "zero", v: 0, ok: true},
+		{name: "one byte maximum", v: math.MaxUint8, ok: true},
+		{name: "two bytes", v: math.MaxUint8 + 1, ok: false},
+		{name: "uint32 maximum", v: math.MaxUint32, ok: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := logTypeFromWire(tc.v); (err == nil) != tc.ok {
+				t.Fatalf("log type %d: err = %v, want ok=%v", tc.v, err, tc.ok)
+			}
+			// The same value inside an entry must fail the whole request.
+			entry := &uniov1.RaftAppendEntries{
+				Header:  &uniov1.RaftHeader{},
+				Entries: []*uniov1.RaftLog{{Type: tc.v}},
+			}
+			_, err := appendEntriesFromPB(entry)
+			if (err == nil) != tc.ok {
+				t.Fatalf("entry with type %d: err = %v, want ok=%v", tc.v, err, tc.ok)
+			}
+		})
+	}
+}
+
+// TestEncodersRefuseUnsupportedValues checks that a request carrying a value
+// its wire field cannot represent fails to encode, rather than being sent
+// truncated.
+func TestEncodersRefuseUnsupportedValues(t *testing.T) {
+	bad := raft.RPCHeader{ProtocolVersion: raft.ProtocolVersionMax + 1, ID: []byte("b")}
+	if _, err := appendEntriesToPB(1, &raft.AppendEntriesRequest{RPCHeader: bad}); err == nil {
+		t.Fatal("append entries with an unsupported protocol version encoded")
+	}
+	if _, err := requestVoteToPB(1, &raft.RequestVoteRequest{RPCHeader: bad}); err == nil {
+		t.Fatal("vote with an unsupported protocol version encoded")
+	}
+	if _, err := preVoteToPB(1, &raft.RequestPreVoteRequest{RPCHeader: bad}); err == nil {
+		t.Fatal("pre-vote with an unsupported protocol version encoded")
+	}
+	if _, err := timeoutNowToPB(1, &raft.TimeoutNowRequest{RPCHeader: bad}); err == nil {
+		t.Fatal("timeout-now with an unsupported protocol version encoded")
+	}
+	if _, err := appendEntriesRespToPB(&raft.AppendEntriesResponse{RPCHeader: bad}); err == nil {
+		t.Fatal("append response with an unsupported protocol version encoded")
+	}
+	snap := &raft.InstallSnapshotRequest{RPCHeader: raft.RPCHeader{ID: []byte("b")}, SnapshotVersion: raft.SnapshotVersionMax + 1}
+	if _, err := installSnapshotToPB(1, snap); err == nil {
+		t.Fatal("snapshot with an unsupported snapshot version encoded")
+	}
+}
+
+// TestDecodersRefuseUnsupportedHeaders checks that a header with an unsupported
+// protocol version makes every request decoder fail.
+func TestDecodersRefuseUnsupportedHeaders(t *testing.T) {
+	badHeader := &uniov1.RaftHeader{ProtocolVersion: math.MaxUint32, Id: []byte("b")}
+	if _, err := appendEntriesFromPB(&uniov1.RaftAppendEntries{Header: badHeader}); err == nil {
+		t.Fatal("append entries with a wrapped protocol version decoded")
+	}
+	if _, err := requestVoteFromPB(&uniov1.RaftRequestVote{Header: badHeader}); err == nil {
+		t.Fatal("vote with a wrapped protocol version decoded")
+	}
+	if _, err := preVoteFromPB(&uniov1.RaftRequestPreVote{Header: badHeader}); err == nil {
+		t.Fatal("pre-vote with a wrapped protocol version decoded")
+	}
+	if _, err := timeoutNowFromPB(&uniov1.RaftTimeoutNow{Header: badHeader}); err == nil {
+		t.Fatal("timeout-now with a wrapped protocol version decoded")
+	}
+	if _, err := installSnapshotFromPB(&uniov1.RaftInstallSnapshot{Header: &uniov1.RaftHeader{}, SnapshotVersion: 2}); err == nil {
+		t.Fatal("snapshot with an unsupported snapshot version decoded")
 	}
 }
 
@@ -185,7 +384,7 @@ func TestIsHeartbeatMatchesRaftPredicate(t *testing.T) {
 }
 
 func TestCheckSenderRejectsForeignIdentity(t *testing.T) {
-	h := headerToPB(header("node-b"))
+	h := &uniov1.RaftHeader{Id: []byte("node-b")}
 	if err := checkSender(ids.NodeID("node-b"), h); err != nil {
 		t.Fatalf("matching sender rejected: %v", err)
 	}
