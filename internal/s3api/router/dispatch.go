@@ -25,6 +25,10 @@ func dispatch(method, bucket, key string, q url.Values, copySource bool) (Op, er
 			// Object tagging is supported; bucket tagging is not.
 			continue
 		}
+		if sub == "versions" && method == "GET" && key == "" && bucket != "" {
+			// ListObjectVersions is supported; nothing else takes ?versions.
+			continue
+		}
 		if _, ok := q[sub]; ok {
 			return OpUnknown, s3err.Errorf(s3err.NotImplemented, "this operation is not supported")
 		}
@@ -59,6 +63,8 @@ func dispatchBucket(method string, q url.Values) (Op, error) {
 			return OpGetBucketLocation, nil
 		case has(q, "uploads"):
 			return OpListMultipartUploads, nil
+		case has(q, "versions"):
+			return OpListObjectVersions, nil
 		case has(q, "list-type"):
 			if q.Get("list-type") != "2" {
 				return OpUnknown, s3err.Errorf(s3err.InvalidArgument, "unsupported list-type")

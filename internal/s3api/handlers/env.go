@@ -90,6 +90,8 @@ func (e *Env) Handle(op router.Op, c *Call) error {
 		return e.ListObjectsV1(c)
 	case router.OpListObjectsV2:
 		return e.ListObjectsV2(c)
+	case router.OpListObjectVersions:
+		return e.ListObjectVersions(c)
 	case router.OpListMultipartUploads:
 		return e.ListMultipartUploads(c)
 	case router.OpDeleteObjects:

@@ -87,7 +87,8 @@ func TestMatch(t *testing.T) {
 		{"get bucket tagging", Request{Method: "GET", Path: "/photos", Query: "tagging="}, want{err: s3err.NotImplemented}},
 		{"put bucket tagging", Request{Method: "PUT", Path: "/photos", Query: "tagging="}, want{err: s3err.NotImplemented}},
 		{"delete policy", Request{Method: "DELETE", Path: "/photos", Query: "policy="}, want{err: s3err.NotImplemented}},
-		{"list versions", Request{Method: "GET", Path: "/photos", Query: "versions="}, want{err: s3err.NotImplemented}},
+		{"list versions", Request{Method: "GET", Path: "/photos", Query: "versions="}, want{op: OpListObjectVersions, bucket: "photos"}},
+		{"put versions", Request{Method: "PUT", Path: "/photos", Query: "versions="}, want{err: s3err.NotImplemented}},
 		{"select", Request{Method: "POST", Path: "/photos/k", Query: "select=&select-type=2"}, want{err: s3err.NotImplemented}},
 
 		// Reserved service namespace: never a bucket lookup.

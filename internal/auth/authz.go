@@ -11,6 +11,7 @@ const (
 	ActionDeleteBucket               Action = "s3:DeleteBucket"
 	ActionListAllMyBuckets           Action = "s3:ListAllMyBuckets"
 	ActionListBucket                 Action = "s3:ListBucket"
+	ActionListBucketVersions         Action = "s3:ListBucketVersions"
 	ActionListBucketMultipartUploads Action = "s3:ListBucketMultipartUploads"
 	ActionGetBucketLocation          Action = "s3:GetBucketLocation"
 	ActionGetObject                  Action = "s3:GetObject"
