@@ -28,6 +28,7 @@ import (
 	"github.com/eukalpia/unio/internal/s3api/apierr"
 	"github.com/eukalpia/unio/internal/s3api/handlers"
 	"github.com/eukalpia/unio/internal/s3api/middleware"
+	"github.com/eukalpia/unio/internal/s3api/reqstat"
 	"github.com/eukalpia/unio/internal/s3api/router"
 )
 
@@ -40,16 +41,17 @@ const maxRequestBody = math.MaxInt
 // Server serves the S3 API. Create it with New, then call Run or Serve. A
 // Server serves at most one listener at a time.
 type Server struct {
-	cfg     Config
-	logger  *slog.Logger
-	router  *router.Router
-	env     *handlers.Env
-	authn   auth.Authenticator
-	authz   auth.Authorizer
-	tls     *tls.Config
-	hostID  string
-	limiter *middleware.Limiter
-	engine  *route.Engine
+	cfg          Config
+	logger       *slog.Logger
+	router       *router.Router
+	env          *handlers.Env
+	authn        auth.Authenticator
+	authz        auth.Authorizer
+	tls          *tls.Config
+	hostID       string
+	limiter      *middleware.Limiter
+	engine       *route.Engine
+	metricsToken tokenDigest
 
 	stop     chan struct{}
 	stopOnce sync.Once
@@ -90,10 +92,15 @@ func New(cfg Config, layer object.Layer, authn auth.Authenticator, authz auth.Au
 	if err != nil {
 		return nil, err
 	}
+	// The token is reduced to its digest here, so the Server holds no copy of
+	// the secret and the caller's slice can change afterwards without effect.
+	metricsToken := newTokenDigest(cfg.MetricsToken)
+	cfg.MetricsToken = nil
 	s := &Server{
-		cfg:    cfg,
-		logger: logger,
-		router: rt,
+		cfg:          cfg,
+		logger:       logger,
+		router:       rt,
+		metricsToken: metricsToken,
 		env: &handlers.Env{
 			Layer:     layer,
 			Region:    cfg.Region,
@@ -214,6 +221,10 @@ func (s *Server) newHertz(ln net.Listener) *server.Hertz {
 		opts = append(opts, server.WithTLS(s.tls))
 	}
 	h := server.New(opts...)
+	if s.cfg.Observer != nil {
+		// Outermost, so that its duration covers every inner rejection too.
+		h.Use(middleware.Observe(s.cfg.Observer.ObserveHTTPRequest))
+	}
 	h.Use(
 		middleware.RequestID(s.hostID, s.logger),
 		middleware.WriteDeadline(s.cfg.WriteIdleTimeout),
@@ -229,11 +240,14 @@ func (s *Server) newHertz(ln net.Listener) *server.Hertz {
 // handle serves one S3 request: route, authenticate, authorize, dispatch.
 // Every failure is rendered as an S3 error by apierr.
 func (s *Server) handle(ctx context.Context, c *app.RequestContext) {
+	// st is nil when no observer is configured; its methods then do nothing.
+	st := reqstat.Get(c)
 	rt, err := s.router.Match(routeRequest(c))
 	if err != nil {
 		apierr.Write(c, s.logger, err, string(c.Request.URI().PathOriginal()))
 		return
 	}
+	st.SetOp(observedName(rt.Op))
 	if rt.Op.IsService() {
 		s.serveService(ctx, c, rt)
 		return
@@ -241,7 +255,7 @@ func (s *Server) handle(ctx context.Context, c *app.RequestContext) {
 	resource := resourceOf(rt)
 
 	header := requestHeader(c)
-	res, err := s.authn.Authenticate(ctx, authRequest(c, header, requestBody(c, s.cfg.ReadBodyIdleTimeout)))
+	res, err := s.authn.Authenticate(ctx, authRequest(c, header, requestBody(c, s.cfg.ReadBodyIdleTimeout, st)))
 	if err != nil {
 		apierr.Write(c, s.logger, err, resource)
 		return
@@ -264,6 +278,7 @@ func (s *Server) handle(ctx context.Context, c *app.RequestContext) {
 		Auth:      res,
 		Authorize: authorize,
 		Resource:  resource,
+		Stats:     st,
 	}
 	if err := s.env.Handle(rt.Op, call); err != nil {
 		apierr.Write(c, s.logger, err, resource)

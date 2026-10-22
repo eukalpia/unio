@@ -9,6 +9,7 @@ import (
 
 	"github.com/eukalpia/unio/internal/auth"
 	"github.com/eukalpia/unio/internal/s3api/apierr"
+	"github.com/eukalpia/unio/internal/s3api/reqinfo"
 	"github.com/eukalpia/unio/internal/s3api/router"
 	"github.com/eukalpia/unio/internal/s3err"
 )
@@ -35,12 +36,25 @@ func (s *Server) serveService(ctx context.Context, c *app.RequestContext, rt rou
 	}
 }
 
-// serveMetrics authenticates the caller, requires the admin action and then
-// runs the configured metrics handler.
+// serveMetrics answers /unio/metrics. A Bearer credential is checked against
+// the metrics token alone and never reaches SigV4, so a wrong token cannot be
+// rescued by a valid signature. Any other request is authenticated and must
+// hold the admin action.
 func (s *Server) serveMetrics(ctx context.Context, c *app.RequestContext) {
 	resource := "/unio/metrics"
 	if s.cfg.Metrics == nil {
 		apierr.Write(c, s.logger, s3err.Errorf(s3err.NotImplemented, "metrics are not enabled on this node"), resource)
+		return
+	}
+	if token, bearer := parseBearer(c.Request.Header.Peek("Authorization")); bearer {
+		// The header and the token are never logged; the rejection is logged
+		// with the request id only.
+		if !s.metricsToken.matches(token) {
+			s.logger.Warn("metrics bearer token rejected", "request_id", reqinfo.Get(c).RequestID, "remote", c.RemoteAddr().String())
+			apierr.Write(c, s.logger, s3err.Errorf(s3err.AccessDenied, "Access Denied"), resource)
+			return
+		}
+		s.writeMetrics(ctx, c, resource)
 		return
 	}
 	header := requestHeader(c)
@@ -53,6 +67,12 @@ func (s *Server) serveMetrics(ctx context.Context, c *app.RequestContext) {
 		apierr.Write(c, s.logger, err, resource)
 		return
 	}
+	s.writeMetrics(ctx, c, resource)
+}
+
+// writeMetrics runs the configured metrics handler and sends its output. The
+// caller has already authorized the request.
+func (s *Server) writeMetrics(ctx context.Context, c *app.RequestContext, resource string) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, resource, nil)
 	if err != nil {
 		apierr.Write(c, s.logger, s3err.Wrap(s3err.InternalError, err), resource)

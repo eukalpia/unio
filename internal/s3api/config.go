@@ -27,6 +27,25 @@ const (
 	copyBufferSize = 64 << 10
 )
 
+// Observer receives one call for every request, once its response is complete.
+// Rejected requests are reported too. A streamed GET is complete after its last
+// body byte, so its duration covers the whole stream and bytesOut counts the
+// body bytes actually written; an aborted stream reports the bytes written
+// before the abort. Any other response is complete when its handler chain has
+// produced it, and the transport writes it right after the call.
+//
+// op is the S3 API name, such as "GetObject" or "ListObjectsV2". Both health
+// probes report "Health", /unio/metrics reports "Metrics", and a request
+// rejected before routing reports "Unknown". bytesIn counts the request body
+// bytes the server read from the connection; a body the server never reads is
+// not counted. bytesOut counts response body bytes, not headers.
+//
+// ObserveHTTPRequest runs on the request goroutine, so it must be fast and must
+// not block.
+type Observer interface {
+	ObserveHTTPRequest(op string, status int, d time.Duration, bytesIn, bytesOut int64)
+}
+
 // Config configures the S3 HTTP front end. Zero durations and limits take the
 // Default values above; Addr is required.
 type Config struct {
@@ -69,12 +88,28 @@ type Config struct {
 	// Readiness reports whether the node can serve requests. It backs
 	// /unio/health/ready. Nil means always ready.
 	Readiness func(ctx context.Context) error
-	// Metrics serves /unio/metrics. It requires the admin action. Nil makes the
-	// endpoint answer NotImplemented.
+	// Metrics serves /unio/metrics. A request with a Bearer token must present
+	// MetricsToken; any other request must be signed by a user with the admin
+	// action. Nil makes the endpoint answer NotImplemented.
 	Metrics http.Handler
+	// MetricsToken is the bearer token that /unio/metrics accepts in an
+	// "Authorization: Bearer <token>" header, for scrapers that cannot sign
+	// SigV4. Nil or empty disables the token. New keeps only a SHA-256 digest
+	// of it, so later changes to the slice have no effect. The token is
+	// compared in constant time. Its length is checked by internal/config,
+	// which requires at least 32 bytes; this package does not check it.
+	//
+	// A request that presents a Bearer credential is judged by the token
+	// alone. A wrong, empty or missing token, or any token while none is
+	// configured, is 403 AccessDenied and never falls back to SigV4. Without a
+	// Bearer header the endpoint keeps the SigV4 path with the admin action.
+	MetricsToken []byte
 	// BufferBudget bounds the memory of GET copy buffers. Nil selects a budget
 	// of DefaultBufferBudget bytes owned by the server.
 	BufferBudget *bufpool.Budget
+	// Observer receives one call per request. Nil disables observation, and
+	// then no per-request record is made. See Observer for the arguments.
+	Observer Observer
 }
 
 // withDefaults returns a copy of c with zero fields replaced by defaults, and

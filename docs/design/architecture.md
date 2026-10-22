@@ -207,8 +207,8 @@ compaction updates only the local index and never writes to Raft. See
 ## 7. UniWire internode protocol
 
 - A single TCP port (9100), **always mTLS** with TLS 1.3.
-  - Nothing disables it. There is no plaintext option, and configuration
-    refuses `http` endpoints.
+  - The only way to disable it is the explicit `--insecure-internode` flag,
+    meant for benchmarks; using it prints a loud warning.
 - **Trust bootstrap from a shared secret.**
   - An Ed25519 cluster CA key is derived deterministically via HKDF from
     `UNIO_CLUSTER_SECRET` (at least 32 characters).
@@ -269,8 +269,19 @@ compaction updates only the local index and never writes to Raft. See
   - cluster information;
   - triggering repair.
 - **Service endpoints:** `/unio/health/live`, `/unio/health/ready`, and
-  `/unio/metrics`. Metrics accept a bearer token (`metrics.token`) when one
-  is configured, and otherwise require SigV4 with admin rights.
+  `/unio/metrics`.
+  - Health probes need no credentials.
+  - `/unio/metrics` accepts `Authorization: Bearer <token>` with the metrics
+    token (`metrics.token` in the configuration), for scrapers that cannot sign SigV4. The
+    token is compared in constant time through SHA-256 digests. A Bearer
+    header with a wrong or empty token, or any Bearer header on a node with no
+    token configured, gets `403 AccessDenied` and never falls back to SigV4.
+    Without a Bearer header the endpoint takes the SigV4 path and needs the
+    admin action.
+  - Every request is reported once to `Config.Observer`, with its S3 API name
+    (`Health`, `Metrics` and `Unknown` for requests rejected before routing),
+    status, duration and body bytes in and out. A streamed GET is reported
+    after its last byte, and an aborted stream reports the bytes it wrote.
 
 Planned for later milestones (see [ROADMAP](../../ROADMAP.md)):
 
@@ -304,7 +315,7 @@ Planned for later milestones (see [ROADMAP](../../ROADMAP.md)):
   - XML bodies ≤ 2 MiB;
   - objects ≤ 5 TiB; parts ≤ 5 GiB; at most 10,000 parts.
 - **DoS protection:**
-  - header, read-idle, write-idle and keep-alive idle timeouts (slowloris);
+  - header, body and idle timeouts (slowloris);
   - a concurrency limit with a bounded queue, returning `503 SlowDown` when
     it is exceeded;
   - a global memory budget for buffers.
@@ -362,8 +373,7 @@ Planned for later milestones (see [ROADMAP](../../ROADMAP.md)):
   - `go test -bench` covers every hot path and is compared with `benchstat`
     in CI;
   - cluster-level comparisons against MinIO use `warp`.
-- `pprof` is off by default. When enabled, it listens only on a loopback
-  address (`metrics.pprof_address`) and requires the metrics token.
+- `pprof` is served only behind authentication.
 
 ## 13. Module layout
 
