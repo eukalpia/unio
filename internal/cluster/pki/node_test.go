@@ -4,6 +4,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"net"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -27,8 +28,8 @@ func TestIssueNodeCertificateShape(t *testing.T) {
 	if len(leaf.URIs) != 1 || leaf.URIs[0].String() != "unio://node/node1" {
 		t.Fatalf("URI SANs = %v, want exactly unio://node/node1", leaf.URIs)
 	}
-	if len(leaf.DNSNames) != 1 || leaf.DNSNames[0] != "node1.internal" {
-		t.Fatalf("DNS SANs = %v", leaf.DNSNames)
+	if want := []string{"node1.node.unio", "node1.internal"}; !slices.Equal(leaf.DNSNames, want) {
+		t.Fatalf("DNS SANs = %v, want %v", leaf.DNSNames, want)
 	}
 	if len(leaf.IPAddresses) != 2 || !leaf.IPAddresses[0].Equal(net.ParseIP("10.0.0.7")) || !leaf.IPAddresses[1].Equal(net.ParseIP("::1")) {
 		t.Fatalf("IP SANs = %v", leaf.IPAddresses)

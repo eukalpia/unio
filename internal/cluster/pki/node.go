@@ -20,32 +20,52 @@ import (
 const (
 	nodeURIScheme = "unio"
 	nodeURIHost   = "node"
-	maxNodeIDLen  = 64
+
+	// nodeDNSSuffix is the DNS zone that node names live in. A node's
+	// certificate names it <id>.node.unio, and a dialer sets ServerName to that
+	// name, so the standard hostname check binds the certificate to the node.
+	nodeDNSSuffix = "node.unio"
+
+	// maxNodeIDLen is the longest DNS label, so the longest node id.
+	maxNodeIDLen = 63
 )
 
-// ValidateNodeID reports whether id is usable as a node identity. Node ids
-// appear in certificate URIs, so they are restricted to ASCII letters,
-// digits, '.', '_' and '-', with at most 64 characters.
+// ValidateNodeID reports whether id is usable as a node identity. A node id is
+// a DNS label, because it appears in the certificate's DNS name
+// <id>.node.unio. It must be 1 to 63 characters from lowercase ASCII letters,
+// digits and hyphens, and it must not begin or end with a hyphen.
 func ValidateNodeID(id ids.NodeID) error {
 	s := string(id)
 	if s == "" || len(s) > maxNodeIDLen {
 		return fmt.Errorf("pki: node id must be 1 to %d characters", maxNodeIDLen)
 	}
+	if s[0] == '-' || s[len(s)-1] == '-' {
+		return fmt.Errorf("pki: node id %q must not begin or end with a hyphen", s)
+	}
 	for i := range len(s) {
 		c := s[i]
 		switch {
-		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '.', c == '_', c == '-':
+		case c >= 'a' && c <= 'z', c >= '0' && c <= '9', c == '-':
 		default:
-			return fmt.Errorf("pki: node id %q has an invalid character", s)
+			return fmt.Errorf("pki: node id %q is not a DNS label: use lowercase letters, digits and hyphens", s)
 		}
 	}
 	return nil
 }
 
+// NodeDNSName returns the DNS name of node id, the name a dialer sets as
+// ServerName and a certificate for that node carries.
+func NodeDNSName(id ids.NodeID) (string, error) {
+	if err := ValidateNodeID(id); err != nil {
+		return "", err
+	}
+	return string(id) + "." + nodeDNSSuffix, nil
+}
+
 // IssueNode generates a fresh Ed25519 key and a one-shot certificate for node
-// id, valid for DefaultLifetime. The certificate carries CN and URI SAN
-// "unio://node/<id>", which is how peers learn the node's identity, plus the
-// given hosts as DNS or IP SANs. A node that stays up should use an Issuer,
+// id, valid for DefaultLifetime. The certificate names the node twice: as the
+// URI SAN unio://node/<id>, and as the DNS name <id>.node.unio. It also carries
+// the given hosts as DNS or IP SANs. A node that stays up should use an Issuer,
 // which renews the certificate before it expires.
 func (ca *CA) IssueNode(id ids.NodeID, hosts []string) (tls.Certificate, error) {
 	now := time.Now()
@@ -55,6 +75,10 @@ func (ca *CA) IssueNode(id ids.NodeID, hosts []string) (tls.Certificate, error) 
 // issueAt is IssueNode with explicit validity bounds, for tests.
 func (ca *CA) issueAt(id ids.NodeID, hosts []string, notBefore, notAfter time.Time) (tls.Certificate, error) {
 	uri, err := nodeURI(id)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	dnsName, err := NodeDNSName(id)
 	if err != nil {
 		return tls.Certificate{}, err
 	}
@@ -78,7 +102,7 @@ func (ca *CA) issueAt(id ids.NodeID, hosts []string, notBefore, notAfter time.Ti
 		KeyUsage:     x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		URIs:         []*url.URL{uri},
-		DNSNames:     dns,
+		DNSNames:     append([]string{dnsName}, dns...),
 		IPAddresses:  ips,
 	}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, ca.cert, pub, ca.key)
@@ -141,8 +165,10 @@ func nodeIDFromURI(u *url.URL) (ids.NodeID, bool) {
 	return id, true
 }
 
-// nodeIDFromCert returns the node identity carried by cert. A certificate
-// must carry exactly one identity URI.
+// nodeIDFromCert returns the node identity carried by cert. The certificate
+// must carry exactly one identity URI, and it must also carry the DNS name of
+// that node. The two names are issued together, so a certificate in which they
+// disagree is refused.
 func nodeIDFromCert(cert *x509.Certificate) (ids.NodeID, error) {
 	if cert == nil {
 		return "", errors.New("pki: no peer certificate")
@@ -158,5 +184,14 @@ func nodeIDFromCert(cert *x509.Certificate) (ids.NodeID, error) {
 	if n != 1 {
 		return "", fmt.Errorf("pki: certificate has %d node identity URIs, want 1", n)
 	}
-	return found, nil
+	dnsName, err := NodeDNSName(found)
+	if err != nil {
+		return "", err
+	}
+	for _, name := range cert.DNSNames {
+		if name == dnsName {
+			return found, nil
+		}
+	}
+	return "", fmt.Errorf("pki: certificate does not name node %s in DNS as %s", found, dnsName)
 }

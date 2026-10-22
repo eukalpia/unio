@@ -2,22 +2,21 @@ package pki
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 
 	"github.com/eukalpia/unio/internal/ids"
 )
 
-// ServerConfig returns the TLS configuration for a UniWire listener. It
-// accepts TLS 1.3 only and presents the identity's current certificate through
+// ServerConfig returns the TLS configuration for a UniWire listener. It accepts
+// TLS 1.3 only and presents the identity's current certificate through
 // GetCertificate, so a renewal reaches the next handshake without restarting
-// the listener. It requests a client certificate and verifies it in
-// verifyPeer, against the identity's clock. Session tickets are disabled: a
-// resumed session would skip the peer checks.
+// the listener.
 //
-// The built-in verification is not used because it reads the wall clock, while
-// the identity's clock decides validity.
+// It requires a client certificate that verifies against the identity's roots
+// with the standard checks: chain, client-auth usage, and validity at the
+// identity's clock. VerifyConnection then checks the node identity. Session
+// tickets are disabled, because a resumed session would skip the peer checks.
 func ServerConfig(id *Identity) (*tls.Config, error) {
 	if err := id.check(); err != nil {
 		return nil, err
@@ -28,21 +27,26 @@ func ServerConfig(id *Identity) (*tls.Config, error) {
 		GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 			return id.certificate()
 		},
-		ClientAuth:             tls.RequireAnyClientCert,
-		VerifyPeerCertificate:  verifyPeer(id, x509.ExtKeyUsageClientAuth),
+		ClientAuth:             tls.RequireAndVerifyClientCert,
+		ClientCAs:              id.Roots,
+		Time:                   id.now,
+		VerifyConnection:       verifyPeerIdentity,
 		SessionTicketsDisabled: true,
 	}, nil
 }
 
 // ClientConfig returns the TLS configuration for dialing a UniWire peer. It
-// presents the identity's current certificate through GetClientCertificate, and
-// it accepts only server certificates that chain to the identity's roots, are
-// valid at the identity's clock and carry a node identity.
+// presents the identity's current certificate through GetClientCertificate and
+// verifies the server with the standard checks: chain, server-auth usage,
+// validity at the identity's clock, and the host name in ServerName.
 //
-// Go's standard verification checks host names, which cannot express node
-// identity, so it is disabled and replaced by verifyPeer, which performs the
-// chain check and the identity check. Callers must still compare the returned
-// PeerID with the node they meant to dial.
+// ServerName is the dialed node's DNS identity, from NodeDNSName, and the caller
+// must set it on each dial. A configuration without it cannot complete a
+// handshake, so the node identity is always checked. VerifyConnection then
+// confirms that the URI identity of the certificate is the node that was asked
+// for.
+//
+// Certificate verification is never disabled.
 func ClientConfig(id *Identity) (*tls.Config, error) {
 	if err := id.check(); err != nil {
 		return nil, err
@@ -53,8 +57,9 @@ func ClientConfig(id *Identity) (*tls.Config, error) {
 		GetClientCertificate: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
 			return id.certificate()
 		},
-		InsecureSkipVerify:     true, // #nosec G402 -- replaced by verifyPeer below, which runs on every handshake
-		VerifyPeerCertificate:  verifyPeer(id, x509.ExtKeyUsageServerAuth),
+		RootCAs:                id.Roots,
+		Time:                   id.now,
+		VerifyConnection:       verifyServerIdentity,
 		SessionTicketsDisabled: true,
 	}, nil
 }
@@ -68,35 +73,33 @@ func PeerID(state tls.ConnectionState) (ids.NodeID, error) {
 	return nodeIDFromCert(state.PeerCertificates[0])
 }
 
-// verifyPeer returns a VerifyPeerCertificate hook. It checks the leaf
-// certificate against the identity's roots for usage, at the identity's clock,
-// and requires a node identity URI.
-func verifyPeer(id *Identity, usage x509.ExtKeyUsage) func([][]byte, [][]*x509.Certificate) error {
-	return func(raw [][]byte, _ [][]*x509.Certificate) error {
-		if len(raw) == 0 {
-			return errors.New("pki: peer presented no certificate")
-		}
-		leaf, err := x509.ParseCertificate(raw[0])
-		if err != nil {
-			return fmt.Errorf("pki: parse peer certificate: %w", err)
-		}
-		inter := x509.NewCertPool()
-		for _, der := range raw[1:] {
-			c, err := x509.ParseCertificate(der)
-			if err != nil {
-				return fmt.Errorf("pki: parse peer intermediate: %w", err)
-			}
-			inter.AddCert(c)
-		}
-		if _, err := leaf.Verify(x509.VerifyOptions{
-			Roots:         id.Roots,
-			Intermediates: inter,
-			KeyUsages:     []x509.ExtKeyUsage{usage},
-			CurrentTime:   id.now(),
-		}); err != nil {
-			return fmt.Errorf("pki: peer certificate rejected: %w", err)
-		}
-		_, err = nodeIDFromCert(leaf)
+// verifyPeerIdentity is the server's VerifyConnection hook. The standard checks
+// have already verified the client certificate's chain, usage and validity. The
+// hook requires the certificate to carry a well-formed node identity.
+//
+// The server's ConnectionState.ServerName is the name the client asked for, so
+// it is not compared here. Only a client knows which node it meant to reach.
+func verifyPeerIdentity(cs tls.ConnectionState) error {
+	_, err := PeerID(cs)
+	return err
+}
+
+// verifyServerIdentity is the client's VerifyConnection hook. The standard
+// checks have already verified the server certificate's chain, usage, validity,
+// and the host name in ServerName. The hook requires the URI identity of the
+// certificate to be the node named by ServerName, so a certificate is accepted
+// only for the node that was dialed.
+func verifyServerIdentity(cs tls.ConnectionState) error {
+	peer, err := PeerID(cs)
+	if err != nil {
 		return err
 	}
+	want, err := NodeDNSName(peer)
+	if err != nil {
+		return err
+	}
+	if cs.ServerName != want {
+		return fmt.Errorf("pki: server certificate is for node %s, but node %s was dialed", peer, cs.ServerName)
+	}
+	return nil
 }
