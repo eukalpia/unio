@@ -47,6 +47,8 @@ x-unio-node: &unio-node
   environment: &unio-env
     # Every drive in the cluster: https://node1:9100/data1 ... https://node4:9100/data4
     UNIO_ENDPOINTS: "https://node{1...4}:9100/data{1...4}"
+    # Drive sync mode: always (default) or batch. See docs/design/architecture.md.
+    UNIO_STORAGE_SYNC: ${UNIO_STORAGE_SYNC:-always}
     UNIO_CLUSTER_SECRET_FILE: /run/secrets/unio_cluster_secret
     UNIO_ROOT_USER_FILE: /run/secrets/unio_root_user
     UNIO_ROOT_PASSWORD_FILE: /run/secrets/unio_root_password

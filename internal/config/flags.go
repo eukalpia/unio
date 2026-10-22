@@ -81,6 +81,8 @@ func settings() []setting {
 			func(c *Config) *Size { return &c.Storage.InlineThreshold }),
 		sizeSetting("memory-budget", "UNIO_MEMORY_BUDGET", "memory budget for I/O buffers, e.g. 1GiB",
 			func(c *Config) *Size { return &c.Storage.MemoryBudget }),
+		strSetting("storage-sync", "UNIO_STORAGE_SYNC", "when drive writes reach stable storage: always (each write) or batch (in groups; a power loss can lose the last batch)",
+			func(c *Config) *string { return &c.Storage.Sync }),
 		intSetting("max-requests", "UNIO_MAX_REQUESTS", "concurrent S3 requests",
 			func(c *Config) *int { return &c.Limits.MaxRequests }),
 		intSetting("request-queue", "UNIO_REQUEST_QUEUE", "S3 requests waiting for a slot before 503 SlowDown",

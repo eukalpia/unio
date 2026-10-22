@@ -275,6 +275,13 @@ func checkStorage(c *Config, r *report) {
 	if b := c.Storage.MemoryBudget; b < minMemoryBudget {
 		r.errorf("storage.memory_budget %s must be at least %s (UNIO_MEMORY_BUDGET)", b, Size(minMemoryBudget))
 	}
+	switch c.Storage.Sync {
+	case SyncAlways:
+	case SyncBatch:
+		r.warnf("storage.sync is %q: drive writes are acknowledged before they are synced, so a power loss can lose writes from the last batch interval", SyncBatch)
+	default:
+		r.errorf("storage.sync %q must be %q or %q (UNIO_STORAGE_SYNC)", c.Storage.Sync, SyncAlways, SyncBatch)
+	}
 }
 
 // checkLimits validates concurrency limits.

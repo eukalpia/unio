@@ -57,6 +57,7 @@ func Defaults() Config {
 		Storage: StorageConfig{
 			InlineThreshold: DefaultInlineThreshold,
 			MemoryBudget:    DefaultMemoryBudget,
+			Sync:            SyncAlways,
 		},
 		Limits: LimitsConfig{
 			MaxRequests:           DefaultMaxRequests,

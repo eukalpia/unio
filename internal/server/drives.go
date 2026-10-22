@@ -26,7 +26,7 @@ func openDrives(ctx context.Context, lc *lifecycle, cfg *config.Config, id ident
 	var drives []*local.Drive
 	for _, ep := range cfg.LocalDrives() {
 		driveID := topology.DriveIDFor(id.clusterID, id.node, ep.Path)
-		d, err := openDrive(ctx, ep, id, driveID, budget)
+		d, err := openDrive(ctx, cfg, ep, id, driveID, budget)
 		switch {
 		case errors.Is(err, local.ErrClusterMismatch), errors.Is(err, local.ErrDriveIDMismatch):
 			return nil, fmt.Errorf("server: drive %s belongs to another cluster or slot: %w", ep.Path, err)
@@ -43,7 +43,7 @@ func openDrives(ctx context.Context, lc *lifecycle, cfg *config.Config, id ident
 
 // openDrive formats the drive at ep if it is new and opens it, checking its
 // cluster and slot identity.
-func openDrive(ctx context.Context, ep config.Endpoint, id identity, driveID ids.DriveID, budget *bufpool.Budget) (*local.Drive, error) {
+func openDrive(ctx context.Context, cfg *config.Config, ep config.Endpoint, id identity, driveID ids.DriveID, budget *bufpool.Budget) (*local.Drive, error) {
 	if err := local.EnsureFormatted(ctx, ep.Path, id.clusterID, driveID); err != nil {
 		return nil, err
 	}
@@ -53,5 +53,14 @@ func openDrive(ctx context.Context, ep config.Endpoint, id identity, driveID ids
 		Endpoint:   ep.String(),
 		ExpectedID: driveID,
 		Budget:     budget,
+		SyncPolicy: syncPolicy(cfg.Storage.Sync),
 	})
+}
+
+// syncPolicy maps the configured sync mode to the drive option.
+func syncPolicy(mode string) local.SyncPolicy {
+	if mode == config.SyncBatch {
+		return local.SyncBatch
+	}
+	return local.SyncAlways
 }

@@ -109,7 +109,20 @@ type StorageConfig struct {
 	// MemoryBudget bounds the buffer pool. Requests wait for memory rather
 	// than allocating past it.
 	MemoryBudget Size `yaml:"memory_budget"`
+	// Sync selects when a drive write reaches stable storage: SyncAlways
+	// syncs every write before it is acknowledged; SyncBatch acknowledges
+	// writes in the page cache and syncs them in groups, so a power loss can
+	// lose writes from the last batch interval.
+	Sync string `yaml:"sync"`
 }
+
+// Drive sync modes for StorageConfig.Sync.
+const (
+	// SyncAlways syncs every drive write before acknowledging it.
+	SyncAlways = "always"
+	// SyncBatch syncs drive writes in groups after acknowledging them.
+	SyncBatch = "batch"
+)
 
 // LimitsConfig bounds concurrency.
 type LimitsConfig struct {
