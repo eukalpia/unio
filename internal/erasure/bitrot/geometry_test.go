@@ -126,3 +126,27 @@ func TestSpanRejectsBadArguments(t *testing.T) {
 		})
 	}
 }
+
+func TestStripeRange(t *testing.T) {
+	// Framed blocks of an object of 25 bytes, k=4, stripe 10: 19, 19, 18 bytes.
+	const size, k, stripe = 25, 4, 10
+	tests := []struct {
+		name             string
+		first, end       int64
+		wantOff, wantLen int64
+	}{
+		{"all stripes", 0, 3, 0, 56},
+		{"middle stripe", 1, 2, 19, 19},
+		{"last stripe", 2, 3, 38, 18},
+		{"first two", 0, 2, 0, 38},
+		{"empty", 1, 1, 19, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			off, length := StripeRange(size, k, stripe, tt.first, tt.end)
+			if off != tt.wantOff || length != tt.wantLen {
+				t.Fatalf("StripeRange = (%d,%d), want (%d,%d)", off, length, tt.wantOff, tt.wantLen)
+			}
+		})
+	}
+}
