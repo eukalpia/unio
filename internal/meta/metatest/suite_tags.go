@@ -1,6 +1,7 @@
 package metatest
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/eukalpia/unio/internal/meta"
@@ -18,6 +19,7 @@ func tagsCases() []storeCase {
 		{"Tags/UpdateDeleteMarker", caseUpdateTagsDeleteMarker},
 		{"Tags/UpdateRejectsInvalidSet", caseUpdateTagsInvalid},
 		{"Tags/UpdateMissingBucket", caseUpdateTagsMissingBucket},
+		{"Tags/UpdateLongVersionID", caseUpdateTagsLongVersionID},
 	}
 }
 
@@ -174,4 +176,14 @@ func caseUpdateTagsInvalid(t *testing.T, s meta.Store) {
 func caseUpdateTagsMissingBucket(t *testing.T, s meta.Store) {
 	_, err := s.UpdateTags(t.Context(), "absent-bucket", "k", "", "a=b")
 	requireCode(t, err, s3err.NoSuchBucket)
+}
+
+// caseUpdateTagsLongVersionID checks that a version id too long to be stored
+// names no version: the store answers NoSuchVersion, the client's error, and
+// does not fail with an internal error.
+func caseUpdateTagsLongVersionID(t *testing.T, s meta.Store) {
+	mustCreateBucket(t, s, testBucket, object.VersioningEnabled)
+	mustPutObject(t, s, objectRecord(testBucket, "k", newVersionID(), "one"))
+	_, err := s.UpdateTags(t.Context(), testBucket, "k", strings.Repeat("v", 65), "a=b")
+	requireCode(t, err, s3err.NoSuchVersion)
 }

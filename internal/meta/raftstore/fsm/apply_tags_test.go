@@ -122,6 +122,7 @@ func TestUpdateTags(t *testing.T) {
 		{"unknown version", updateTagsCmd("k", "v9", "a=b"), s3err.NoSuchVersion},
 		{"latest is a delete marker", updateTagsCmd("gone", "", "a=b"), s3err.NoSuchKey},
 		{"delete marker named by version", updateTagsCmd("gone", "m1", "a=b"), s3err.MethodNotAllowed},
+		{"version id too long", updateTagsCmd("k", strings.Repeat("v", maxIDLength+1), "a=b"), s3err.NoSuchVersion},
 	}
 	for _, tc := range errorCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -137,7 +138,6 @@ func TestUpdateTags(t *testing.T) {
 	}{
 		{"zero bucket id", &pb.Command{Cmd: &pb.Command_UpdateTags{UpdateTags: &pb.UpdateTags{Key: "k", Tags: "a=b"}}}},
 		{"empty key", updateTagsCmd("", "", "a=b")},
-		{"version id too long", updateTagsCmd("k", strings.Repeat("v", maxIDLength+1), "a=b")},
 		{"duplicate tag key", updateTagsCmd("k", "", "a=1&a=2")},
 		{"reserved prefix", updateTagsCmd("k", "", "aws:x=1")},
 		{"eleven tags", updateTagsCmd("k", "", tagsString(object.MaxTags+1))},

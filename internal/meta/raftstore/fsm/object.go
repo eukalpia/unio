@@ -270,6 +270,11 @@ func (f *FSM) updateTags(b *pebble.Batch, c *pb.UpdateTags) (*pb.ApplyResult, er
 	if err := validUpdateTags(c); err != nil {
 		return nil, err
 	}
+	if len(c.VersionId) > maxIDLength {
+		// No stored version has an id this long, so the id names no version. A
+		// client can send it, so it is an unknown version, not a malformed command.
+		return nil, s3err.Errorf(s3err.NoSuchVersion, "version does not exist")
+	}
 	bucket := ids.BucketID(c.BucketId)
 	rec, dbKey, err := f.resolveVersion(bucket, []byte(c.Key), c.VersionId)
 	if err != nil {

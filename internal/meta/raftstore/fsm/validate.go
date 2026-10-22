@@ -340,9 +340,6 @@ func validUpdateTags(c *pb.UpdateTags) error {
 	if err := validKey(c.Key); err != nil {
 		return err
 	}
-	if err := validVersionID(c.VersionId); err != nil {
-		return err
-	}
 	if _, err := object.DecodeTags(c.Tags); err != nil {
 		return errMalformed("tag set")
 	}
