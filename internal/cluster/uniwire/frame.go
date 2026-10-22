@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 )
 
 // RPC frames carry one message on an RPC connection:
@@ -53,23 +54,48 @@ type rpcFrame struct {
 	payload []byte
 }
 
+// lengthU32 converts a length to the uint32 field that carries it on the wire.
+// It refuses a negative length, a length above limit, and a length that the
+// field cannot hold, so an encoder can never truncate a length.
+func lengthU32(n, limit int) (uint32, error) {
+	if n < 0 {
+		return 0, fmt.Errorf("uniwire: negative length %d", n)
+	}
+	if n > limit || int64(n) > math.MaxUint32 {
+		return 0, fmt.Errorf("%w: length %d exceeds limit %d", errFrameTooLarge, n, limit)
+	}
+	return uint32(n), nil
+}
+
+// lengthU8 converts a length to the uint8 field that carries it on the wire. It
+// refuses a negative length and a length above limit or above 255.
+func lengthU8(n, limit int) (uint8, error) {
+	if n < 0 || n > limit || n > math.MaxUint8 {
+		return 0, fmt.Errorf("uniwire: length %d outside [0, %d]", n, min(limit, math.MaxUint8))
+	}
+	return uint8(n), nil
+}
+
 // appendRPCFrame appends one complete frame to dst. The parts are
 // concatenated as the payload. It fails, without writing anything to dst's
-// existing bytes, when the body would exceed max.
+// existing bytes, when the method name or the body does not fit its field or
+// exceeds max.
 func appendRPCFrame(dst []byte, max int, typ frameType, id uint64, method string, parts ...[]byte) ([]byte, error) {
-	if len(method) > maxMethodLen {
-		return dst, fmt.Errorf("uniwire: method name is %d bytes, limit is %d", len(method), maxMethodLen)
+	mlen, err := lengthU8(len(method), maxMethodLen)
+	if err != nil {
+		return dst, fmt.Errorf("uniwire: method name: %w", err)
 	}
 	body := rpcFixedLen + len(method)
 	for _, p := range parts {
 		body += len(p)
 	}
-	if body > max {
-		return dst, fmt.Errorf("%w: body %d bytes exceeds limit %d", errFrameTooLarge, body, max)
+	blen, err := lengthU32(body, max)
+	if err != nil {
+		return dst, err
 	}
-	dst = binary.BigEndian.AppendUint32(dst, uint32(body))
+	dst = binary.BigEndian.AppendUint32(dst, blen)
 	dst = binary.BigEndian.AppendUint64(dst, id)
-	dst = append(dst, byte(typ), byte(len(method)))
+	dst = append(dst, byte(typ), mlen)
 	dst = append(dst, method...)
 	for _, p := range parts {
 		dst = append(dst, p...)
@@ -128,10 +154,11 @@ func appendMessageFrame(dst []byte, max int, msg vtMessage) ([]byte, error) {
 	if err != nil {
 		return dst, fmt.Errorf("uniwire: marshal frame: %w", err)
 	}
-	if len(b) > max {
-		return dst, fmt.Errorf("%w: message %d bytes exceeds limit %d", errFrameTooLarge, len(b), max)
+	blen, err := lengthU32(len(b), max)
+	if err != nil {
+		return dst, fmt.Errorf("uniwire: message: %w", err)
 	}
-	dst = binary.BigEndian.AppendUint32(dst, uint32(len(b)))
+	dst = binary.BigEndian.AppendUint32(dst, blen)
 	return append(dst, b...), nil
 }
 
@@ -143,8 +170,9 @@ func readMessageFrame(r io.Reader, max int, msg vtMessage) error {
 		return err
 	}
 	n := int(binary.BigEndian.Uint32(hdr[:]))
-	if n > max {
-		return fmt.Errorf("%w: message length %d exceeds limit %d", errMalformedFrame, n, max)
+	// n is negative when int is 32 bits and the length has its top bit set.
+	if n < 0 || n > max {
+		return fmt.Errorf("%w: message length %d outside [0, %d]", errMalformedFrame, n, max)
 	}
 	b := make([]byte, n)
 	if _, err := io.ReadFull(r, b); err != nil {
