@@ -1,0 +1,15 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "unio.fullname" . }}
+  labels:
+    {{- include "unio.labels" . | nindent 4 }}
+spec:
+  # One node at a time: a drain takes a whole node's drives, so a second
+  # concurrent disruption could take the erasure sets below quorum.
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      {{- include "unio.selectorLabels" . | nindent 6 }}
+{{- end }}

@@ -1,0 +1,38 @@
+{{- if .Values.metrics.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "unio.fullname" . }}
+  labels:
+    {{- include "unio.labels" . | nindent 4 }}
+    {{- with .Values.metrics.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "unio.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: s3
+  endpoints:
+    - port: s3
+      path: /unio/metrics
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+      {{- with .Values.metrics.serviceMonitor.scrapeTimeout }}
+      scrapeTimeout: {{ . }}
+      {{- end }}
+      {{- if .Values.tls.existingSecret }}
+      scheme: HTTPS
+      {{- with .Values.metrics.serviceMonitor.tlsConfig }}
+      tlsConfig:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- else }}
+      scheme: HTTP
+      {{- end }}
+      # The metrics endpoint accepts this bearer token, read from the chart Secret.
+      authorization:
+        type: Bearer
+        credentials:
+          name: {{ include "unio.credentialsSecret" . }}
+          key: metrics-token
+{{- end }}

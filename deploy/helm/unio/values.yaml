@@ -1,0 +1,147 @@
+# Default values for the Unio chart. The schema in values.schema.json checks
+# every value. See docs/deploy/kubernetes.md for the install and upgrade steps.
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Cluster domain of the Kubernetes cluster. Node identities and drive
+# endpoints are built from it, so it must match the cluster.
+clusterDomain: cluster.local
+
+image:
+  # Registry path of the Unio image. Build it with deploy/docker/Dockerfile and
+  # push it to a registry that the nodes can pull from.
+  repository: unio
+  # Image tag. Empty means the chart appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# Number of nodes. Each node is one pod of the StatefulSet.
+# Fixed for the life of the cluster in v0.1: see the scaling section of the docs.
+replicas: 4
+# Drives per node. Each drive is one PersistentVolumeClaim, mounted at
+# /data1 to /dataN. replicas times drivesPerNode must form erasure sets:
+# the total must be 1, or have a divisor from 4 to 16.
+# Fixed for the life of the cluster in v0.1.
+drivesPerNode: 4
+
+persistence:
+  # Size of each drive.
+  size: 10Gi
+  # Empty uses the default storage class of the cluster.
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  annotations: {}
+
+config:
+  # S3 region served by the nodes. SigV4 credential scopes must name it.
+  region: us-east-1
+  # Virtual-host suffixes for bucket.<suffix> addressing, for example
+  # s3.example.com. Empty means path-style addressing only.
+  domains: []
+  # always syncs every drive write before it is acknowledged. batch
+  # acknowledges writes first and syncs them in groups, so a power loss can
+  # lose the last batch interval.
+  storageSync: always
+  # Memory budget for I/O buffers. Keep the memory limit of the container
+  # above it.
+  memoryBudget: 1GiB
+  logLevel: info
+  logFormat: json
+  erasure:
+    # Drives per erasure set. Zero picks the largest size from 4 to 16 that
+    # divides the total drive count.
+    setDriveCount: 0
+    # Parity shards per set. Zero picks 2 for sets of up to 8 drives and 4
+    # for larger sets.
+    parity: 0
+
+auth:
+  # Name of an existing Secret with the keys cluster-secret, root-user and
+  # root-password, and metrics-token when metrics.token.enabled is true.
+  # Empty means the chart creates the Secret on the first install and keeps
+  # its values on every upgrade.
+  existingSecret: ""
+
+tls:
+  # Name of an existing kubernetes.io/tls Secret, with the keys tls.crt and
+  # tls.key, for the S3 endpoint. Empty serves plain HTTP on port 9000.
+  existingSecret: ""
+  # Refuse to start the S3 endpoint without TLS.
+  require: false
+
+metrics:
+  token:
+    # Protect /unio/metrics with a bearer token. Without it the endpoint
+    # accepts only SigV4 requests from an admin.
+    enabled: false
+  serviceMonitor:
+    # Create a Prometheus Operator ServiceMonitor. It needs
+    # metrics.token.enabled and the monitoring.coreos.com CRDs.
+    enabled: false
+    interval: 30s
+    scrapeTimeout: ""
+    labels: {}
+    tlsConfig: {}
+
+service:
+  annotations: {}
+
+networkPolicy:
+  # Allow internode traffic only from pods of this release, on port 9100.
+  enabled: true
+  # Peers that may reach the S3 port (9000). Empty allows any source.
+  s3From: []
+
+podDisruptionBudget:
+  # Allows at most one node to be unavailable at a time.
+  enabled: true
+
+ingress:
+  s3:
+    enabled: false
+    className: ""
+    annotations: {}
+    # Host names for the S3 API. Add *.<host> too for virtual-host buckets,
+    # when the ingress controller supports wildcard hosts.
+    hosts: []
+    tls: []
+  console:
+    # The web console, served at /unio/console/ on the S3 port.
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts: []
+    tls: []
+
+# preferred spreads the pods over Kubernetes nodes when possible. required
+# refuses to schedule two pods on one Kubernetes node. none disables the rule.
+antiAffinity: preferred
+nodeSelector: {}
+tolerations: []
+podLabels: {}
+podAnnotations: {}
+priorityClassName: ""
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    # Keep this above config.memoryBudget, plus the process overhead.
+    memory: 2Gi
+
+probes:
+  # The startup probe runs every 5 seconds. With 120 attempts, the first
+  # bootstrap may take up to 10 minutes before the pod is restarted.
+  startupFailureThreshold: 120
+
+# Seconds that Kubernetes waits for a pod to stop. Must be longer than the
+# server shutdown deadline, which is 30 seconds by default.
+terminationGracePeriodSeconds: 60
+
+# Extra environment variables for the Unio container. Do not put secrets here:
+# mount them with auth.existingSecret or tls.existingSecret instead.
+extraEnv: []
