@@ -9,7 +9,8 @@ import (
 )
 
 // Build metadata. The release build sets these with
-// -ldflags "-X github.com/eukalpia/unio/cmd/unio.version=..." (and commit, date).
+// -ldflags "-X main.version=..." (and main.commit, main.date). The linker names
+// symbols of package main by "main", not by the module path.
 // They are the only package-level variables in the CLI: the linker writes them
 // once and nothing mutates them at run time.
 var (
