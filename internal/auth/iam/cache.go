@@ -9,11 +9,18 @@ import (
 // generations, like the signing-key cache: when the current one is full it
 // becomes the previous one and the older generation is dropped. Retention is
 // therefore at most 2*size entries. Expired entries are dropped on access.
+//
+// An epoch counter fences fills against invalidation. Every remove and clear
+// advances the epoch. A reader takes the epoch before it loads a value from
+// storage and inserts with putAt, which succeeds only if the epoch is
+// unchanged. A load that raced with an invalidation therefore cannot put the
+// value it read back into the cache.
 type ttlCache[K comparable, V any] struct {
 	mu    sync.Mutex
 	clock func() time.Time
 	ttl   time.Duration
 	size  int
+	epo   uint64
 	cur   map[K]ttlEntry[V]
 	prev  map[K]ttlEntry[V]
 }
@@ -60,26 +67,42 @@ func (c *ttlCache[K, V]) get(k K) (V, bool) {
 	return e.value, true
 }
 
-// put caches v for k for the TTL.
-func (c *ttlCache[K, V]) put(k K, v V) {
+// epoch returns the current invalidation epoch. A reader takes it before it
+// loads a value, and passes it to putAt.
+func (c *ttlCache[K, V]) epoch() uint64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.insertLocked(k, ttlEntry[V]{value: v, expires: c.clock().Add(c.ttl)})
+	return c.epo
 }
 
-// remove drops k from the cache.
+// putAt caches v for k, unless an invalidation has happened since epoch was
+// taken. It reports whether v was cached.
+func (c *ttlCache[K, V]) putAt(k K, v V, epoch uint64) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.epo != epoch {
+		return false
+	}
+	c.insertLocked(k, ttlEntry[V]{value: v, expires: c.clock().Add(c.ttl)})
+	return true
+}
+
+// remove drops k from the cache and fences in-flight fills.
 func (c *ttlCache[K, V]) remove(k K) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.epo++
 	delete(c.cur, k)
 	delete(c.prev, k)
 }
 
-// clear drops every entry. It is used after administrative changes, which
-// can affect entries for other keys (for example, all keys of a user).
+// clear drops every entry and fences in-flight fills. It is used after
+// administrative changes, which can affect entries for other keys, such as
+// all keys of a user.
 func (c *ttlCache[K, V]) clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.epo++
 	c.cur = make(map[K]ttlEntry[V])
 	c.prev = nil
 }

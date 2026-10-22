@@ -14,7 +14,7 @@ import (
 func TestTTLCacheExpiresEntries(t *testing.T) {
 	clock := newClock()
 	c := newTTLCache[string, int](clock.Now, 10*time.Second, 8)
-	c.put("a", 1)
+	putNow(c, "a", 1)
 	if v, ok := c.get("a"); !ok || v != 1 {
 		t.Fatal("fresh entry missing")
 	}
@@ -31,8 +31,8 @@ func TestTTLCacheExpiresEntries(t *testing.T) {
 func TestTTLCacheRemoveAndClear(t *testing.T) {
 	clock := newClock()
 	c := newTTLCache[string, int](clock.Now, time.Minute, 8)
-	c.put("a", 1)
-	c.put("b", 2)
+	putNow(c, "a", 1)
+	putNow(c, "b", 2)
 	c.remove("a")
 	if _, ok := c.get("a"); ok {
 		t.Fatal("removed entry still cached")
@@ -48,7 +48,7 @@ func TestTTLCacheIsBounded(t *testing.T) {
 	const size = 16
 	c := newTTLCache[int, int](clock.Now, time.Hour, size)
 	for i := range 5000 {
-		c.put(i, i)
+		putNow(c, i, i)
 		if n := len(c.cur) + len(c.prev); n > 2*size {
 			t.Fatalf("cache holds %d entries, bound is %d", n, 2*size)
 		}
@@ -58,9 +58,9 @@ func TestTTLCacheIsBounded(t *testing.T) {
 func TestTTLCacheKeepsHotEntries(t *testing.T) {
 	clock := newClock()
 	c := newTTLCache[string, int](clock.Now, time.Hour, 4)
-	c.put("hot", 7)
+	putNow(c, "hot", 7)
 	for i := range 200 {
-		c.put(fmt.Sprint("cold", i), i)
+		putNow(c, fmt.Sprint("cold", i), i)
 		if _, ok := c.get("hot"); !ok {
 			t.Fatalf("hot entry evicted after %d inserts", i+1)
 		}
@@ -130,4 +130,36 @@ func TestConcurrentUse(t *testing.T) {
 // identityOf returns the identity an authenticated request of key carries.
 func identityOf(key auth.AccessKey, user string) auth.Identity {
 	return auth.Identity{AccessKey: key.ID, User: user}
+}
+
+// putNow caches v for k as a fill that started now. It is the test form of
+// putAt for fills that cannot race with an invalidation.
+func putNow[K comparable, V any](c *ttlCache[K, V], k K, v V) bool {
+	return c.putAt(k, v, c.epoch())
+}
+
+// TestTTLCacheRejectsFillStartedBeforeInvalidation forces the interleaving: a
+// fill reads its epoch, an invalidation runs, and then the fill tries to
+// insert the value it loaded before the invalidation.
+func TestTTLCacheRejectsFillStartedBeforeInvalidation(t *testing.T) {
+	clock := newClock()
+	c := newTTLCache[string, int](clock.Now, time.Minute, 8)
+	for name, invalidate := range map[string]func(){
+		"remove": func() { c.remove("a") },
+		"clear":  func() { c.clear() },
+	} {
+		t.Run(name, func(t *testing.T) {
+			fill := c.epoch()
+			invalidate()
+			if c.putAt("a", 1, fill) {
+				t.Fatal("a value loaded before the invalidation was cached")
+			}
+			if _, ok := c.get("a"); ok {
+				t.Fatal("stale value visible after the invalidation")
+			}
+			if !putNow(c, "a", 2) {
+				t.Fatal("a fill that started after the invalidation was rejected")
+			}
+		})
+	}
 }
