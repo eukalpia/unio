@@ -25,7 +25,7 @@ type SystemKV interface {
 	// returns the new revision. Fails with ErrRevisionMismatch.
 	Put(ctx context.Context, key string, value []byte, expectRevision uint64) (uint64, error)
 	// Delete removes key under the same revision rules. Deleting a missing
-	// key with AnyRevision succeeds.
+	// key with AnyRevision or with expectRevision 0 succeeds.
 	Delete(ctx context.Context, key string, expectRevision uint64) error
 	// List returns all entries whose key starts with prefix, in key order.
 	List(ctx context.Context, prefix string) ([]KV, error)

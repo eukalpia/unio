@@ -28,6 +28,9 @@ type IAM interface {
 	Authorizer
 	CreateUser(ctx context.Context, name string) (UserInfo, error)
 	DeleteUser(ctx context.Context, name string) error
+	// SetUserEnabled enables or disables a user. Requests signed with a
+	// disabled user's keys fail authentication.
+	SetUserEnabled(ctx context.Context, name string, enabled bool) error
 	ListUsers(ctx context.Context) ([]UserInfo, error)
 	CreateAccessKey(ctx context.Context, user string) (AccessKey, error)
 	DeleteAccessKey(ctx context.Context, accessKeyID string) error
