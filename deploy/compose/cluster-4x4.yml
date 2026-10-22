@@ -1,21 +1,27 @@
 # Local Unio cluster: 4 nodes x 4 drives (16 erasure drives).
 #
+# LOCAL TESTING ONLY. The credentials are local test values for this stack on
+# your own machine. test/e2e/run.sh generates them for each run. A manual run
+# reads them from deploy/compose/.env. Do not use this stack for anything else.
+#
 # Usage, from the repository root:
-#   cp deploy/compose/.env.example deploy/compose/.env   # then fill in the values
-#   chmod 600 deploy/compose/.env
+#   cp deploy/compose/.env.example deploy/compose/.env   # then set the values (see .env.example)
 #   docker compose -f deploy/compose/cluster-4x4.yml up -d --build
 #
 # Ports: S3 is published on the host loopback interface only, node1 to node4 on
-# 127.0.0.1:9001 to 127.0.0.1:9004.
+# 127.0.0.1:9001 to 127.0.0.1:9004. Readiness is served on the S3 port at
+# /unio/health/ready.
 #
-# TLS for S3 is OFF in this local cluster: UNIO_REQUIRE_TLS is not set, so the
-# S3 endpoint serves plain HTTP. Internode traffic on port 9100 is always mTLS,
-# is never published, and stays on the internal network.
+# Internode traffic (port 9100) is always mutual TLS. The certificates are
+# derived from the cluster secret, so no certificate files are needed. The S3
+# endpoint serves plain HTTP in this local stack, because no UNIO_TLS_* variable
+# is set. Port 9100 is never published and stays on the internal network.
 #
 # Secrets are mounted as files under /run/secrets/ and read through the *_FILE
 # variables. They are not passed as environment variables.
 #
-# Do not run this together with rustfs-4x4.yml: both publish host ports 9001 to 9004.
+# Do not run this together with single.yml or rustfs-4x4.yml: they all publish
+# host ports 9001 to 9004.
 
 name: unio-4x4
 
@@ -30,19 +36,24 @@ x-unio-node: &unio-node
   # with SIGKILL and restarts them itself. A restart policy would bring a
   # killed node back before the harness checks that it stayed down.
   stop_grace_period: 30s
+  # The root filesystem is not read-only. Compose rejects environment-sourced
+  # secrets on a read-only service, and this stack passes its secrets that way.
+  # The process runs as the nonroot user from the image, with no capabilities
+  # and no way to gain new ones.
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
   environment: &unio-env
     # Every drive in the cluster: https://node1:9100/data1 ... https://node4:9100/data4
     UNIO_ENDPOINTS: "https://node{1...4}:9100/data{1...4}"
     UNIO_CLUSTER_SECRET_FILE: /run/secrets/unio_cluster_secret
     UNIO_ROOT_USER_FILE: /run/secrets/unio_root_user
     UNIO_ROOT_PASSWORD_FILE: /run/secrets/unio_root_password
-    UNIO_METRICS_TOKEN_FILE: /run/secrets/unio_metrics_token
-    UNIO_LOG_FORMAT: json
   secrets: &unio-secrets
     - unio_cluster_secret
     - unio_root_user
     - unio_root_password
-    - unio_metrics_token
   networks: &unio-networks
     - internal
     - public
@@ -104,7 +115,8 @@ services:
       - node4-data4:/data4
 
 # Secret values come from the environment of the compose process (populated
-# from deploy/compose/.env). Compose writes each one to /run/secrets/<name>.
+# from deploy/compose/.env, or from the variables that test/e2e/run.sh exports).
+# Compose writes each one to /run/secrets/<name>.
 secrets:
   unio_cluster_secret:
     environment: UNIO_CLUSTER_SECRET
@@ -112,8 +124,6 @@ secrets:
     environment: UNIO_ROOT_USER
   unio_root_password:
     environment: UNIO_ROOT_PASSWORD
-  unio_metrics_token:
-    environment: UNIO_METRICS_TOKEN
 
 networks:
   # Node-to-node traffic (UniWire on 9100). No external connectivity, nothing published.
