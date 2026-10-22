@@ -33,6 +33,10 @@ func (s *Server) serveService(ctx context.Context, c *app.RequestContext, rt rou
 		writeText(c, 200, "ok")
 	case router.OpMetrics:
 		s.serveMetrics(ctx, c)
+	case router.OpAdminAPI:
+		s.serveAdmin(ctx, c)
+	case router.OpConsole:
+		s.serveConsole(c)
 	}
 }
 

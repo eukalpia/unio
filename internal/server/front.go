@@ -9,6 +9,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/eukalpia/unio/internal/admin"
 	"github.com/eukalpia/unio/internal/auth/iam"
 	"github.com/eukalpia/unio/internal/config"
 	"github.com/eukalpia/unio/internal/drive/local"
@@ -43,6 +44,11 @@ func startFront(lc *lifecycle, cfg *config.Config, cs *clusterServices, dp *data
 	if err != nil {
 		return nil, fmt.Errorf("server: metrics: %w", err)
 	}
+	recorder := admin.NewRecorder(nil)
+	adm, err := startAdmin(cfg, access, cs, dp, budget, recorder, logger)
+	if err != nil {
+		return nil, err
+	}
 	health := obs.NewHealth(logger)
 	health.AddReadinessCheck("metadata", cs.store.Ready)
 	health.AddReadinessCheck("drives", drivesReady(cfg, drives))
@@ -69,8 +75,10 @@ func startFront(lc *lifecycle, cfg *config.Config, cs *clusterServices, dp *data
 		Readiness:             health.Check,
 		Metrics:               promhttp.HandlerFor(metrics.Registry(), promhttp.HandlerOpts{}),
 		MetricsToken:          token,
-		Observer:              metrics,
+		Observer:              observers{metrics, recorder},
 		BufferBudget:          budget.front,
+		Admin:                 adm.api,
+		Console:               adm.console,
 	}, dp.engine, access, access, logger.With("component", "s3api"))
 	if err != nil {
 		return nil, fmt.Errorf("server: s3 front end: %w", err)

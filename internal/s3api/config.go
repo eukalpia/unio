@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/eukalpia/unio/internal/admin"
 	"github.com/eukalpia/unio/internal/bufpool"
+	"github.com/eukalpia/unio/internal/console"
 )
 
 // Default values applied to zero Config fields.
@@ -35,8 +37,9 @@ const (
 // produced it, and the transport writes it right after the call.
 //
 // op is the S3 API name, such as "GetObject" or "ListObjectsV2". Both health
-// probes report "Health", /unio/metrics reports "Metrics", and a request
-// rejected before routing reports "Unknown". bytesIn counts the request body
+// probes report "Health", /unio/metrics reports "Metrics", the admin API
+// reports "Admin", the console reports "Console", and a request rejected before
+// routing reports "Unknown". bytesIn counts the request body
 // bytes the server read from the connection; a body the server never reads is
 // not counted. bytesOut counts response body bytes, not headers.
 //
@@ -110,6 +113,12 @@ type Config struct {
 	// Observer receives one call per request. Nil disables observation, and
 	// then no per-request record is made. See Observer for the arguments.
 	Observer Observer
+	// Admin serves the admin API under /unio/admin/v1/. Nil makes that path
+	// answer NoSuchKey, as an unknown reserved path does.
+	Admin *admin.Service
+	// Console serves the web console under /unio/console/. Nil makes that path
+	// answer NoSuchKey.
+	Console *console.Handler
 }
 
 // withDefaults returns a copy of c with zero fields replaced by defaults, and

@@ -59,8 +59,10 @@ fuzzed and never trusts lengths, counts or names from the other side.
 | Resource exhaustion | Header, read-idle, write-idle and keep-alive idle timeouts; concurrency limit with bounded queue (`503 SlowDown`); bounded XML bodies; global buffer budget | `s3api/middleware`, `bufpool` |
 | Memory amplification | No allocation sized from client-supplied numbers without a cap; streaming everywhere except bounded XML | all parsers |
 | Information disclosure | Clients see only S3 codes and fixed messages; internal causes are logged with a request id | `s3err`, `s3api/apierr` |
-| Reserved namespace abuse | `/unio/*` is never treated as a bucket; bucket name `unio` is rejected | `s3api/router` |
+| Reserved namespace abuse | `/unio/*` is never treated as a bucket; bucket name `unio` is rejected; the admin API and the console answer only path-style and bare-domain requests, so a virtual-hosted request to those paths is an object request | `s3api/router` |
 | Log injection or secret leakage | Structured logging; signatures, secrets and query strings are never logged | `obs`, `s3api/middleware` |
+| Console script injection | Content-Security-Policy `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`; `X-Content-Type-Options: nosniff`; `Referrer-Policy: no-referrer`; the console has no inline script or style | `console/headers.go` |
+| Console asset path traversal | The request path is decoded once and refused with 404, never with the index fallback, if the decoded path holds a backslash, a control character or a second level of escaping (`%`), or any element that is `.`, `..` or empty. Files come only from the embedded tree. Covered by `FuzzAssetName` and the traversal tests | `console/path.go` |
 
 ### 4.2 Identity and access
 
@@ -69,6 +71,12 @@ fuzzed and never trusts lengths, counts or names from the other side.
 | Default or weak credentials | No defaults; root credentials must pass `auth.ValidateRootCredentials`, the same check at configuration load and at start; `unio init` generates strong secrets | `config`, `auth` |
 | Secret theft from metadata | User secrets encrypted with AES-256-GCM under a key derived from the cluster secret (HKDF); access key id as additional data | `auth/iam` |
 | Policy parser abuse | Size limit, strict JSON, unsupported elements rejected rather than ignored, linear-time wildcard matching | `auth/policy` |
+| Forged or altered admin session | Token is `base64url(payload).base64url(HMAC-SHA256(key, payload))`. The key is HKDF-SHA256 of the cluster secret with info `unio/v1/console-session`. The HMAC is checked in constant time before the payload is parsed, the payload is decoded strictly, and a token lasts 12 h. Tokens longer than 1 KiB are refused. Covered by `FuzzOpenSession` | `admin/session.go` |
+| Revoked admin still holding a session | Every cookie request is checked against IAM: the key must be enabled and still allowed `unio:Admin`. A change made on the node that makes it takes effect at once; a change made on another node takes effect within the IAM cache TTL (5 s by default) | `admin/auth.go`, `auth/iam` |
+| CSRF on cookie-authenticated changes | The cookie is `HttpOnly`, `SameSite=Strict` and `Path=/unio/`. A state change made with the cookie must carry `X-Unio-CSRF`, which is HMAC-SHA256(key, "csrf" + cookie), compared in constant time. This is a token bound to the session and sent in a header, not a double-submit cookie. A page on another origin cannot read the cookie or compute the token. `GET session` returns the token to the same origin only | `admin/session.go`, `admin/auth.go` |
+| Login brute force | `POST session` allows 10 attempts per minute per client address. An IPv6 client is counted per /64. The limiter tracks at most 4096 addresses and forgets the least recently seen. The check runs before the body is read, and an excess attempt gets 429 `SlowDown` with `Retry-After`. The address is the TCP peer, and forwarded headers are not trusted. Behind a reverse proxy every client shares the proxy's address, so one client can throttle every login, and the limit does not slow an attacker who spreads attempts over many addresses | `admin/ratelimit.go`, `admin/login.go` |
+| Presigned URL outlives its intent | The URL is signed as the session's access key, so IAM applies when it is used, and the right to the action is checked when it is signed. `expiresSeconds` is limited to 1 to 3600 and the method to GET or PUT. The root secret signs only when the root account is the session | `admin/presign.go` |
+| Secret disclosed by the admin API | A new access key's secret is returned once by `POST users/{name}/keys`, with `Cache-Control: no-store`. IAM stores it sealed. Listings, logs and errors never carry it | `admin/users.go`, `auth/iam` |
 
 ### 4.3 Internode
 
