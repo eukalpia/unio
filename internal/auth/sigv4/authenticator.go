@@ -145,7 +145,7 @@ func (a *Authenticator) verifyHeader(ctx context.Context, req *auth.Request, que
 	if len(pv) > 1 {
 		return nil, malformed("duplicate x-amz-content-sha256")
 	}
-	if err := requireHeadersSigned(req.Header, hdr.signedHeaders); err != nil {
+	if err := requireHeadersSigned(req.Header, hdr.signedHeaders, false); err != nil {
 		return nil, err
 	}
 	pl, err := parsePayloadHash(pv[0])

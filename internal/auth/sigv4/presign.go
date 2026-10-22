@@ -176,7 +176,7 @@ func (a *Authenticator) verifyPresignedParams(ctx context.Context, req *auth.Req
 			return nil, s3err.Errorf(s3err.InvalidRequest, "streaming payloads cannot be presigned")
 		}
 	}
-	if err := requireHeadersSigned(req.Header, hdr.signedHeaders); err != nil {
+	if err := requireHeadersSigned(req.Header, hdr.signedHeaders, true); err != nil {
 		return nil, err
 	}
 	id, key, err := a.resolve(ctx, hdr.scope)
