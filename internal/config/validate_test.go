@@ -124,6 +124,19 @@ func TestValidate(t *testing.T) {
 		{name: "root user missing", mutate: func(c *Config) { c.Auth.RootUser = Secret{} }, wantErr: "auth.root_user is not set"},
 		{name: "root user short", mutate: func(c *Config) { c.Auth.RootUser = NewSecret("short") }, wantErr: "root access key must be at least 12"},
 		{name: "root user with a hyphen", mutate: func(c *Config) { c.Auth.RootUser = NewSecret("unio-root-adm01") }, wantErr: "only letters and digits"},
+		{name: "root user is a well-known name", mutate: func(c *Config) { c.Auth.RootUser = NewSecret("administrator") }, wantErr: "well-known default name"},
+		{name: "root user is a well-known name in other case", mutate: func(c *Config) { c.Auth.RootUser = NewSecret("Administrator") }, wantErr: "well-known default name"},
+		{name: "root password equal to the root user", mutate: func(c *Config) {
+			v := "Pw7Kd2Rx9Lm4Vq8Zt1Nb6Hc3Yf5Gs0JaAA"
+			c.Auth.RootUser = NewSecret(v)
+			c.Auth.RootPassword = NewSecret(v)
+		}, wantErr: "must differ from the root access key"},
+		{name: "root password is a template", mutate: func(c *Config) {
+			c.Auth.RootPassword = NewSecret("ChangeMe-Please-Rotate-This-Value-9876")
+		}, wantErr: "template or documentation example"},
+		{name: "root password mentions password", mutate: func(c *Config) {
+			c.Auth.RootPassword = NewSecret("my-password-is-long-enough-123456")
+		}, wantErr: "word password"},
 		{name: "root user of 128 letters and digits", mutate: func(c *Config) { c.Auth.RootUser = NewSecret(strings.Repeat("R", 128)) }},
 		{name: "root user longer than 128", mutate: func(c *Config) { c.Auth.RootUser = NewSecret(strings.Repeat("R", 129)) }, wantErr: "at most 128"},
 		{name: "root password missing", mutate: func(c *Config) { c.Auth.RootPassword = Secret{} }, wantErr: "auth.root_password is not set"},
