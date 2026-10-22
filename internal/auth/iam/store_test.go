@@ -321,11 +321,11 @@ func TestPolicyLifecycle(t *testing.T) {
 	mustCreateUser(t, s, "alice")
 	alice := auth.Identity{AccessKey: "AK", User: "alice"}
 
-	if err := s.SetUserPolicy(ctx, "alice", []byte(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:*","Resource":"*","Condition":{}}]}`)); !s3err.Is(err, s3err.NotImplemented) {
-		t.Fatalf("policy with Condition: err = %v, want NotImplemented", err)
+	if err := s.SetUserPolicy(ctx, "alice", []byte(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:*","Resource":"*","Condition":{}}]}`)); !s3err.Is(err, s3err.MalformedPolicy) {
+		t.Fatalf("policy with Condition: err = %v, want MalformedPolicy", err)
 	}
-	if err := s.SetUserPolicy(ctx, "alice", []byte(`{not json`)); !s3err.Is(err, s3err.InvalidArgument) {
-		t.Fatalf("malformed policy: err = %v, want InvalidArgument", err)
+	if err := s.SetUserPolicy(ctx, "alice", []byte(`{not json`)); !s3err.Is(err, s3err.MalformedPolicy) {
+		t.Fatalf("malformed policy: err = %v, want MalformedPolicy", err)
 	}
 	if err := s.SetUserPolicy(ctx, "nobody", []byte(readAllowPolicy)); !errors.Is(err, ErrUserNotFound) {
 		t.Fatalf("policy for missing user: err = %v", err)
@@ -606,3 +606,29 @@ func TestDeleteUserRepeatCleansLeftovers(t *testing.T) {
 		t.Fatalf("leftover key records after repeat delete: %d", len(left))
 	}
 }
+
+func TestManagementErrorCodes(t *testing.T) {
+	s, _, _ := newTestStore(t)
+	ctx := context.Background()
+	mustCreateUser(t, s, "olga")
+	cases := []struct {
+		name string
+		err  error
+		want s3err.Code
+	}{
+		{"duplicate user", func() error { _, err := s.CreateUser(ctx, "olga"); return err }(), s3err.EntityAlreadyExists},
+		{"delete missing user", s.DeleteUser(ctx, "nobody"), s3err.NoSuchEntity},
+		{"keys of missing user", func() error { _, err := s.ListAccessKeys(ctx, "nobody"); return err }(), s3err.NoSuchEntity},
+		{"delete missing key", s.DeleteAccessKey(ctx, "MISSINGKEY0000000000A"), s3err.NoSuchEntity},
+		{"disable missing user", s.SetUserEnabled(ctx, "nobody", false), s3err.NoSuchEntity},
+		{"invalid name", func() error { _, err := s.CreateUser(ctx, "a/b"); return err }(), s3err.InvalidArgument},
+	}
+	for _, c := range cases {
+		if got := s3err.CodeOf(c.err); got != c.want {
+			t.Fatalf("%s: code = %s, want %s (err %v)", c.name, got, c.want, c.err)
+		}
+	}
+}
+
+// Compile-time check that the store satisfies the contract interface.
+var _ auth.IAM = (*Store)(nil)

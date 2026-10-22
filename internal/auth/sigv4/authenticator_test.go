@@ -223,8 +223,8 @@ func TestAuthenticateAnonymous(t *testing.T) {
 func TestAuthenticateRejectsPresignedParamsWithoutAlgorithm(t *testing.T) {
 	r := newHTTPRequest(t, http.MethodGet, "https://bucket.s3.example.com/key?X-Amz-Signature=abc", nil)
 	a := newTestAuthenticator(docNow)
-	if _, err := a.Authenticate(context.Background(), authRequest(t, r)); !s3err.Is(err, s3err.AuthorizationHeaderMalformed) {
-		t.Fatalf("err = %v, want AuthorizationHeaderMalformed", err)
+	if _, err := a.Authenticate(context.Background(), authRequest(t, r)); !s3err.Is(err, s3err.AuthorizationQueryParametersError) {
+		t.Fatalf("err = %v, want AuthorizationQueryParametersError", err)
 	}
 }
 
@@ -232,8 +232,8 @@ func TestAuthenticateRejectsHeaderAndPresignTogether(t *testing.T) {
 	r := awsGetRequest(t)
 	r.URL.RawQuery = "X-Amz-Algorithm=AWS4-HMAC-SHA256"
 	a := newTestAuthenticator(docNow)
-	if _, err := a.Authenticate(context.Background(), authRequest(t, r)); !s3err.Is(err, s3err.AuthorizationHeaderMalformed) {
-		t.Fatalf("err = %v, want AuthorizationHeaderMalformed", err)
+	if _, err := a.Authenticate(context.Background(), authRequest(t, r)); !s3err.Is(err, s3err.AuthorizationQueryParametersError) {
+		t.Fatalf("err = %v, want AuthorizationQueryParametersError", err)
 	}
 }
 

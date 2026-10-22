@@ -2,6 +2,7 @@ package sigv4
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/eukalpia/unio/internal/auth"
@@ -89,10 +90,30 @@ func isDigit(c byte) bool {
 	return '0' <= c && c <= '9'
 }
 
-// verifyPresigned verifies a request authenticated by query parameters. The
+// verifyPresigned verifies a request authenticated by query parameters. A
+// malformed parameter is reported with AuthorizationQueryParametersError,
+// the code S3 uses for query authentication, rather than the header code.
+func (a *Authenticator) verifyPresigned(ctx context.Context, req *auth.Request, query []queryParam) (*auth.Result, error) {
+	res, err := a.verifyPresignedParams(ctx, req, query)
+	return res, queryError(err)
+}
+
+// queryError maps a malformed-parameter error to the query code. The shared
+// parsers report AuthorizationHeaderMalformed; on the presigned path every
+// such error is a query parameter error. Other codes, such as AccessDenied
+// for an expired URL, pass through unchanged.
+func queryError(err error) error {
+	var e *s3err.Error
+	if errors.As(err, &e) && e.Code == s3err.AuthorizationHeaderMalformed {
+		return &s3err.Error{Code: s3err.AuthorizationQueryParametersError, Message: e.Message, Err: e.Err}
+	}
+	return err
+}
+
+// verifyPresignedParams checks the presigned parameters and the signature. The
 // payload of a presigned request is always UNSIGNED-PAYLOAD and the
 // signature itself is left out of the canonical query.
-func (a *Authenticator) verifyPresigned(ctx context.Context, req *auth.Request, query []queryParam) (*auth.Result, error) {
+func (a *Authenticator) verifyPresignedParams(ctx context.Context, req *auth.Request, query []queryParam) (*auth.Result, error) {
 	alg, err := singleParam(query, paramAlgorithm)
 	if err != nil {
 		return nil, err

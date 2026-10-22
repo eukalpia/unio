@@ -92,14 +92,16 @@ func (a *Authenticator) Authenticate(ctx context.Context, req *auth.Request) (*a
 	case len(values) > 1:
 		return nil, malformed("multiple Authorization headers")
 	case presigned && len(values) == 1:
-		return nil, malformed("request has both Authorization and presigned parameters")
+		return nil, s3err.Errorf(s3err.AuthorizationQueryParametersError,
+			"only one of the Authorization header and presigned parameters may be used")
 	case presigned:
 		return a.verifyPresigned(ctx, req, query)
 	case len(values) == 1:
 		return a.verifyHeader(ctx, req, query, values[0])
 	}
 	if hasAnyParam(query, presignParams...) {
-		return nil, malformed("presigned parameters without X-Amz-Algorithm")
+		return nil, s3err.Errorf(s3err.AuthorizationQueryParametersError,
+			"presigned parameters require X-Amz-Algorithm")
 	}
 	return &auth.Result{
 		Identity:      auth.Identity{Anonymous: true},

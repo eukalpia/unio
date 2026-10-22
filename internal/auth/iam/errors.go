@@ -7,16 +7,15 @@ import (
 )
 
 // Errors returned by management operations. Each carries the S3 code that
-// the admin API reports. s3err has no entity-specific codes, so the closest
-// standard codes are used: NoSuchKey for missing entities and
-// ConditionalRequestConflict for duplicates.
+// the admin API reports: NoSuchEntity for a missing user or key, and
+// EntityAlreadyExists for a duplicate user name.
 var (
 	// ErrUserExists is returned when creating a user whose name is taken.
-	ErrUserExists = s3err.NewSentinel("iam: user already exists", s3err.ConditionalRequestConflict)
+	ErrUserExists = s3err.NewSentinel("iam: user already exists", s3err.EntityAlreadyExists)
 	// ErrUserNotFound is returned for operations on a missing user.
-	ErrUserNotFound = s3err.NewSentinel("iam: user not found", s3err.NoSuchKey)
+	ErrUserNotFound = s3err.NewSentinel("iam: user not found", s3err.NoSuchEntity)
 	// ErrAccessKeyNotFound is returned for operations on a missing key.
-	ErrAccessKeyNotFound = s3err.NewSentinel("iam: access key not found", s3err.NoSuchKey)
+	ErrAccessKeyNotFound = s3err.NewSentinel("iam: access key not found", s3err.NoSuchEntity)
 	// ErrInvalidUserName is returned for a user name outside the allowed form.
 	ErrInvalidUserName = s3err.NewSentinel("iam: invalid user name", s3err.InvalidArgument)
 	// ErrTooManyRetries is returned when compare-and-swap keeps losing to

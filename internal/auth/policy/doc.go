@@ -3,7 +3,7 @@
 // The supported subset is the one Unio enforces today: Version 2012-10-17,
 // Statement entries with Effect Allow or Deny, Action and Resource given as
 // a string or a list, and wildcards '*' and '?' in both. Condition,
-// NotAction and NotResource are refused with NotImplemented rather than
+// NotAction and NotResource are refused with MalformedPolicy rather than
 // ignored, because ignoring a Condition would widen the access it guards.
 //
 // Evaluation follows the IAM rules: an explicit Deny in any matching
