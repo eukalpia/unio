@@ -28,6 +28,20 @@ type Layer interface {
 	CopyObject(ctx context.Context, src Ref, dstBucket, dstKey string, opts CopyOptions) (Info, error)
 	ListObjects(ctx context.Context, bucket string, opts ListOptions) (ListResult, error)
 
+	// PutObjectTags replaces the tag set of one version: the latest when
+	// opts.VersionID is "". It creates no version, and the data, ETag and
+	// modification time are unchanged. The returned Info describes the version
+	// that was tagged. Errors: NoSuchKey or NoSuchVersion for a missing target,
+	// and MethodNotAllowed when the version is a delete marker.
+	PutObjectTags(ctx context.Context, bucket, key string, opts TagOptions) (Info, error)
+	// GetObjectTags returns the tag set of one version, the latest when
+	// versionID is "", with the version's Info. Errors are those of
+	// PutObjectTags.
+	GetObjectTags(ctx context.Context, bucket, key, versionID string) (Info, TagSet, error)
+	// DeleteObjectTags removes every tag of one version. It is PutObjectTags with
+	// an empty tag set, with the same errors and effects.
+	DeleteObjectTags(ctx context.Context, bucket, key, versionID string) (Info, error)
+
 	NewMultipartUpload(ctx context.Context, bucket, key string, opts PutOptions) (uploadID string, err error)
 	PutObjectPart(ctx context.Context, bucket, key, uploadID string, partNumber int, body Body) (PartInfo, error)
 	CopyObjectPart(ctx context.Context, src Ref, bucket, key, uploadID string, partNumber int, opts CopyOptions) (PartInfo, error)

@@ -113,11 +113,28 @@ func EncodeTags(tags TagSet) string {
 	return v.Encode()
 }
 
-// DecodeTags parses a tag set in the URL query encoding of EncodeTags, which
-// is also the encoding of the x-amz-tagging header, and validates it with
-// ValidateTags. The empty string is the empty tag set. A pair without "="
-// has an empty value, and "+" decodes to a space. Errors are InvalidTag.
+// DecodeTags parses a tag set that a client sent, in the URL query encoding
+// of EncodeTags (also the encoding of the x-amz-tagging header), and validates
+// it with ValidateTags. The empty string is the empty tag set. A pair without
+// "=" has an empty value, and "+" decodes to a space. Errors are InvalidTag.
 func DecodeTags(encoded string) (TagSet, error) {
+	tags, err := ParseTags(encoded)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateTags(tags); err != nil {
+		return nil, err
+	}
+	return tags, nil
+}
+
+// ParseTags parses the URL query encoding of a tag set without checking the
+// tag rules. Stored tag sets are parsed with it, so that an object written
+// under earlier rules stays readable; client input goes through DecodeTags.
+// It rejects only what cannot be a tag set at all: an empty pair, a malformed
+// escape, a set longer than MaxEncodedTagsLength or with more than MaxTags
+// pairs. Errors are InvalidTag.
+func ParseTags(encoded string) (TagSet, error) {
 	if encoded == "" {
 		return nil, nil
 	}
@@ -143,9 +160,6 @@ func DecodeTags(encoded string) (TagSet, error) {
 			break
 		}
 		rest = more
-	}
-	if err := ValidateTags(tags); err != nil {
-		return nil, err
 	}
 	return tags, nil
 }

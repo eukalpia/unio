@@ -79,3 +79,12 @@ type CopyOptions struct {
 	// MetadataReplace, and destination conditions in all cases.
 	Put PutOptions
 }
+
+// TagOptions configures PutObjectTags.
+type TagOptions struct {
+	// VersionID names the version to tag. Empty means the latest version.
+	VersionID string
+	// Tags is the new tag set. It replaces the stored set, so an empty set
+	// removes every tag.
+	Tags TagSet
+}

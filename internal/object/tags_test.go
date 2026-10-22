@@ -215,3 +215,24 @@ func tagSetOf(n int) TagSet {
 	}
 	return set
 }
+
+// TestParseTagsSkipsTheClientRules checks the read-side parser: a stored tag
+// set that the client rules now refuse, such as an aws: key written under
+// earlier rules, still parses, while the structure is still checked.
+func TestParseTagsSkipsTheClientRules(t *testing.T) {
+	set, err := ParseTags("aws:created-by=me&team=storage")
+	if err != nil || len(set) != 2 || set[0] != (Tag{Key: "aws:created-by", Value: "me"}) {
+		t.Fatalf("ParseTags of a legacy set = %v, %v", set, err)
+	}
+	if _, err := DecodeTags("aws:created-by=me"); s3err.CodeOf(err) != s3err.InvalidTag {
+		t.Fatalf("DecodeTags accepted the reserved prefix: %v", err)
+	}
+	for _, bad := range []string{"a=1&&b=2", "k=%ZZ", tagList(MaxTags + 1)} {
+		if _, err := ParseTags(bad); s3err.CodeOf(err) != s3err.InvalidTag {
+			t.Fatalf("ParseTags(%q) = %v, want InvalidTag", bad, err)
+		}
+	}
+	if set, err := ParseTags(""); err != nil || len(set) != 0 {
+		t.Fatalf("ParseTags of the empty string = %v, %v", set, err)
+	}
+}
