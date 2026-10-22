@@ -104,27 +104,60 @@ type exactReader struct {
 	remaining int64
 }
 
+// maxEmptyReads bounds the consecutive reads from a shard source that return
+// neither data nor an error. A source that keeps doing so is broken, and the
+// upload fails instead of waiting for it.
+const maxEmptyReads = 100
+
+// readProgress reads into p until the source returns data or an error. A read
+// that makes no progress is retried up to maxEmptyReads times, after which it
+// fails with io.ErrNoProgress.
+func readProgress(r io.Reader, p []byte) (int, error) {
+	for range maxEmptyReads {
+		n, err := r.Read(p)
+		if n > 0 || err != nil {
+			return n, err
+		}
+	}
+	return 0, io.ErrNoProgress
+}
+
+// probeEnd checks that a source has ended, once all of its declared bytes have
+// been read. The probe must see io.EOF. Data means the source is longer than
+// declared. A probe that makes no progress, or fails, is inconclusive, and the
+// caller must not commit on an inconclusive probe.
+func probeEnd(r io.Reader) error {
+	var probe [1]byte
+	n, err := readProgress(r, probe[:])
+	switch {
+	case n > 0:
+		return errSourceLonger
+	case errors.Is(err, io.EOF):
+		return nil
+	default:
+		return err
+	}
+}
+
 // Read implements io.Reader.
 func (e *exactReader) Read(p []byte) (int, error) {
 	if e.remaining == 0 {
 		return 0, io.EOF
 	}
+	if len(p) == 0 {
+		return 0, nil
+	}
 	if int64(len(p)) > e.remaining {
 		p = p[:e.remaining]
 	}
-	n, err := e.r.Read(p)
+	n, err := readProgress(e.r, p)
 	e.remaining -= int64(n)
 	if errors.Is(err, io.EOF) && e.remaining > 0 {
 		return n, io.ErrUnexpectedEOF
 	}
 	if err == nil && e.remaining == 0 {
-		var probe [1]byte
-		m, perr := e.r.Read(probe[:])
-		switch {
-		case m > 0:
-			return 0, errSourceLonger
-		case perr != nil && !errors.Is(perr, io.EOF):
-			return 0, perr
+		if err := probeEnd(e.r); err != nil {
+			return 0, err
 		}
 	}
 	return n, err
