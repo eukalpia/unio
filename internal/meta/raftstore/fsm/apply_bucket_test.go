@@ -61,28 +61,28 @@ func (h *harness) listBuckets() []*pb.BucketRecord {
 func TestCreateBucket(t *testing.T) {
 	h := newHarness(t, KindSystem)
 
-	a := h.mustApply(createBucketCmd("a", "alice")).Bucket
-	if a == nil || a.Id != 1 || a.Name != "a" || a.Owner != "alice" {
+	a := h.mustApply(createBucketCmd("alpha", "alice")).Bucket
+	if a == nil || a.Id != 1 || a.Name != "alpha" || a.Owner != "alice" {
 		t.Fatalf("first bucket = %v, want id 1", a)
 	}
-	b := h.mustApply(createBucketCmd("b", "bob")).Bucket
+	b := h.mustApply(createBucketCmd("bravo", "bob")).Bucket
 	if b.Id != 2 {
 		t.Fatalf("second bucket id = %d, want 2", b.Id)
 	}
 
 	before := h.dumpState()
-	wantCode(t, h.mustReject(createBucketCmd("a", "alice")), s3err.BucketAlreadyOwnedByYou)
+	wantCode(t, h.mustReject(createBucketCmd("alpha", "alice")), s3err.BucketAlreadyOwnedByYou)
 	h.assertUnchanged(before)
-	wantCode(t, h.mustReject(createBucketCmd("a", "mallory")), s3err.BucketAlreadyExists)
+	wantCode(t, h.mustReject(createBucketCmd("alpha", "mallory")), s3err.BucketAlreadyExists)
 	h.assertUnchanged(before)
 
 	h.mustReject(createBucketCmd("", "alice"))
 
 	// Ids come from a counter that never goes back, so a deleted bucket's id
 	// is not reused by a bucket created under the same name.
-	h.mustApply(markDeletingCmd("a", a.Id, true))
-	h.mustApply(deleteBucketCmd("a", a.Id))
-	again := h.mustApply(createBucketCmd("a", "alice")).Bucket
+	h.mustApply(markDeletingCmd("alpha", a.Id, true))
+	h.mustApply(deleteBucketCmd("alpha", a.Id))
+	again := h.mustApply(createBucketCmd("alpha", "alice")).Bucket
 	if again.Id != 3 {
 		t.Fatalf("re-created bucket id = %d, want 3 (ids are never reused)", again.Id)
 	}
@@ -90,22 +90,22 @@ func TestCreateBucket(t *testing.T) {
 
 func TestMarkBucketDeleting(t *testing.T) {
 	h := newHarness(t, KindSystem)
-	id := h.mustApply(createBucketCmd("a", "alice")).Bucket.Id
+	id := h.mustApply(createBucketCmd("alpha", "alice")).Bucket.Id
 
 	before := h.dumpState()
-	wantCode(t, h.mustReject(markDeletingCmd("a", id+1, true)), s3err.NoSuchBucket)
+	wantCode(t, h.mustReject(markDeletingCmd("alpha", id+1, true)), s3err.NoSuchBucket)
 	wantCode(t, h.mustReject(markDeletingCmd("missing", id, true)), s3err.NoSuchBucket)
 	h.assertUnchanged(before)
 
-	res := h.mustApply(markDeletingCmd("a", id, true))
+	res := h.mustApply(markDeletingCmd("alpha", id, true))
 	if res.Bucket == nil || !res.Bucket.Deleting {
 		t.Fatalf("mark deleting: result %v, want Deleting true", res.Bucket)
 	}
-	if _, err := h.getBucket("a", false); s3err.CodeOf(err) != s3err.NoSuchBucket {
+	if _, err := h.getBucket("alpha", false); s3err.CodeOf(err) != s3err.NoSuchBucket {
 		t.Fatalf("GetBucket of a deleting bucket: %v, want NoSuchBucket", err)
 	}
 
-	res = h.mustApply(markDeletingCmd("a", id, false))
+	res = h.mustApply(markDeletingCmd("alpha", id, false))
 	if res.Bucket.Deleting {
 		t.Fatal("unmark deleting: bucket still deleting")
 	}
@@ -113,59 +113,59 @@ func TestMarkBucketDeleting(t *testing.T) {
 
 func TestDeleteBucket(t *testing.T) {
 	h := newHarness(t, KindSystem)
-	id := h.mustApply(createBucketCmd("a", "alice")).Bucket.Id
+	id := h.mustApply(createBucketCmd("alpha", "alice")).Bucket.Id
 
 	// Only a bucket marked deleting can be removed.
 	before := h.dumpState()
-	h.mustReject(deleteBucketCmd("a", id))
+	h.mustReject(deleteBucketCmd("alpha", id))
 	h.assertUnchanged(before)
 
-	h.mustApply(markDeletingCmd("a", id, true))
-	wantCode(t, h.mustReject(deleteBucketCmd("a", id+1)), s3err.NoSuchBucket)
+	h.mustApply(markDeletingCmd("alpha", id, true))
+	wantCode(t, h.mustReject(deleteBucketCmd("alpha", id+1)), s3err.NoSuchBucket)
 	wantCode(t, h.mustReject(deleteBucketCmd("missing", id)), s3err.NoSuchBucket)
 
-	h.mustApply(deleteBucketCmd("a", id))
-	if _, err := h.getBucket("a", true); s3err.CodeOf(err) != s3err.NoSuchBucket {
+	h.mustApply(deleteBucketCmd("alpha", id))
+	if _, err := h.getBucket("alpha", true); s3err.CodeOf(err) != s3err.NoSuchBucket {
 		t.Fatalf("GetBucket after delete (include deleting): %v, want NoSuchBucket", err)
 	}
 }
 
 func TestSetBucketVersioning(t *testing.T) {
 	h := newHarness(t, KindSystem)
-	id := h.mustApply(createBucketCmd("a", "alice")).Bucket.Id
+	id := h.mustApply(createBucketCmd("alpha", "alice")).Bucket.Id
 
-	res := h.mustApply(setBucketVersioningCmd("a", id, pb.VersioningState_VERSIONING_STATE_ENABLED))
+	res := h.mustApply(setBucketVersioningCmd("alpha", id, pb.VersioningState_VERSIONING_STATE_ENABLED))
 	if res.Bucket.Versioning != pb.VersioningState_VERSIONING_STATE_ENABLED {
 		t.Fatalf("versioning = %v, want ENABLED", res.Bucket.Versioning)
 	}
 
-	wantCode(t, h.mustReject(setBucketVersioningCmd("a", id+1, pb.VersioningState_VERSIONING_STATE_SUSPENDED)), s3err.NoSuchBucket)
+	wantCode(t, h.mustReject(setBucketVersioningCmd("alpha", id+1, pb.VersioningState_VERSIONING_STATE_SUSPENDED)), s3err.NoSuchBucket)
 
-	h.mustApply(markDeletingCmd("a", id, true))
+	h.mustApply(markDeletingCmd("alpha", id, true))
 	before := h.dumpState()
-	wantCode(t, h.mustReject(setBucketVersioningCmd("a", id, pb.VersioningState_VERSIONING_STATE_SUSPENDED)), s3err.NoSuchBucket)
+	wantCode(t, h.mustReject(setBucketVersioningCmd("alpha", id, pb.VersioningState_VERSIONING_STATE_SUSPENDED)), s3err.NoSuchBucket)
 	h.assertUnchanged(before)
 }
 
 func TestBucketVisibility(t *testing.T) {
 	h := newHarness(t, KindSystem)
-	h.mustApply(createBucketCmd("c", "u"))
-	h.mustApply(createBucketCmd("a", "u"))
-	b := h.mustApply(createBucketCmd("b", "u")).Bucket
-	h.mustApply(markDeletingCmd("b", b.Id, true))
+	h.mustApply(createBucketCmd("charlie", "u"))
+	h.mustApply(createBucketCmd("alpha", "u"))
+	b := h.mustApply(createBucketCmd("bravo", "u")).Bucket
+	h.mustApply(markDeletingCmd("bravo", b.Id, true))
 
 	var names []string
 	for _, rec := range h.listBuckets() {
 		names = append(names, rec.Name)
 	}
-	if len(names) != 2 || names[0] != "a" || names[1] != "c" {
+	if len(names) != 2 || names[0] != "alpha" || names[1] != "charlie" {
 		t.Fatalf("ListBuckets = %v, want [a c]", names)
 	}
 
-	if _, err := h.getBucket("b", false); s3err.CodeOf(err) != s3err.NoSuchBucket {
+	if _, err := h.getBucket("bravo", false); s3err.CodeOf(err) != s3err.NoSuchBucket {
 		t.Fatalf("GetBucket hides deleting: %v", err)
 	}
-	got, err := h.getBucket("b", true)
+	got, err := h.getBucket("bravo", true)
 	if err != nil || got.Id != b.Id || !got.Deleting {
 		t.Fatalf("GetBucket include_deleting = %v, %v; want the deleting bucket", got, err)
 	}

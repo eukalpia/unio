@@ -13,9 +13,18 @@ import (
 // Read answers a query from the committed state. Callers must have
 // established linearizability first (see group.Read). Reads never change the
 // state, so Read may run concurrently with Apply.
-func (f *FSM) Read(q *pb.ReadQuery) (*pb.ReadResult, error) {
+//
+// Like Apply, Read never panics: a malformed query is an error, and a panic
+// that a handler still raises is recovered and counted by PanicCount.
+func (f *FSM) Read(q *pb.ReadQuery) (res *pb.ReadResult, err error) {
 	f.readMu.RLock()
 	defer f.readMu.RUnlock()
+	defer func() {
+		if r := recover(); r != nil {
+			f.panics.Add(1)
+			res, err = nil, errPanicked
+		}
+	}()
 	if f.closed {
 		return nil, ErrClosed
 	}
@@ -60,6 +69,9 @@ func (f *FSM) withReadKind(want Kind, fn func() (*pb.ReadResult, error)) (*pb.Re
 // DeleteMarker set. A missing key is NoSuchKey; a missing version is
 // NoSuchVersion.
 func (f *FSM) readObject(q *pb.GetObjectQuery) (*pb.ReadResult, error) {
+	if q == nil {
+		return nil, errMalformed("read query")
+	}
 	rec, _, err := f.resolveVersion(ids.BucketID(q.BucketId), []byte(q.Key), q.VersionId)
 	if err != nil {
 		return nil, err
@@ -75,6 +87,9 @@ func (f *FSM) readObject(q *pb.GetObjectQuery) (*pb.ReadResult, error) {
 
 // readUpload returns one in-progress upload.
 func (f *FSM) readUpload(q *pb.GetUploadQuery) (*pb.ReadResult, error) {
+	if q == nil {
+		return nil, errMalformed("read query")
+	}
 	up, err := f.uploadRecord(ids.BucketID(q.BucketId), []byte(q.Key), q.UploadId)
 	if err != nil {
 		return nil, err
@@ -88,6 +103,9 @@ func (f *FSM) readUpload(q *pb.GetUploadQuery) (*pb.ReadResult, error) {
 // readParts returns the parts of an upload after the marker. The result
 // reports whether more parts follow the page.
 func (f *FSM) readParts(q *pb.ListPartsQuery) (*pb.ReadResult, error) {
+	if q == nil {
+		return nil, errMalformed("read query")
+	}
 	bucket := ids.BucketID(q.BucketId)
 	up, err := f.uploadRecord(bucket, []byte(q.Key), q.UploadId)
 	if err != nil {
@@ -117,6 +135,9 @@ func (f *FSM) readParts(q *pb.ListPartsQuery) (*pb.ReadResult, error) {
 // readBucketHasData reports whether a partition holds object versions or
 // uploads of a bucket. Parts exist only under uploads, so uploads suffice.
 func (f *FSM) readBucketHasData(q *pb.BucketHasDataQuery) (*pb.ReadResult, error) {
+	if q == nil {
+		return nil, errMalformed("read query")
+	}
 	bucket := ids.BucketID(q.BucketId)
 	for _, prefix := range [][]byte{keys.ObjectBucketPrefix(bucket), keys.UploadBucketPrefix(bucket)} {
 		it, err := f.prefixIter(prefix)
@@ -137,6 +158,9 @@ func (f *FSM) readBucketHasData(q *pb.BucketHasDataQuery) (*pb.ReadResult, error
 // readBucket returns a bucket by name. Buckets marked deleting are absent
 // unless the query asks for them.
 func (f *FSM) readBucket(q *pb.GetBucketQuery) (*pb.ReadResult, error) {
+	if q == nil {
+		return nil, errMalformed("read query")
+	}
 	rec, err := f.bucketRecord(q.Name)
 	if err != nil {
 		return nil, err
@@ -168,6 +192,9 @@ func (f *FSM) readBuckets() (*pb.ReadResult, error) {
 
 // readKVGet returns one system key-value entry, or meta.ErrNotFound.
 func (f *FSM) readKVGet(q *pb.KVGetQuery) (*pb.ReadResult, error) {
+	if q == nil {
+		return nil, errMalformed("read query")
+	}
 	value, rev, found, err := f.kvRecord(q.Key)
 	if err != nil {
 		return nil, err
@@ -181,6 +208,9 @@ func (f *FSM) readKVGet(q *pb.KVGetQuery) (*pb.ReadResult, error) {
 
 // readKVList returns every key-value entry whose key starts with the prefix.
 func (f *FSM) readKVList(q *pb.KVListQuery) (*pb.ReadResult, error) {
+	if q == nil {
+		return nil, errMalformed("read query")
+	}
 	prefix := keys.KV([]byte(q.Prefix))
 	it, err := f.prefixIter(prefix)
 	if err != nil {

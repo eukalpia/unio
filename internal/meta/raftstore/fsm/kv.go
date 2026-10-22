@@ -27,8 +27,11 @@ func (f *FSM) kvRecord(key string) (value []byte, revision uint64, found bool, e
 // kvPut writes a key-value entry if its revision matches. The new revision
 // is the Raft index of the command, which is unique and increases.
 func (f *FSM) kvPut(b *pebble.Batch, c *pb.KVPut, index uint64) (*pb.ApplyResult, error) {
-	if len(c.Value) > meta.MaxSystemValueSize {
-		return nil, meta.ErrValueTooLarge
+	if err := validKVKey(c.Key); err != nil {
+		return nil, err
+	}
+	if err := validKVValue(c.Value); err != nil {
+		return nil, err
 	}
 	_, cur, _, err := f.kvRecord(c.Key)
 	if err != nil {
@@ -49,6 +52,9 @@ func (f *FSM) kvPut(b *pebble.Batch, c *pb.KVPut, index uint64) (*pb.ApplyResult
 // kvDelete removes a key-value entry under the same revision rules. Deleting
 // a missing key succeeds when the expected revision is 0 or AnyRevision.
 func (f *FSM) kvDelete(b *pebble.Batch, c *pb.KVDelete) (*pb.ApplyResult, error) {
+	if err := validKVKey(c.Key); err != nil {
+		return nil, err
+	}
 	_, cur, found, err := f.kvRecord(c.Key)
 	if err != nil {
 		return nil, err

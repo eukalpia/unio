@@ -111,10 +111,13 @@ func (f *FSM) addVersion(b *pebble.Batch, ctrl bucketControl, bucket ids.BucketI
 
 // putObject commits a new version of a key.
 func (f *FSM) putObject(b *pebble.Batch, c *pb.PutObject) (*pb.ApplyResult, error) {
+	if err := validBucketID(c.BucketId); err != nil {
+		return nil, err
+	}
 	bucket := ids.BucketID(c.BucketId)
 	rec := c.GetRecord()
-	if rec == nil || rec.Key == "" {
-		return nil, errMalformed("put object")
+	if err := validRecord(rec, 0); err != nil {
+		return nil, err
 	}
 	ctrl, err := f.control(bucket)
 	if err != nil {
@@ -142,6 +145,9 @@ func (f *FSM) putObject(b *pebble.Batch, c *pb.PutObject) (*pb.ApplyResult, erro
 // id is given. Deleting a missing version, or a missing null version, is a
 // success that changes nothing.
 func (f *FSM) deleteObject(b *pebble.Batch, c *pb.DeleteObject) (*pb.ApplyResult, error) {
+	if err := validDeleteObject(c); err != nil {
+		return nil, err
+	}
 	bucket := ids.BucketID(c.BucketId)
 	key := []byte(c.Key)
 	ctrl, err := f.control(bucket)
@@ -219,6 +225,9 @@ func (f *FSM) deleteObject(b *pebble.Batch, c *pb.DeleteObject) (*pb.ApplyResult
 // references the expected data. Otherwise it fails with
 // meta.ErrRevisionMismatch.
 func (f *FSM) updateLayout(b *pebble.Batch, c *pb.UpdateLayout) (*pb.ApplyResult, error) {
+	if err := validUpdateLayout(c); err != nil {
+		return nil, err
+	}
 	bucket := ids.BucketID(c.BucketId)
 	rec, dbKey, err := f.resolveVersion(bucket, []byte(c.Key), c.VersionId)
 	if err != nil {
@@ -238,7 +247,7 @@ func (f *FSM) updateLayout(b *pebble.Batch, c *pb.UpdateLayout) (*pb.ApplyResult
 		return nil, meta.ErrRevisionMismatch
 	}
 	rec.Parts[idx].Layout = c.Layout
-	v, err := rec.MarshalVT()
+	v, err := marshalStored(rec)
 	if err != nil {
 		return nil, fmt.Errorf("fsm: encode object: %w", err)
 	}

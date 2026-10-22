@@ -173,9 +173,9 @@ func TestSnapshotIsPointInTime(t *testing.T) {
 
 func TestSnapshotRoundTripSystemGroup(t *testing.T) {
 	src := newHarness(t, KindSystem)
-	src.mustApply(createBucketCmd("a", "alice"))
-	b := src.mustApply(createBucketCmd("b", "bob")).Bucket
-	src.mustApply(markDeletingCmd("b", b.Id, true))
+	src.mustApply(createBucketCmd("alpha", "alice"))
+	b := src.mustApply(createBucketCmd("bravo", "bob")).Bucket
+	src.mustApply(markDeletingCmd("bravo", b.Id, true))
 	src.mustApply(kvPutCmd("cluster/x", []byte("1"), 0))
 	src.mustApply(kvPutCmd("cluster/y", []byte("2"), 0))
 	data := persistSnapshot(t, src.f)
@@ -190,8 +190,8 @@ func TestSnapshotRoundTripSystemGroup(t *testing.T) {
 	}
 	// The bucket id counter came across, so the next id continues the sequence.
 	dst.index = src.index
-	applyBoth(t, src, dst, createBucketCmd("c", "carol"))
-	c, err := dst.getBucket("c", false)
+	applyBoth(t, src, dst, createBucketCmd("charlie", "carol"))
+	c, err := dst.getBucket("charlie", false)
 	if err != nil || c.Id != 3 {
 		t.Fatalf("bucket created after restore = %v, %v; want id 3", c, err)
 	}

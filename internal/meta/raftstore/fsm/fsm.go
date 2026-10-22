@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/cockroachdb/pebble/v2"
 	"github.com/hashicorp/raft"
@@ -28,6 +29,9 @@ const (
 // machine cannot know whether the failed batch reached disk, so it refuses
 // further work; the node must restart and replay the log.
 var ErrFailed = errors.New("fsm: state machine failed; restart the node")
+
+// errPanicked is the outcome of an entry or read that panicked and was recovered.
+var errPanicked = errors.New("fsm: command rejected after an internal error")
 
 // ErrClosed is returned by reads that race with Close.
 var ErrClosed = errors.New("fsm: state machine is closed")
@@ -58,6 +62,9 @@ type FSM struct {
 	// uses the database, and Close takes the write lock before closing it.
 	readMu sync.RWMutex
 	closed bool
+
+	// panics counts recovered panics; see PanicCount.
+	panics atomic.Int64
 }
 
 // Open opens or creates the state machine database in dir. cache is shared
@@ -100,13 +107,26 @@ func (f *FSM) Applied() uint64 { return f.applied }
 // Apply implements raft.FSM. It decodes a Command, applies it atomically and
 // returns an *Outcome. Entries at or below the persisted applied index are
 // already reflected in the state and are skipped.
-func (f *FSM) Apply(l *raft.Log) interface{} {
+//
+// Apply never panics. Every input is either applied or rejected with an error
+// Outcome; a rejected entry leaves the visible state unchanged and still
+// advances the applied index, so every replica takes the same branch. Handlers
+// validate their commands before they write. A panic that a handler still
+// raises is a bug: it is recovered, counted (see PanicCount), and rejected the
+// same way on every replica, so one bad entry cannot split the cluster.
+func (f *FSM) Apply(l *raft.Log) (out interface{}) {
 	if err := f.failure(); err != nil {
 		return &Outcome{Err: err}
 	}
 	if l.Index <= f.applied {
 		return &Outcome{}
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			f.panics.Add(1)
+			out = f.commitOutcome(l.Index, nil, errPanicked)
+		}
+	}()
 	var cmd pb.Command
 	if err := cmd.UnmarshalVT(l.Data); err != nil {
 		return f.commitOutcome(l.Index, nil, fmt.Errorf("fsm: decode command %d: %w", l.Index, err))
@@ -121,6 +141,11 @@ func (f *FSM) Apply(l *raft.Log) interface{} {
 	}
 	return f.commitOutcome(l.Index, b, err, res)
 }
+
+// PanicCount reports how many entries or reads panicked and were rejected by
+// the recovery in Apply and Read. It is zero for a correct state machine, and
+// fuzzing asserts that it stays zero.
+func (f *FSM) PanicCount() int64 { return f.panics.Load() }
 
 // commitOutcome persists the applied index in batch b (creating one when
 // nil), commits it, and builds the Outcome. A commit failure is fatal.

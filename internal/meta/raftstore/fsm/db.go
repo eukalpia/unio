@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/cockroachdb/pebble/v2"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/eukalpia/unio/internal/meta/raftstore/keys"
 )
@@ -98,4 +99,13 @@ func (f *FSM) deletePrefix(b *pebble.Batch, prefix []byte) (n int, err error) {
 // beUint64 decodes an 8-byte big-endian value. The caller checks the length.
 func beUint64(b []byte) uint64 {
 	return binary.BigEndian.Uint64(b)
+}
+
+// marshalStored encodes a record for the database. Object and upload records
+// carry maps, and the vtprotobuf encoder writes map entries in Go's random
+// iteration order, so two replicas holding the same state would store
+// different bytes. The reflection encoder with Deterministic set sorts the
+// map keys, which makes the stored bytes a function of the state alone.
+func marshalStored(m proto.Message) ([]byte, error) {
+	return proto.MarshalOptions{Deterministic: true}.Marshal(m)
 }
