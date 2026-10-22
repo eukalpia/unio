@@ -20,4 +20,21 @@ jobs:
           fail-on-severity: low
           # Licenses compatible with distributing Apache-2.0 binaries.
           allow-licenses: Apache-2.0, MIT, BSD-2-Clause, BSD-3-Clause, ISC, MPL-2.0, Unlicense, 0BSD, CC0-1.0
+          # The Go project's golang.org/x modules are BSD-3-Clause with the Go
+          # patent grant (PATENTS), which the license detector reports as an
+          # unknown reference. They are allowed by name, not by loosening the
+          # license list.
+          allow-dependencies-licenses: >-
+            pkg:golang/golang.org/x/arch,
+            pkg:golang/golang.org/x/crypto,
+            pkg:golang/golang.org/x/exp,
+            pkg:golang/golang.org/x/mod,
+            pkg:golang/golang.org/x/net,
+            pkg:golang/golang.org/x/sync,
+            pkg:golang/golang.org/x/sys,
+            pkg:golang/golang.org/x/telemetry,
+            pkg:golang/golang.org/x/term,
+            pkg:golang/golang.org/x/text,
+            pkg:golang/golang.org/x/time,
+            pkg:golang/golang.org/x/tools
           comment-summary-in-pr: on-failure
