@@ -19,6 +19,7 @@ import (
 // accepted as flags, so they do not appear in shell history or process lists.
 const (
 	accessKeyEnv = "UNIO_BENCH_ACCESS_KEY"
+	// #nosec G101 -- false positive: this is the name of an environment variable, not a credential value
 	secretKeyEnv = "UNIO_BENCH_SECRET_KEY"
 )
 

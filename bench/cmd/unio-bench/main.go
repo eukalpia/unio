@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 
 	"github.com/eukalpia/unio/bench/internal/harness"
 	"github.com/eukalpia/unio/bench/internal/objstore"
@@ -109,7 +110,8 @@ func writeResults(cfg config, rep report.Report, stdout io.Writer) error {
 // writeFile creates path, runs write on it and reports the first error,
 // including the error from closing the file.
 func writeFile(path string, write func(io.Writer) error) error {
-	f, err := os.Create(path)
+	// #nosec G304 -- the path is the operator's own report file, named by -out or -markdown; it is cleaned and only written
+	f, err := os.Create(filepath.Clean(path))
 	if err != nil {
 		return fmt.Errorf("create %s: %w", path, err)
 	}

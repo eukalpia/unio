@@ -76,6 +76,10 @@ func Run(ctx context.Context, spec Spec, cfg RunConfig) (Result, error) {
 
 	// Each worker owns its recorders, so recording needs no locks. The
 	// sample limit keeps total memory bounded whatever the throughput.
+	streams, err := workerStreams(cfg.Concurrency)
+	if err != nil {
+		return Result{}, err
+	}
 	limit := stats.SampleLimit(cfg.Concurrency * len(spec.Ops))
 	recs := make([][]*stats.Recorder, cfg.Concurrency)
 	var wg sync.WaitGroup
@@ -84,7 +88,8 @@ func Run(ctx context.Context, spec Spec, cfg RunConfig) (Result, error) {
 		wg.Add(1)
 		go func(id int, own []*stats.Recorder) {
 			defer wg.Done()
-			rng := rand.New(rand.NewPCG(cfg.Seed, uint64(id)))
+			// #nosec G404 -- benchmark workload generation, not security sensitive
+			rng := rand.New(rand.NewPCG(cfg.Seed, streams[id]))
 			runWorker(runCtx, win, spec.NewWorker(id), spec.Ops, own, rng, cfg.MaxOpsPerWorker)
 		}(id, recs[id])
 	}
