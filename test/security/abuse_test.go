@@ -79,7 +79,9 @@ func TestStalledBodyIsCutOff(t *testing.T) {
 	conn := tg.dial(t)
 	defer conn.Close()
 	var head strings.Builder
-	head.WriteString("PUT " + req.URL.RequestURI() + " HTTP/1.1\r\nHost: " + req.Host + "\r\n")
+	// The signed request carries its host in the URL; send it explicitly so
+	// the server reads the body instead of rejecting a missing Host.
+	head.WriteString("PUT " + req.URL.RequestURI() + " HTTP/1.1\r\nHost: " + req.URL.Host + "\r\n")
 	for k, vs := range req.Header {
 		for _, v := range vs {
 			head.WriteString(k + ": " + v + "\r\n")

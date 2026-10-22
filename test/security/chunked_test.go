@@ -22,9 +22,16 @@ const (
 // they were signed.
 func (tg target) chunkedUpload(t *testing.T, bucket, key string, data []byte, chunkSize int, mutate func(chunks [][]byte)) *http.Request {
 	t.Helper()
+	return tg.chunkedUploadDeclaring(t, bucket, key, data, len(data), chunkSize, mutate)
+}
+
+// chunkedUploadDeclaring is chunkedUpload with an explicit, correctly signed
+// x-amz-decoded-content-length, which may differ from len(data).
+func (tg target) chunkedUploadDeclaring(t *testing.T, bucket, key string, data []byte, declared, chunkSize int, mutate func(chunks [][]byte)) *http.Request {
+	t.Helper()
 	req := newRequest(t, http.MethodPut, tg.objectURL(bucket, key, ""), nil)
 	req.Header.Set("Content-Encoding", "aws-chunked")
-	req.Header.Set("X-Amz-Decoded-Content-Length", strconv.Itoa(len(data)))
+	req.Header.Set("X-Amz-Decoded-Content-Length", strconv.Itoa(declared))
 	now := time.Now().UTC()
 	tg.sign(t, req, nil, tg.goodCreds(), now, streamingPayload)
 
@@ -134,8 +141,8 @@ func TestChunkedUploadIntegrity(t *testing.T) {
 	})
 
 	t.Run("decoded length lies", func(t *testing.T) {
-		req := tg.chunkedUpload(t, bucket, "lying", data, 65536, nil)
-		req.Header.Set("X-Amz-Decoded-Content-Length", strconv.Itoa(len(data)+10))
+		// The wrong length is signed, so only the length check can reject it.
+		req := tg.chunkedUploadDeclaring(t, bucket, "lying", data, len(data)+10, 65536, nil)
 		expectRejected(t, send(t, req))
 		if tg.objectExists(t, bucket, "lying") {
 			t.Fatal("an upload with a wrong decoded length was stored")
