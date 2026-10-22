@@ -124,6 +124,8 @@ func (p *Pool) alloc() []byte {
 	}
 	raw := make([]byte, p.size+p.align)
 	off := 0
+	// #nosec G103 -- the address is only read to compute an alignment offset;
+	// no pointer arithmetic is converted back into a pointer.
 	if rem := int(uintptr(unsafe.Pointer(&raw[0])) & uintptr(p.align-1)); rem != 0 {
 		off = p.align - rem
 	}
