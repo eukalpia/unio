@@ -17,7 +17,7 @@ The goal of v0.1 is a working, secure multi-node cluster with the core S3 API.
 | Metadata | `internal/meta` | Multi-Raft on Pebble, state machines, key schema, listing |
 | Cluster | `internal/cluster` | UniWire mTLS transport, PKI bootstrap, remote drives, Raft transport, topology |
 | Object layer | `internal/object` | PUT/GET/DELETE/COPY/multipart orchestration, inline and packed tiers, GC queue |
-| Platform | `cmd/uniio`, `config`, `obs`, `test`, `bench`, `deploy` | CLI, configuration, observability, Docker Compose, integration, chaos and benchmark harnesses, CI |
+| Platform | `cmd/unio`, `config`, `obs`, `test`, `bench`, `deploy` | CLI, configuration, observability, Docker Compose, integration, chaos and benchmark harnesses, CI |
 | Integration | `internal/server` | Node assembly, end-to-end tests, `ceph/s3-tests` subset |
 
 Exit criteria:

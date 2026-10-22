@@ -1,21 +1,21 @@
-# UniIO
+# Unio
 
 **A distributed, S3-compatible object store built for speed, integrity and simple operations.**
 
-[![CI](https://github.com/eukalpia/uniio/actions/workflows/ci.yml/badge.svg)](https://github.com/eukalpia/uniio/actions/workflows/ci.yml)
+[![CI](https://github.com/eukalpia/unio/actions/workflows/ci.yml/badge.svg)](https://github.com/eukalpia/unio/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 > **Status: pre-alpha.** The architecture is fixed and the v0.1 foundation is
 > under active development. Do not store production data yet.
 
-UniIO is a single Go binary that turns a set of servers and drives into a
+Unio is a single Go binary that turns a set of servers and drives into a
 fault-tolerant object store with an S3 API. It aims to be universal: competitive
 on large objects, and much faster on small objects and listing than file-walking
 designs.
 
-## Why UniIO
+## Why Unio
 
-| | UniIO |
+| | Unio |
 |---|---|
 | **Fast listing** | A dedicated metadata plane: Raft-replicated partitions on Pebble. LIST is an ordered range scan, not a filesystem walk |
 | **Small objects** | Tiny objects are stored inline in metadata. Small objects are packed into append-only segments with group fsync, with no inode per object |
@@ -70,9 +70,9 @@ Details: [ROADMAP.md](ROADMAP.md).
 Runnable builds arrive with v0.1. To build from source:
 
 ```sh
-git clone https://github.com/eukalpia/uniio.git
-cd uniio
-go build ./cmd/uniio
+git clone https://github.com/eukalpia/unio.git
+cd unio
+go build ./cmd/unio
 ```
 
 ## Contributing
@@ -85,8 +85,8 @@ Report security issues privately as described in [SECURITY.md](SECURITY.md).
 
 ## License
 
-UniIO is licensed under the [Apache License, Version 2.0](LICENSE).
+Unio is licensed under the [Apache License, Version 2.0](LICENSE).
 
-UniIO is an independent project and is not affiliated with or endorsed by
+Unio is an independent project and is not affiliated with or endorsed by
 MinIO, Inc. or Amazon Web Services. "S3" and "Amazon S3" are trademarks of
 Amazon.com, Inc. or its affiliates.

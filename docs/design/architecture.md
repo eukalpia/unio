@@ -1,16 +1,16 @@
-# UniIO Architecture
+# Unio Architecture
 
 - Status: accepted (v0.1 baseline)
 - Last updated: 2026-10-22
 - Decision records: [docs/adr](../adr/README.md)
 
-This document describes the target architecture of UniIO for the v0.1
+This document describes the target architecture of Unio for the v0.1
 milestone and the constraints every contribution must respect. Changes to
 anything described here go through an [ADR](../adr/README.md).
 
 ## 1. Goals
 
-UniIO is a distributed, S3-compatible object store. It aims to be a universal
+Unio is a distributed, S3-compatible object store. It aims to be a universal
 system: at least as fast as MinIO on large objects, clearly faster on small
 objects and listing, and safe and stable from the first release.
 
@@ -46,7 +46,7 @@ Every invariant is covered by automated tests.
   available.
 - **I2 Integrity.** A client never receives bytes that differ from what was
   written. Every block is verified against its bitrot hash on read. On a
-  mismatch UniIO reconstructs from parity or returns an error, never garbage.
+  mismatch Unio reconstructs from parity or returns an error, never garbage.
 - **I3 Linearizable metadata.** After an acknowledged PUT or DELETE, any
   GET, HEAD or LIST on any node observes that result or a newer one.
 - **I4 Atomicity.** A failed or interrupted PUT never becomes visible. Its
@@ -56,14 +56,14 @@ Every invariant is covered by automated tests.
 
 ## 2. Overview
 
-UniIO ships as one binary, `uniio`. All nodes are symmetric and run the same
+Unio ships as one binary, `unio`. All nodes are symmetric and run the same
 roles, so operations stay simple. Internally, data and metadata are separate
 planes.
 
 ```
                 S3 clients (AWS SDKs, rclone, Spark, Trino, ...)
                                  │ HTTP(S) / S3, port 9000
-┌──────────────────────── UniIO node (single binary) ──────────────────────┐
+┌──────────────────────── Unio node (single binary) ──────────────────────┐
 │  s3api (Hertz, standard transport)  ──  auth (SigV4, IAM, policies)      │
 │          │                                                               │
 │  object: inline / packed / blob placement, multipart, copy, delete       │
@@ -106,7 +106,7 @@ Release builds are `CGO_ENABLED=0` and built with `-trimpath`.
   - 1 node × 1 drive: no erasure coding (K=1, M=0); for development only.
   - 1 node × N drives: erasure coding across drives.
   - 3 or more nodes: full high availability.
-  - 2 nodes: allowed, but metadata is not fault tolerant. UniIO logs a
+  - 2 nodes: allowed, but metadata is not fault tolerant. Unio logs a
     warning.
 - **Recorded placement.** Placement is recorded in the object's metadata
   (erasure set id and drive ids) instead of being recomputed from a hash on
@@ -188,7 +188,7 @@ compaction updates only the local index and never writes to Raft. See
 - **System group 0** holds the cluster map, buckets and IAM.
   - It is replicated to every node; nodes outside the voting quorum hold
     non-voter replicas.
-  - Bucket and access-key checks are therefore local reads. On a miss, UniIO
+  - Bucket and access-key checks are therefore local reads. On a miss, Unio
     re-checks linearizably against the leader.
 - **Key schema** inside a partition:
   `O | bucketID | escaped(key) | ^versionTimestamp`.
@@ -211,7 +211,7 @@ compaction updates only the local index and never writes to Raft. See
     meant for benchmarks; using it prints a loud warning.
 - **Trust bootstrap from a shared secret.**
   - An Ed25519 cluster CA key is derived deterministically via HKDF from
-    `UNIIO_CLUSTER_SECRET` (at least 32 characters).
+    `UNIO_CLUSTER_SECRET` (at least 32 characters).
   - Each node issues its own certificate from that CA and accepts only peers
     with certificates from the same CA.
   - Operators may supply their own certificates instead.
@@ -228,7 +228,7 @@ compaction updates only the local index and never writes to Raft. See
 ## 8. Drive engine
 
 - **Layout:**
-  - `<drive>/.uniio/format.pb`: drive id, cluster id, format version;
+  - `<drive>/.unio/format.pb`: drive id, cluster id, format version;
   - `segments/`: packed segments;
   - `blobs/<xx>/<id>`: blob files;
   - `index/`: the local Pebble index;
@@ -264,12 +264,12 @@ compaction updates only the local index and never writes to Raft. See
 - **Checksums:** `x-amz-checksum-*` with CRC32, CRC32C, CRC64NVME, SHA1 and
   SHA256.
 - **Object attributes:** user metadata, object tags, `Content-*` headers.
-- **Admin API** (`/uniio/admin/v1/...`, SigV4-signed with an admin key):
+- **Admin API** (`/unio/admin/v1/...`, SigV4-signed with an admin key):
   - users and access keys;
   - cluster information;
   - triggering repair.
-- **Service endpoints:** `/uniio/health/live`, `/uniio/health/ready`, and
-  `/uniio/metrics` (token-protected).
+- **Service endpoints:** `/unio/health/live`, `/unio/health/ready`, and
+  `/unio/metrics` (token-protected).
 
 Planned for later milestones (see [ROADMAP](../../ROADMAP.md)):
 
@@ -283,7 +283,7 @@ Planned for later milestones (see [ROADMAP](../../ROADMAP.md)):
 ## 10. Security baseline
 
 - **No default credentials.**
-  - The root key must be provided, or `uniio init` generates a random one
+  - The root key must be provided, or `unio init` generates a random one
     and writes it to a file with mode 0600.
   - Weak keys are rejected: access keys shorter than 12 characters and
     secret keys shorter than 32.
@@ -366,8 +366,8 @@ Planned for later milestones (see [ROADMAP](../../ROADMAP.md)):
 ## 13. Module layout
 
 ```
-cmd/uniio/                   CLI: server, init, admin
-api/proto/uniio/v1/          Protobuf: metadata records, Raft commands, RPC
+cmd/unio/                   CLI: server, init, admin
+api/proto/unio/v1/          Protobuf: metadata records, Raft commands, RPC
 internal/pb/                 Generated protobuf / vtprotobuf code
 internal/core/               Shared types, errors and interfaces (contracts)
 internal/core/coretest/      In-memory fakes and conformance suites

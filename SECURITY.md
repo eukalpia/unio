@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-UniIO is pre-1.0. Security fixes go to `main` and to the latest released
+Unio is pre-1.0. Security fixes go to `main` and to the latest released
 minor version.
 
 ## Reporting a vulnerability
@@ -10,7 +10,7 @@ minor version.
 **Do not open public issues for security problems.**
 
 Report vulnerabilities privately through
-[GitHub Security Advisories](https://github.com/eukalpia/uniio/security/advisories/new).
+[GitHub Security Advisories](https://github.com/eukalpia/unio/security/advisories/new).
 
 Please include:
 
