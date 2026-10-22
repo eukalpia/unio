@@ -178,7 +178,7 @@ func kindOf(marker string) payloadKind {
 }
 
 // signHeaderWith signs r with the given payload marker at the given time.
-func signHeaderWith(t *testing.T, r *http.Request, marker string, when time.Time) {
+func signHeaderWith(t testing.TB, r *http.Request, marker string, when time.Time) {
 	t.Helper()
 	signer := newSDKSigner()
 	if err := signer.SignHTTP(context.Background(), sdkCredentials(), r, marker, "s3", testRegion, when); err != nil {
@@ -187,7 +187,7 @@ func signHeaderWith(t *testing.T, r *http.Request, marker string, when time.Time
 }
 
 // authorizationSeed extracts the signature from an Authorization header.
-func authorizationSeed(t *testing.T, authz string) [sha256.Size]byte {
+func authorizationSeed(t testing.TB, authz string) [sha256.Size]byte {
 	t.Helper()
 	i := strings.LastIndex(authz, "Signature=")
 	if i < 0 {

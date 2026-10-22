@@ -21,7 +21,7 @@ var docNow = time.Date(2013, 5, 24, 0, 0, 0, 0, time.UTC)
 
 // awsGetRequest is the GET Object example from the S3 SigV4 documentation.
 // The signature is the one published there.
-func awsGetRequest(t *testing.T) *http.Request {
+func awsGetRequest(t testing.TB) *http.Request {
 	t.Helper()
 	r := newHTTPRequest(t, http.MethodGet, "https://examplebucket.s3.amazonaws.com/test.txt", nil)
 	r.Header.Set("Range", "bytes=0-9")
