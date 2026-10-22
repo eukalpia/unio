@@ -155,8 +155,10 @@ func setObjectHeaders(c *Call, info object.Info, checksumMode bool) {
 	setIfSet(c, "Content-Language", info.ContentLanguage)
 	setIfSet(c, "Cache-Control", info.CacheControl)
 	setIfSet(c, "Expires", info.Expires)
+	// The names are stored in lower case and sent that way. Set would write them
+	// in canonical case, which clients that compare names see as a change.
 	for k, v := range info.UserMetadata {
-		h.Set("x-amz-meta-"+k, v)
+		h.SetCanonical([]byte("x-amz-meta-"+k), []byte(v))
 	}
 	if info.StorageClass != "" && info.StorageClass != "STANDARD" {
 		h.Set("x-amz-storage-class", info.StorageClass)
