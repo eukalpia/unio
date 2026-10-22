@@ -69,6 +69,17 @@ fuzzed and never trusts lengths, counts or names from the other side.
 | Default or weak credentials | No defaults; root credentials must pass `auth.ValidateRootCredentials`, the same check at configuration load and at start; `unio init` generates strong secrets | `config`, `auth` |
 | Secret theft from metadata | User secrets encrypted with AES-256-GCM under a key derived from the cluster secret (HKDF); access key id as additional data | `auth/iam` |
 | Policy parser abuse | Size limit, strict JSON, unsupported elements rejected rather than ignored, linear-time wildcard matching | `auth/policy` |
+| Privilege escalation through several policies | A user's access is the union of its inline policy and its attached managed policies. An explicit Deny in any matching statement of any of them wins, an Allow must match otherwise, and anything else is denied. One function, `policy.EvaluateAll`, implements the rule, and it is linear in the total number of statements | `auth/policy`, `auth/iam` |
+| Attachment outliving its policy (dangling grant) | A policy is marked as deleting before its attachments are counted. An attach writes its attachment first, then confirms that the policy is live, and rolls the attachment back when it is not. Evaluation ignores an attachment unless its policy is live and has the same incarnation id, so a rollback that failed still grants nothing | `auth/iam` |
+| Access kept after a policy change | Replacing a document, detaching and deleting clear the local cache at once. Other nodes see the change within the cache TTL, 5 seconds by default. Deleting a policy that is still attached fails with `DeleteConflict` | `auth/iam` |
+| Inheritance by a re-created name | Each managed policy has a random incarnation id, and each attachment records it. A user's attachments are stored in the user record, so they are removed with the user. The incarnation-scoped deletion removes only the records of the deleted user or policy, and a delete that overlaps a re-creation leaves the new record alone | `auth/iam` |
+| Unbounded policy state | At most 1000 managed policies, counted by a slot counter that is never below the number of records; at most 10 attached policies per user; document size limit as for inline policies | `auth/iam` |
+| Policies on the root identity | Root keeps its implicit full access and cannot have policies. Attach, detach and inline policy changes for root are refused with `InvalidArgument` | `auth/iam` |
+
+Known limit: a storage failure during the rollback of a refused attach leaves
+the attachment in place. It then takes effect as soon as its policy is live.
+The attach reports the failure, so an operator must list the user's policies
+after such an error, and detach any attachment that should not exist.
 
 ### 4.3 Internode
 
