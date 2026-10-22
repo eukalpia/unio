@@ -47,7 +47,9 @@ func (e *Env) GetObject(c *Call, head bool) error {
 		PartNumber: partNumber,
 		Conditions: conds,
 	}
-	checksumMode := headers.ParseChecksumMode(c.Header)
+	// A partial read is not checked against the checksum of the whole object, so
+	// its response carries no checksum, as S3 does.
+	checksumMode := headers.ParseChecksumMode(c.Header) && rng == nil
 
 	if head {
 		info, err := e.Layer.HeadObject(c.Ctx, c.Route.Bucket, c.Route.Key, opts)
