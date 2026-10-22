@@ -9,8 +9,8 @@ import (
 
 // ObjectVersion returns the key of one version of key in bucket:
 // O | bucketID | esc(key) 00 01 | ^ts. The timestamp is bitwise inverted, so
-// newer versions (larger ts) sort first. The null version uses ts 0, which
-// sorts after every real version of the same key.
+// newer versions (larger ts) sort first. Null versions have no timestamp
+// of their own; they are ordinary versions with an empty version id.
 func ObjectVersion(bucket ids.BucketID, key []byte, ts uint64) []byte {
 	return binary.BigEndian.AppendUint64(ObjectVersionPrefix(bucket, key), ^ts)
 }
