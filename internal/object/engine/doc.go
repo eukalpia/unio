@@ -2,7 +2,8 @@
 // (meta.Store) and a registry of erasure sets (erasure.Registry).
 //
 // Data placement follows the size tiers of ADR-0005. Payloads up to the
-// inline threshold are kept in the metadata record. Larger payloads, and every
+// inline threshold are kept in the metadata record; a disabled inline tier
+// (Options.InlineThreshold below zero) keeps none. Larger payloads, and every
 // multipart part, are written to one erasure set and referenced by a
 // meta.PartRecord. The metadata commit is the only point where a write becomes
 // visible, and data is deleted only after the metadata that refers to it has
