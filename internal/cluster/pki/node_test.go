@@ -50,9 +50,11 @@ func TestIssueNodeCertificateShape(t *testing.T) {
 			t.Fatalf("missing ExtKeyUsage %v", eku)
 		}
 	}
-	validity := time.Until(leaf.NotAfter)
-	if validity < 364*24*time.Hour || validity > 366*24*time.Hour {
-		t.Fatalf("validity from now = %v, want about one year", validity)
+	if d := time.Until(leaf.NotAfter) - DefaultLifetime; d < -time.Minute || d > time.Minute {
+		t.Fatalf("NotAfter is %v from now, want DefaultLifetime %v", time.Until(leaf.NotAfter), DefaultLifetime)
+	}
+	if got := time.Until(leaf.NotBefore); got > -4*time.Minute || got < -6*time.Minute {
+		t.Fatalf("NotBefore is %v from now, want about five minutes of clock skew", got)
 	}
 }
 

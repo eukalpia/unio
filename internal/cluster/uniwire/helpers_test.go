@@ -48,10 +48,11 @@ func (n *testNet) resolve(id ids.NodeID) (string, error) {
 // transport is closed when the test ends.
 func (n *testNet) node(id ids.NodeID, lim Limits) *Transport {
 	n.t.Helper()
-	ident, err := n.ca.Identity(id, []string{"127.0.0.1"})
+	ident, err := n.ca.NewIdentity(id, []string{"127.0.0.1"}, pki.IssuerOptions{})
 	if err != nil {
 		n.t.Fatal(err)
 	}
+	n.t.Cleanup(func() { _ = ident.Close() })
 	server, err := pki.ServerConfig(ident)
 	if err != nil {
 		n.t.Fatal(err)
@@ -78,10 +79,11 @@ func (n *testNet) node(id ids.NodeID, lim Limits) *Transport {
 // dialOnly starts a transport for id that cannot accept connections.
 func (n *testNet) dialOnly(id ids.NodeID, lim Limits) *Transport {
 	n.t.Helper()
-	ident, err := n.ca.Identity(id, nil)
+	ident, err := n.ca.NewIdentity(id, nil, pki.IssuerOptions{})
 	if err != nil {
 		n.t.Fatal(err)
 	}
+	n.t.Cleanup(func() { _ = ident.Close() })
 	client, err := pki.ClientConfig(ident)
 	if err != nil {
 		n.t.Fatal(err)

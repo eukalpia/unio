@@ -36,15 +36,18 @@ func writeOperatorFiles(t *testing.T, dir string, certDER []byte, key any, caPEM
 
 func TestLoadIdentityFromOperatorFiles(t *testing.T) {
 	ca := mustCA(t, testSecret)
-	id := mustIdentity(t, ca, "node-op")
+	cert, err := ca.IssueNode("node-op", []string{"127.0.0.1"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	dir := t.TempDir()
-	certFile, keyFile, caFile := writeOperatorFiles(t, dir, id.Certificate.Certificate[0], id.Certificate.PrivateKey, ca.PEM())
+	certFile, keyFile, caFile := writeOperatorFiles(t, dir, cert.Certificate[0], cert.PrivateKey, ca.PEM())
 
 	loaded, err := LoadIdentity(certFile, keyFile, caFile)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := nodeIDFromCert(loaded.Certificate.Leaf)
+	got, err := nodeIDFromCert(currentCert(t, loaded).Leaf)
 	if err != nil || got != "node-op" {
 		t.Fatalf("loaded identity id = %q, %v; want node-op", got, err)
 	}
@@ -65,7 +68,10 @@ func TestLoadIdentityFromOperatorFiles(t *testing.T) {
 
 func TestLoadIdentityErrors(t *testing.T) {
 	ca := mustCA(t, testSecret)
-	id := mustIdentity(t, ca, "node-op")
+	cert, err := ca.IssueNode("node-op", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	dir := t.TempDir()
 
 	t.Run("missing files", func(t *testing.T) {
@@ -75,7 +81,7 @@ func TestLoadIdentityErrors(t *testing.T) {
 	})
 
 	t.Run("CA file without certificates", func(t *testing.T) {
-		certFile, keyFile, _ := writeOperatorFiles(t, dir, id.Certificate.Certificate[0], id.Certificate.PrivateKey, ca.PEM())
+		certFile, keyFile, _ := writeOperatorFiles(t, dir, cert.Certificate[0], cert.PrivateKey, ca.PEM())
 		bad := filepath.Join(dir, "empty-ca.crt")
 		if err := os.WriteFile(bad, []byte("not a certificate"), 0o600); err != nil {
 			t.Fatal(err)
@@ -86,7 +92,7 @@ func TestLoadIdentityErrors(t *testing.T) {
 	})
 
 	t.Run("certificate without node URI", func(t *testing.T) {
-		key := id.Certificate.PrivateKey.(ed25519.PrivateKey)
+		key := cert.PrivateKey.(ed25519.PrivateKey)
 		serial, err := rand.Int(rand.Reader, big.NewInt(1<<62))
 		if err != nil {
 			t.Fatal(err)

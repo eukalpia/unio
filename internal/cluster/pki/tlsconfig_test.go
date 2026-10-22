@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"io"
+	"math/big"
 	"net"
 	"testing"
 	"time"
@@ -17,69 +18,99 @@ type handshakeResult struct {
 	clientPeer ids.NodeID
 	serverErr  error
 	clientErr  error
+	// clientSawServer and serverSawClient are the serial numbers of the leaf
+	// certificates each side received. They show which certificate a
+	// handshake used.
+	clientSawServer *big.Int
+	serverSawClient *big.Int
 }
 
-// exchange runs one loopback connection: the client sends a byte, the server
-// answers with another, and each side reports its peer id. Any failure in the
-// handshake or the round trip is returned.
-func exchange(t *testing.T, serverCfg, clientCfg *tls.Config) handshakeResult {
+// connect performs one mutual TLS handshake over loopback. It returns both ends
+// and each side's handshake error. Connections are closed when the test ends.
+func connect(t *testing.T, serverCfg, clientCfg *tls.Config) (srv, cli *tls.Conn, serverErr, clientErr error) {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
-	var res handshakeResult
-	done := make(chan struct{})
+	type accepted struct {
+		conn *tls.Conn
+		err  error
+	}
+	acc := make(chan accepted, 1)
 	go func() {
-		defer close(done)
 		nc, err := ln.Accept()
 		if err != nil {
-			res.serverErr = err
+			acc <- accepted{err: err}
 			return
 		}
-		defer nc.Close()
 		conn := tls.Server(nc, serverCfg)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := conn.HandshakeContext(ctx); err != nil {
-			res.serverErr = err
+			_ = nc.Close()
+			acc <- accepted{err: err}
 			return
 		}
-		res.serverPeer, res.serverErr = PeerID(conn.ConnectionState())
-		if res.serverErr != nil {
-			return
-		}
-		buf := make([]byte, 1)
-		if _, err := io.ReadFull(conn, buf); err != nil {
-			res.serverErr = err
-			return
-		}
-		_, res.serverErr = conn.Write([]byte{'p'})
+		acc <- accepted{conn: conn}
 	}()
 
 	nc, err := net.Dial("tcp", ln.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer nc.Close()
-	conn := tls.Client(nc, clientCfg)
+	cli = tls.Client(nc, clientCfg)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := conn.HandshakeContext(ctx); err != nil {
-		res.clientErr = err
-	} else {
-		res.clientPeer, res.clientErr = PeerID(conn.ConnectionState())
-		if res.clientErr == nil {
-			_, res.clientErr = conn.Write([]byte{'q'})
+	clientErr = cli.HandshakeContext(ctx)
+	cancel()
+	s := <-acc
+	srv, serverErr = s.conn, s.err
+	t.Cleanup(func() {
+		_ = cli.Close()
+		if srv != nil {
+			_ = srv.Close()
 		}
-		if res.clientErr == nil {
-			buf := make([]byte, 1)
-			_, res.clientErr = io.ReadFull(conn, buf)
-		}
+	})
+	return srv, cli, serverErr, clientErr
+}
+
+// roundTrip sends one byte each way over an established connection.
+func roundTrip(cli, srv *tls.Conn) error {
+	deadline := time.Now().Add(5 * time.Second)
+	_ = cli.SetDeadline(deadline)
+	_ = srv.SetDeadline(deadline)
+	if _, err := cli.Write([]byte{'q'}); err != nil {
+		return err
 	}
-	<-done
+	buf := make([]byte, 1)
+	if _, err := io.ReadFull(srv, buf); err != nil {
+		return err
+	}
+	if _, err := srv.Write([]byte{'p'}); err != nil {
+		return err
+	}
+	_, err := io.ReadFull(cli, buf)
+	return err
+}
+
+// exchange handshakes, then performs a round trip, and reports the outcome on
+// both sides.
+func exchange(t *testing.T, serverCfg, clientCfg *tls.Config) handshakeResult {
+	t.Helper()
+	srv, cli, serr, cerr := connect(t, serverCfg, clientCfg)
+	res := handshakeResult{serverErr: serr, clientErr: cerr}
+	if serr != nil || cerr != nil {
+		return res
+	}
+	res.serverPeer, res.serverErr = PeerID(srv.ConnectionState())
+	res.clientPeer, res.clientErr = PeerID(cli.ConnectionState())
+	res.clientSawServer = cli.ConnectionState().PeerCertificates[0].SerialNumber
+	res.serverSawClient = srv.ConnectionState().PeerCertificates[0].SerialNumber
+	if res.serverErr == nil && res.clientErr == nil {
+		res.clientErr = roundTrip(cli, srv)
+	}
 	return res
 }
 
@@ -161,7 +192,7 @@ func TestExpiredPeerRejected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	clientCfg, err := ClientConfig(&Identity{Certificate: expired, Roots: ca.CertPool()})
+	clientCfg, err := ClientConfig(&Identity{fixed: &expired, Roots: ca.CertPool(), clock: SystemClock()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,8 +221,11 @@ func TestConfigsAreTLS13Only(t *testing.T) {
 			t.Fatalf("%s config enables session tickets, which would skip peer checks on resume", name)
 		}
 	}
-	if server.ClientAuth != tls.RequireAndVerifyClientCert {
-		t.Fatal("server does not require client certificates")
+	if server.ClientAuth != tls.RequireAnyClientCert || server.VerifyPeerCertificate == nil {
+		t.Fatal("server does not require and verify client certificates")
+	}
+	if server.GetCertificate == nil || client.GetClientCertificate == nil {
+		t.Fatal("configs do not serve the identity's current certificate")
 	}
 }
 

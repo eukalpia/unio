@@ -39,10 +39,11 @@ func NewCluster(tb testing.TB, nodes ...ids.NodeID) *Cluster {
 	}
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
 	for _, id := range nodes {
-		ident, err := ca.Identity(id, []string{"127.0.0.1"})
+		ident, err := ca.NewIdentity(id, []string{"127.0.0.1"}, pki.IssuerOptions{})
 		if err != nil {
 			tb.Fatal(err)
 		}
+		tb.Cleanup(func() { _ = ident.Close() })
 		server, err := pki.ServerConfig(ident)
 		if err != nil {
 			tb.Fatal(err)
