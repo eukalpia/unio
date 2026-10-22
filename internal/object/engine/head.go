@@ -21,7 +21,7 @@ func (e *Engine) HeadObject(ctx context.Context, bucket, key string, opts object
 		return object.Info{}, err
 	}
 	info := infoOf(rec, opts.VersionID == "")
-	if err := opts.Conditions.EvaluateRead(info); err != nil {
+	if err := evaluateRead(opts.Conditions, info); err != nil {
 		return object.Info{}, err
 	}
 	c, err := selectPart(rec, contentOf(rec), opts.PartNumber)
