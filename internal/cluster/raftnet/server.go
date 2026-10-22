@@ -1,5 +1,7 @@
 package raftnet
 
+//lint:file-ignore SA1019 the handlers bind the legacy Leader and Candidate fields that raft 1.8 still reads.
+
 import (
 	"context"
 	"errors"
@@ -24,7 +26,8 @@ func malformed() error {
 	return s3err.Errorf(s3err.InvalidRequest, "malformed raft request")
 }
 
-// senderMismatch is the error for a request whose header names another node.
+// senderMismatch is the error for a request whose identity fields name another
+// node than the authenticated sender.
 func senderMismatch() error {
 	return s3err.Errorf(s3err.AccessDenied, "raft sender identity mismatch")
 }
@@ -56,22 +59,23 @@ func (n *Network) deliver(ctx context.Context, g *groupTransport, command any, b
 	}
 }
 
-// handleAppendEntries serves an AppendEntries RPC.
+// handleAppendEntries serves an AppendEntries RPC. The request is bound to the
+// sender before its group is looked up or it is delivered to raft.
 func (n *Network) handleAppendEntries(ctx context.Context, from ids.NodeID, req []byte) ([]byte, error) {
 	var p uniov1.RaftAppendEntries
 	if err := p.UnmarshalVT(req); err != nil {
 		return nil, malformed()
 	}
-	if err := checkSender(from, p.GetHeader()); err != nil {
-		return nil, senderMismatch()
+	cmd, err := appendEntriesFromPB(&p)
+	if err != nil {
+		return nil, malformed()
+	}
+	if err := bindSender(from, &cmd.RPCHeader, &cmd.Leader); err != nil {
+		return nil, err
 	}
 	g, err := n.groupFor(p.GetGroup())
 	if err != nil {
 		return nil, err
-	}
-	cmd, err := appendEntriesFromPB(&p)
-	if err != nil {
-		return nil, malformed()
 	}
 	out, err := n.deliver(ctx, g, cmd, nil, isHeartbeat(cmd))
 	if err != nil {
@@ -94,16 +98,16 @@ func (n *Network) handleRequestVote(ctx context.Context, from ids.NodeID, req []
 	if err := p.UnmarshalVT(req); err != nil {
 		return nil, malformed()
 	}
-	if err := checkSender(from, p.GetHeader()); err != nil {
-		return nil, senderMismatch()
+	cmd, err := requestVoteFromPB(&p)
+	if err != nil {
+		return nil, malformed()
+	}
+	if err := bindSender(from, &cmd.RPCHeader, &cmd.Candidate); err != nil {
+		return nil, err
 	}
 	g, err := n.groupFor(p.GetGroup())
 	if err != nil {
 		return nil, err
-	}
-	cmd, err := requestVoteFromPB(&p)
-	if err != nil {
-		return nil, malformed()
 	}
 	out, err := n.deliver(ctx, g, cmd, nil, false)
 	if err != nil {
@@ -126,16 +130,16 @@ func (n *Network) handleRequestPreVote(ctx context.Context, from ids.NodeID, req
 	if err := p.UnmarshalVT(req); err != nil {
 		return nil, malformed()
 	}
-	if err := checkSender(from, p.GetHeader()); err != nil {
-		return nil, senderMismatch()
+	cmd, err := preVoteFromPB(&p)
+	if err != nil {
+		return nil, malformed()
+	}
+	if err := bindSender(from, &cmd.RPCHeader); err != nil {
+		return nil, err
 	}
 	g, err := n.groupFor(p.GetGroup())
 	if err != nil {
 		return nil, err
-	}
-	cmd, err := preVoteFromPB(&p)
-	if err != nil {
-		return nil, malformed()
 	}
 	out, err := n.deliver(ctx, g, cmd, nil, false)
 	if err != nil {
@@ -158,16 +162,16 @@ func (n *Network) handleTimeoutNow(ctx context.Context, from ids.NodeID, req []b
 	if err := p.UnmarshalVT(req); err != nil {
 		return nil, malformed()
 	}
-	if err := checkSender(from, p.GetHeader()); err != nil {
-		return nil, senderMismatch()
+	cmd, err := timeoutNowFromPB(&p)
+	if err != nil {
+		return nil, malformed()
+	}
+	if err := bindSender(from, &cmd.RPCHeader); err != nil {
+		return nil, err
 	}
 	g, err := n.groupFor(p.GetGroup())
 	if err != nil {
 		return nil, err
-	}
-	cmd, err := timeoutNowFromPB(&p)
-	if err != nil {
-		return nil, malformed()
 	}
 	out, err := n.deliver(ctx, g, cmd, nil, false)
 	if err != nil {
@@ -191,8 +195,12 @@ func (n *Network) handleInstallSnapshot(ctx context.Context, req *uniwire.Stream
 	if err := p.UnmarshalVT(req.Payload); err != nil {
 		return nil, malformed()
 	}
-	if err := checkSender(req.From, p.GetHeader()); err != nil {
-		return nil, senderMismatch()
+	cmd, err := installSnapshotFromPB(&p)
+	if err != nil {
+		return nil, malformed()
+	}
+	if err := bindSender(req.From, &cmd.RPCHeader, &cmd.Leader); err != nil {
+		return nil, err
 	}
 	if req.BodyLen != p.GetSize() {
 		return nil, s3err.Errorf(s3err.InvalidRequest, "snapshot length does not match its header")
@@ -200,10 +208,6 @@ func (n *Network) handleInstallSnapshot(ctx context.Context, req *uniwire.Stream
 	g, err := n.groupFor(p.GetGroup())
 	if err != nil {
 		return nil, err
-	}
-	cmd, err := installSnapshotFromPB(&p)
-	if err != nil {
-		return nil, malformed()
 	}
 	// Raft may still hold the body when this handler gives up, and the
 	// transport drains the body afterwards. The guard ensures that raft cannot

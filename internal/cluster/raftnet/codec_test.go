@@ -13,6 +13,7 @@ import (
 
 	"github.com/eukalpia/unio/internal/ids"
 	uniov1 "github.com/eukalpia/unio/internal/pb/unio/v1"
+	"github.com/eukalpia/unio/internal/s3err"
 )
 
 // header returns a raft header naming node id.
@@ -383,12 +384,57 @@ func TestIsHeartbeatMatchesRaftPredicate(t *testing.T) {
 	}
 }
 
-func TestCheckSenderRejectsForeignIdentity(t *testing.T) {
-	h := &uniov1.RaftHeader{Id: []byte("node-b")}
-	if err := checkSender(ids.NodeID("node-b"), h); err != nil {
-		t.Fatalf("matching sender rejected: %v", err)
+// TestBindSender checks every combination of identity fields the binding has to
+// judge: honest, empty, and naming another node.
+func TestBindSender(t *testing.T) {
+	cases := []struct {
+		name       string
+		id, addr   string
+		legacy     string
+		wantErr    bool
+		wantAddr   string
+		wantLegacy string
+	}{
+		{name: "all honest", id: "b", addr: "b", legacy: "b", wantAddr: "b", wantLegacy: "b"},
+		{name: "empty address and legacy are filled", id: "b", addr: "", legacy: "", wantAddr: "b", wantLegacy: "b"},
+		{name: "empty address with honest legacy", id: "b", addr: "", legacy: "b", wantAddr: "b", wantLegacy: "b"},
+		{name: "honest address with empty legacy", id: "b", addr: "b", legacy: "", wantAddr: "b", wantLegacy: "b"},
+		{name: "address names another node", id: "b", addr: "c", legacy: "b", wantErr: true},
+		{name: "legacy names another node", id: "b", addr: "", legacy: "c", wantErr: true},
+		{name: "legacy names another node beside honest address", id: "b", addr: "b", legacy: "c", wantErr: true},
+		{name: "id names another node", id: "c", addr: "c", legacy: "c", wantErr: true},
+		{name: "id is empty", id: "", addr: "", legacy: "", wantErr: true},
 	}
-	if err := checkSender(ids.NodeID("node-c"), h); err == nil {
-		t.Fatal("header naming another node accepted")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := raft.RPCHeader{ID: []byte(tc.id), Addr: []byte(tc.addr)}
+			legacy := []byte(tc.legacy)
+			err := bindSender(ids.NodeID("b"), &h, &legacy)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("bindSender error = %v, want error=%v", err, tc.wantErr)
+			}
+			if err != nil {
+				if s3err.CodeOf(err) != s3err.AccessDenied {
+					t.Fatalf("refusal code = %s, want AccessDenied", s3err.CodeOf(err))
+				}
+				return
+			}
+			if string(h.Addr) != tc.wantAddr || string(legacy) != tc.wantLegacy {
+				t.Fatalf("after bind addr=%q legacy=%q, want %q and %q", h.Addr, legacy, tc.wantAddr, tc.wantLegacy)
+			}
+		})
+	}
+}
+
+// TestBindSenderWithoutLegacyField checks the binding for RPCs that carry no
+// legacy identity field.
+func TestBindSenderWithoutLegacyField(t *testing.T) {
+	h := raft.RPCHeader{ID: []byte("b"), Addr: []byte("c")}
+	if err := bindSender(ids.NodeID("b"), &h); err == nil {
+		t.Fatal("address naming another node accepted")
+	}
+	h = raft.RPCHeader{ID: []byte("b")}
+	if err := bindSender(ids.NodeID("b"), &h); err != nil || string(h.Addr) != "b" {
+		t.Fatalf("empty address not filled: %v, %q", err, h.Addr)
 	}
 }

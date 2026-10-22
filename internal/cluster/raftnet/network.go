@@ -131,16 +131,6 @@ func (n *Network) groupFor(group uint32) (*groupTransport, error) {
 	return g, nil
 }
 
-// checkSender rejects a request whose header claims an identity other than the
-// authenticated sender. Raft trusts the header, so this is the check that
-// stops one node from voting or appending as another.
-func checkSender(from ids.NodeID, h *uniov1.RaftHeader) error {
-	if string(h.GetId()) != string(from) {
-		return fmt.Errorf("raftnet: request from %s claims identity %q", from, h.GetId())
-	}
-	return nil
-}
-
 // groupTransport is the raft.Transport of one group.
 type groupTransport struct {
 	net      *Network
