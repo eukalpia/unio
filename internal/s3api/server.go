@@ -250,9 +250,11 @@ func (s *Server) handle(ctx context.Context, c *app.RequestContext) {
 	authorize := func(action auth.Action, bucket, key string) error {
 		return s.authz.Authorize(ctx, identity, action, bucket, key)
 	}
-	if err := authorize(primaryAction(rt.Op), rt.Bucket, rt.Key); err != nil {
-		apierr.Write(c, s.logger, err, resource)
-		return
+	if requiresPreAuthorization(rt.Op) {
+		if err := authorize(primaryAction(rt.Op), rt.Bucket, rt.Key); err != nil {
+			apierr.Write(c, s.logger, err, resource)
+			return
+		}
 	}
 	call := &handlers.Call{
 		Ctx:       ctx,
