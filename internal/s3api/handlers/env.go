@@ -15,6 +15,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 
 	"github.com/eukalpia/unio/internal/auth"
+	"github.com/eukalpia/unio/internal/bufpool"
 	"github.com/eukalpia/unio/internal/object"
 	"github.com/eukalpia/unio/internal/s3api/router"
 	"github.com/eukalpia/unio/internal/s3err"
@@ -29,6 +30,12 @@ type Env struct {
 	Region string
 	// Logger receives diagnostics from handlers.
 	Logger *slog.Logger
+	// CopyPool supplies the copy buffers of streamed GET responses.
+	CopyPool *bufpool.Pool
+	// WriteIdle bounds the wait for each write of a streamed body.
+	WriteIdle time.Duration
+	// WriteCap caps the total time of one streamed response. Zero means none.
+	WriteCap time.Duration
 }
 
 // Call is one authenticated request ready for its operation.

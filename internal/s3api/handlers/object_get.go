@@ -59,21 +59,37 @@ func (e *Env) GetObject(c *Call, head bool) error {
 	if err != nil {
 		return err
 	}
-	setObjectHeaders(c, reader.Info, checksumMode)
-	applyOverrides(c)
-	status := 200
-	if rng != nil {
-		status = 206
-		c.RC.Response.Header.Set("Content-Range", contentRange(reader.Offset, reader.Length, reader.Info.Size))
-	}
-	c.RC.SetStatusCode(status)
 	if reader.Length == 0 {
 		_ = reader.Close()
+		setObjectHeaders(c, reader.Info, checksumMode)
+		applyOverrides(c)
+		c.RC.SetStatusCode(rangeStatus(c, rng, reader))
 		c.RC.Response.Header.SetContentLength(0)
 		return nil
 	}
-	c.RC.Response.SetBodyStream(reader.ReadCloser, int(reader.Length))
+	// The copy buffer is acquired before any header is set, so that a budget
+	// or deadline failure is reported as a normal S3 error.
+	buf, err := e.CopyPool.Get(c.Ctx)
+	if err != nil {
+		_ = reader.Close()
+		return err
+	}
+	setObjectHeaders(c, reader.Info, checksumMode)
+	applyOverrides(c)
+	c.RC.SetStatusCode(rangeStatus(c, rng, reader))
+	c.RC.Response.Header.SetContentLength(int(reader.Length))
+	e.streamObject(c, reader, buf)
 	return nil
+}
+
+// rangeStatus returns 206 with Content-Range for a range request, and 200 for
+// a full read.
+func rangeStatus(c *Call, rng *object.HTTPRange, reader *object.Reader) int {
+	if rng == nil {
+		return 200
+	}
+	c.RC.Response.Header.Set("Content-Range", contentRange(reader.Offset, reader.Length, reader.Info.Size))
+	return 206
 }
 
 // contentRange formats the Content-Range value of a partial response.

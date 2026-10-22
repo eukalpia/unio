@@ -23,6 +23,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/route"
 
 	"github.com/eukalpia/unio/internal/auth"
+	"github.com/eukalpia/unio/internal/bufpool"
 	"github.com/eukalpia/unio/internal/object"
 	"github.com/eukalpia/unio/internal/s3api/apierr"
 	"github.com/eukalpia/unio/internal/s3api/handlers"
@@ -30,10 +31,11 @@ import (
 	"github.com/eukalpia/unio/internal/s3api/router"
 )
 
-// maxRequestBody is the largest request body the transport accepts. The
-// largest legitimate body is a single part, so the limit is object.MaxPartSize
-// capped to what fits in an int on this platform.
-var maxRequestBody = int(min(int64(object.MaxPartSize), int64(math.MaxInt)))
+// maxRequestBody is the transport body limit. Bodies are streamed, never
+// buffered, so the transport does not need a size limit of its own: every
+// operation checks its declared length against its S3 limit before it reads
+// the body, and reports EntityTooLarge with the S3 code.
+const maxRequestBody = math.MaxInt
 
 // Server serves the S3 API. Create it with New, then call Run or Serve. A
 // Server serves at most one listener at a time.
@@ -89,10 +91,17 @@ func New(cfg Config, layer object.Layer, authn auth.Authenticator, authz auth.Au
 		return nil, err
 	}
 	s := &Server{
-		cfg:     cfg,
-		logger:  logger,
-		router:  rt,
-		env:     &handlers.Env{Layer: layer, Region: cfg.Region, Logger: logger},
+		cfg:    cfg,
+		logger: logger,
+		router: rt,
+		env: &handlers.Env{
+			Layer:     layer,
+			Region:    cfg.Region,
+			Logger:    logger,
+			CopyPool:  bufpool.NewPool(copyBufferSize, cfg.BufferBudget),
+			WriteIdle: cfg.WriteIdleTimeout,
+			WriteCap:  cfg.WriteTimeout,
+		},
 		authn:   authn,
 		authz:   authz,
 		tls:     tlsCfg,
@@ -194,7 +203,6 @@ func (s *Server) newHertz(ln net.Listener) *server.Hertz {
 		server.WithMaxRequestBodySize(maxRequestBody),
 		server.WithMaxHeaderBytes(object.MaxHeaderBytes),
 		server.WithReadTimeout(s.cfg.ReadHeaderTimeout),
-		server.WithWriteTimeout(s.cfg.WriteTimeout),
 		server.WithIdleTimeout(s.cfg.IdleTimeout),
 		server.WithExitWaitTime(s.cfg.ShutdownTimeout),
 		server.WithDisablePrintRoute(true),
@@ -208,6 +216,7 @@ func (s *Server) newHertz(ln net.Listener) *server.Hertz {
 	h := server.New(opts...)
 	h.Use(
 		middleware.RequestID(s.hostID),
+		middleware.WriteDeadline(s.cfg.WriteIdleTimeout),
 		middleware.AccessLog(s.logger),
 		middleware.Recover(s.logger),
 		middleware.Admission(s.limiter, s.logger),
@@ -223,6 +232,10 @@ func (s *Server) handle(ctx context.Context, c *app.RequestContext) {
 	rt, err := s.router.Match(routeRequest(c))
 	if err != nil {
 		apierr.Write(c, s.logger, err, string(c.Request.URI().PathOriginal()))
+		return
+	}
+	if rt.Op.IsService() {
+		s.serveService(ctx, c, rt)
 		return
 	}
 	resource := resourceOf(rt)

@@ -84,6 +84,13 @@ func (r *Router) Match(req Request) (Route, error) {
 	if err != nil {
 		return Route{}, s3err.Errorf(s3err.InvalidRequest, "malformed query string")
 	}
+	if _, virtual := r.bucketFromHost(req.Host); !virtual && isReservedPath(req.Path) && !isReservedBucketCreate(req.Method, req.Path) {
+		op, err := serviceOp(req.Method, req.Path)
+		if err != nil {
+			return Route{}, err
+		}
+		return Route{Op: op, Query: query}, nil
+	}
 	bucket, key, err := r.splitTarget(req.Host, req.Path)
 	if err != nil {
 		return Route{}, err
@@ -165,4 +172,45 @@ func unescape(s string) (string, error) {
 		return "", s3err.Errorf(s3err.InvalidArgument, "invalid percent-encoding in request path")
 	}
 	return v, nil
+}
+
+// reservedPrefix is the namespace reserved for service endpoints and future
+// administrative APIs. Path-style requests under it are never bucket lookups:
+// bucket "unio" cannot be created, so the namespace cannot collide with data.
+const reservedPrefix = "/unio"
+
+// isReservedPath reports whether rawPath is inside the reserved namespace.
+func isReservedPath(rawPath string) bool {
+	return rawPath == reservedPrefix || strings.HasPrefix(rawPath, reservedPrefix+"/")
+}
+
+// serviceOp routes a request in the reserved namespace. Health and metrics
+// endpoints accept GET and HEAD (metrics only GET); anything else in the
+// namespace is reported as NoSuchKey, so that probes cannot tell it apart
+// from a missing object.
+func serviceOp(method, rawPath string) (Op, error) {
+	switch rawPath {
+	case "/unio/health/live":
+		return serviceMethod(method, OpHealthLive, true)
+	case "/unio/health/ready":
+		return serviceMethod(method, OpHealthReady, true)
+	case "/unio/metrics":
+		return serviceMethod(method, OpMetrics, false)
+	}
+	return OpUnknown, s3err.Errorf(s3err.NoSuchKey, "the specified key does not exist")
+}
+
+// serviceMethod checks the method of a service endpoint.
+func serviceMethod(method string, op Op, allowHead bool) (Op, error) {
+	if method == "GET" || (allowHead && method == "HEAD") {
+		return op, nil
+	}
+	return OpUnknown, methodNotAllowed()
+}
+
+// isReservedBucketCreate reports whether a request creates the bucket named
+// like the reserved namespace. Such a request is routed as an ordinary
+// CreateBucket, and the handler rejects the name with InvalidBucketName.
+func isReservedBucketCreate(method, rawPath string) bool {
+	return method == "PUT" && (rawPath == reservedPrefix || rawPath == reservedPrefix+"/")
 }

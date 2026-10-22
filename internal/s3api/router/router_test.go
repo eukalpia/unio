@@ -82,6 +82,23 @@ func TestMatch(t *testing.T) {
 		{"list versions", Request{Method: "GET", Path: "/photos", Query: "versions="}, want{err: s3err.NotImplemented}},
 		{"select", Request{Method: "POST", Path: "/photos/k", Query: "select=&select-type=2"}, want{err: s3err.NotImplemented}},
 
+		// Reserved service namespace: never a bucket lookup.
+		{"health live", Request{Method: "GET", Path: "/unio/health/live"}, want{op: OpHealthLive}},
+		{"health live head", Request{Method: "HEAD", Path: "/unio/health/live"}, want{op: OpHealthLive}},
+		{"health ready", Request{Method: "GET", Path: "/unio/health/ready"}, want{op: OpHealthReady}},
+		{"metrics", Request{Method: "GET", Path: "/unio/metrics"}, want{op: OpMetrics}},
+		{"health wrong method", Request{Method: "PUT", Path: "/unio/health/live"}, want{err: s3err.MethodNotAllowed}},
+		{"metrics wrong method", Request{Method: "DELETE", Path: "/unio/metrics"}, want{err: s3err.MethodNotAllowed}},
+		{"reserved admin prefix", Request{Method: "GET", Path: "/unio/admin/v1/users"}, want{err: s3err.NoSuchKey}},
+		{"reserved unknown", Request{Method: "GET", Path: "/unio/anything"}, want{err: s3err.NoSuchKey}},
+		{"reserved bare prefix", Request{Method: "GET", Path: "/unio"}, want{err: s3err.NoSuchKey}},
+		{"reserved trailing slash", Request{Method: "GET", Path: "/unio/"}, want{err: s3err.NoSuchKey}},
+		{"reserved bucket put", Request{Method: "PUT", Path: "/unio/photos"}, want{err: s3err.NoSuchKey}},
+		{"reserved bucket name create", Request{Method: "PUT", Path: "/unio"}, want{op: OpCreateBucket, bucket: "unio"}},
+		{"reserved bucket name create trailing slash", Request{Method: "PUT", Path: "/unio/"}, want{op: OpCreateBucket, bucket: "unio"}},
+		{"virtual host object under unio prefix", Request{Method: "GET", Host: "photos.s3.unio.local", Path: "/unio/health/live"}, want{op: OpGetObject, bucket: "photos", key: "unio/health/live"}},
+		{"virtual host bucket unio is an object key", Request{Method: "GET", Host: "unio.s3.unio.local", Path: "/unio/metrics"}, want{op: OpGetObject, bucket: "unio", key: "unio/metrics"}},
+
 		// Malformed input.
 		{"relative path", Request{Method: "GET", Path: "photos"}, want{err: s3err.InvalidRequest}},
 		{"bad percent in key", Request{Method: "GET", Path: "/photos/%zz"}, want{err: s3err.InvalidArgument}},

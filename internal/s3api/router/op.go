@@ -27,6 +27,12 @@ const (
 	OpCompleteMultipartUpload
 	OpAbortMultipartUpload
 	OpListParts
+
+	// Service endpoints of the reserved /unio/ namespace. They are not S3
+	// operations and never name a bucket.
+	OpHealthLive
+	OpHealthReady
+	OpMetrics
 )
 
 var opNames = [...]string{
@@ -51,6 +57,9 @@ var opNames = [...]string{
 	OpCompleteMultipartUpload: "CompleteMultipartUpload",
 	OpAbortMultipartUpload:    "AbortMultipartUpload",
 	OpListParts:               "ListParts",
+	OpHealthLive:              "HealthLive",
+	OpHealthReady:             "HealthReady",
+	OpMetrics:                 "Metrics",
 }
 
 // String returns the S3 operation name, for logs and metrics.
@@ -59,4 +68,10 @@ func (o Op) String() string {
 		return opNames[o]
 	}
 	return opNames[OpUnknown]
+}
+
+// IsService reports whether o is a service endpoint of the reserved
+// namespace rather than an S3 operation.
+func (o Op) IsService() bool {
+	return o == OpHealthLive || o == OpHealthReady || o == OpMetrics
 }

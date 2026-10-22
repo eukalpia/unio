@@ -8,14 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
-	"net"
-	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"go.uber.org/goleak"
@@ -37,40 +33,7 @@ func TestMain(m *testing.M) {
 // connections are closed when the test ends.
 func newClient(t *testing.T, authz auth.Authorizer) *s3.Client {
 	t.Helper()
-	srv, err := s3api.New(s3api.Config{Addr: "127.0.0.1:0", Region: "us-east-1"},
-		fakes.NewLayer(), &fakes.Authenticator{}, authz,
-		slog.New(slog.NewTextHandler(io.Discard, nil)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	served := make(chan error, 1)
-	go func() { served <- srv.Serve(ctx, ln) }()
-
-	transport := &http.Transport{}
-	t.Cleanup(func() {
-		cancel()
-		if err := <-served; err != nil {
-			t.Errorf("serve returned: %v", err)
-		}
-		transport.CloseIdleConnections()
-	})
-
-	cfg := aws.Config{
-		Region:      "us-east-1",
-		Credentials: credentials.NewStaticCredentialsProvider("AKIAE2ETEST0000000000", "e2e-secret-key-for-tests-only-00000", ""),
-		HTTPClient:  &http.Client{Transport: transport},
-	}
-	return s3.NewFromConfig(cfg, func(o *s3.Options) {
-		o.BaseEndpoint = aws.String("http://" + ln.Addr().String())
-		o.UsePathStyle = true
-		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
-		o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
-	})
+	return newS3(startServer(t, s3api.Config{}, authz), newHTTPClient(t, nil))
 }
 
 func must(t *testing.T, err error) {

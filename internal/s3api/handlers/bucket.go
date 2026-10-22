@@ -10,9 +10,16 @@ import (
 // usEast1 is the region that S3 reports as an empty location constraint.
 const usEast1 = "us-east-1"
 
+// reservedBucket is the bucket name that the service namespace /unio/ owns, so
+// it can never name a bucket.
+const reservedBucket = "unio"
+
 // CreateBucket creates a bucket. The optional body names the location, which
 // must be this deployment's region.
 func (e *Env) CreateBucket(c *Call) error {
+	if c.Route.Bucket == reservedBucket {
+		return s3err.Errorf(s3err.InvalidBucketName, "the bucket name is reserved for the service namespace")
+	}
 	location := ""
 	if c.hasPayload() {
 		data, err := c.readXML()
