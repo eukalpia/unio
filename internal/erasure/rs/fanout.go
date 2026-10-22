@@ -139,7 +139,7 @@ func (fo *fanout) runFeeder(t *target, pw *io.PipeWriter) {
 // for a target that was skipped. Every reference is released even when
 // dispatch fails, so the frame's buffer always returns to its pool.
 func (fo *fanout) dispatch(f *frame) error {
-	f.refs.Store(int32(len(fo.targets)))
+	f.refs.Store(int64(len(fo.targets)))
 	var err error
 	for _, t := range fo.targets {
 		sent := false

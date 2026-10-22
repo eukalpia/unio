@@ -200,7 +200,7 @@ func testRoundTrip(t *testing.T, newSet SetFactory, k, m int) {
 	for _, size := range sizes {
 		t.Run(fmt.Sprintf("size=%d", size), func(t *testing.T) {
 			f := newFixture(t, newSet, k, m)
-			data := payload(size, uint64(size)+1)
+			data := payload(size, 1)
 			id, layout := f.mustWrite(t, data)
 			f.checkPlacement(t, id, layout)
 			got, err := f.readRange(context.Background(), id, layout, size, 0, size)
@@ -231,7 +231,7 @@ func testRangeReads(t *testing.T, newSet SetFactory, k, m int) {
 		{0, size},
 		{2*stripeSize - 1, stripeSize/2 + 1},
 	}
-	rng := rand.New(rand.NewPCG(1, 2))
+	rng := rand.New(rand.NewPCG(1, 2)) // #nosec G404 -- seeded PRNG picks test range offsets; not used for secrets
 	for range 32 {
 		off := rng.Int64N(size)
 		ranges = append(ranges, [2]int64{off, rng.Int64N(size - off + 1)})

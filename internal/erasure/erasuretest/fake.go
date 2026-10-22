@@ -16,8 +16,9 @@ import (
 // no coding or placement. Use it in the tests of packages that consume a Set.
 // It does not model faults; use the conformance suite for real sets.
 type FakeSet struct {
-	id   ids.SetID
-	k, m int
+	id     ids.SetID
+	k, m   int
+	drives []ids.DriveID // one distinct drive id per shard
 
 	mu      sync.Mutex
 	objects map[ids.DataID][]byte
@@ -25,9 +26,15 @@ type FakeSet struct {
 
 var _ erasure.Set = (*FakeSet)(nil)
 
-// NewFakeSet returns an empty FakeSet with the given shape.
+// NewFakeSet returns an empty FakeSet with the given shape. It draws one
+// random drive id per shard, so dataShards must be at least 1 and
+// parityShards must not be negative.
 func NewFakeSet(id ids.SetID, dataShards, parityShards int) *FakeSet {
-	return &FakeSet{id: id, k: dataShards, m: parityShards, objects: make(map[ids.DataID][]byte)}
+	drives := make([]ids.DriveID, dataShards+parityShards)
+	for i := range drives {
+		drives[i] = ids.NewDriveID()
+	}
+	return &FakeSet{id: id, k: dataShards, m: parityShards, drives: drives, objects: make(map[ids.DataID][]byte)}
 }
 
 // ID implements erasure.Set.
@@ -56,16 +63,12 @@ func (s *FakeSet) Write(ctx context.Context, id ids.DataID, r io.Reader, size in
 
 // layout returns a layout with one non-zero drive id per shard.
 func (s *FakeSet) layout() erasure.Layout {
-	drives := make([]ids.DriveID, s.k+s.m)
-	for i := range drives {
-		drives[i] = ids.DriveID{0: byte(s.id), 1: byte(i + 1)}
-	}
 	return erasure.Layout{
 		Set:          s.id,
 		DataShards:   s.k,
 		ParityShards: s.m,
 		StripeSize:   erasure.DefaultStripeSize,
-		Drives:       drives,
+		Drives:       append([]ids.DriveID(nil), s.drives...),
 	}
 }
 
