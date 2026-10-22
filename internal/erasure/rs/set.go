@@ -33,6 +33,8 @@ type Set struct {
 	geoms sync.Map
 }
 
+var _ erasure.Set = (*Set)(nil)
+
 // New returns a set over drives, where drives[i] stores shard i. It fails if
 // the shape is invalid, a drive is nil, or the budget cannot hold one stripe
 // of buffers.
