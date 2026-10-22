@@ -104,10 +104,12 @@ func md5Of(data []byte) [16]byte {
 }
 
 // newUploadID returns a random 32-character lower-case hex upload id.
-func newUploadID() string {
+func newUploadID() (string, error) {
 	var b [16]byte
-	_, _ = rand.Read(b[:])
-	return hex.EncodeToString(b[:])
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", fmt.Errorf("objecttest: upload id: %w", err)
+	}
+	return hex.EncodeToString(b[:]), nil
 }
 
 // listedKey is one entry of a delimited listing: an object key or a common

@@ -2,6 +2,7 @@ package objecttest
 
 import (
 	"bytes"
+	"slices"
 	"sort"
 	"testing"
 
@@ -77,7 +78,7 @@ func suiteCopy(t *testing.T, newLayer func(*testing.T) object.Layer) {
 		t.Run("copy "+sizeName(size), func(t *testing.T) {
 			l := newLayer(t)
 			mustBucket(t, l)
-			data := payload(size, uint64(size)+7)
+			data := payload(size, seedOf(size)+7)
 			mustPut(t, l, "src", data)
 			if _, err := l.CopyObject(t.Context(), object.Ref{Bucket: testBucket, Key: "src"}, testBucket, "dst", object.CopyOptions{}); err != nil {
 				t.Fatal(err)
@@ -277,14 +278,7 @@ func suiteList(t *testing.T, newLayer func(*testing.T) object.Layer) {
 	})
 }
 
+// equalStrings reports whether a and b hold the same strings in the same order.
 func equalStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
+	return slices.Equal(a, b)
 }

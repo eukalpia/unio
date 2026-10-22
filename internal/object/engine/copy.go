@@ -137,13 +137,13 @@ func (e *Engine) readInline(ctx context.Context, c content, dg *digests) ([]byte
 	}
 	data := make([]byte, c.size)
 	if _, err := io.ReadFull(rc, data); err != nil {
-		_ = rc.Close()
+		_ = rc.Close() // the read error is returned instead
 		return nil, wrapCause("reading source", err)
 	}
 	if err := rc.Close(); err != nil {
 		return nil, wrapCause("closing source", err)
 	}
-	_, _ = dg.writer().Write(data)
+	_, _ = dg.writer().Write(data) // hash writes never fail
 	return data, nil
 }
 
@@ -163,7 +163,7 @@ func (e *Engine) copyPart(ctx context.Context, set erasure.Set, c content, off, 
 	id := ids.NewDataID()
 	layout, err := set.Write(ctx, id, io.TeeReader(rc, dg.writer()), length)
 	if err != nil {
-		_ = rc.Close()
+		_ = rc.Close() // the write error is returned instead
 		return meta.PartRecord{}, wrapCause("writing copy", err)
 	}
 	if err := rc.Close(); err != nil {

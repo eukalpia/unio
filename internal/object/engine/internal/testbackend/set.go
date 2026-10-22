@@ -12,6 +12,10 @@ import (
 	"github.com/eukalpia/unio/internal/ids"
 )
 
+// maxDrives bounds the drives of a set. Shard indices are uint16, so a set
+// never has more drives than this.
+const maxDrives = 1 << 15
+
 // Set is an in-memory erasure.Set. Every drive holds a full copy of each
 // shard, each copy with its own digest. Writes need the write quorum of
 // drives, reads verify the digest of a copy before serving it, and a copy
@@ -25,7 +29,10 @@ type Set struct {
 }
 
 type drive struct {
-	id         ids.DriveID
+	id ids.DriveID
+	// index is the position of the drive in its set, and the shard index of
+	// every copy it holds.
+	index      uint16
 	failWrites bool
 	shards     map[ids.ShardID]shard
 }
@@ -38,14 +45,29 @@ type shard struct {
 var _ erasure.Set = (*Set)(nil)
 
 // NewSet returns a set with k data and m parity shards, one drive per shard.
+// It panics on a shape no set can have; that is a programming error in the
+// test that builds the set.
 func NewSet(id ids.SetID, k, m int) *Set {
+	if k < 1 || m < 0 || k+m > maxDrives {
+		panic(fmt.Sprintf("testbackend: invalid erasure shape %d+%d", k, m))
+	}
 	s := &Set{id: id, k: k, m: m, byID: make(map[ids.DriveID]*drive, k+m)}
 	for i := 0; i < k+m; i++ {
-		d := &drive{id: ids.NewDriveID(), shards: make(map[ids.ShardID]shard)}
+		// i < k+m <= maxDrives, checked above, so the index fits in a uint16.
+		d := &drive{
+			id:     ids.NewDriveID(),
+			index:  uint16(i), // #nosec G115 -- i is below maxDrives, checked above
+			shards: make(map[ids.ShardID]shard),
+		}
 		s.drives = append(s.drives, d)
 		s.byID[d.id] = d
 	}
 	return s
+}
+
+// shardKey names the copy of id held by drive d.
+func shardKey(id ids.DataID, d *drive) ids.ShardID {
+	return ids.ShardID{Data: id, Index: d.index}
 }
 
 // ID implements erasure.Set.
@@ -77,18 +99,18 @@ func (s *Set) Write(ctx context.Context, id ids.DataID, r io.Reader, size int64)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var written []int
+	var written []*drive
 	for i, d := range s.drives {
 		if d.failWrites {
 			continue
 		}
-		d.shards[ids.ShardID{Data: id, Index: uint16(i)}] = shard{data: buf, sum: sum}
+		d.shards[shardKey(id, d)] = shard{data: buf, sum: sum}
 		layout.Drives[i] = d.id
-		written = append(written, i)
+		written = append(written, d)
 	}
 	if layout.Written() < layout.WriteQuorum() {
-		for _, i := range written {
-			delete(s.drives[i].shards, ids.ShardID{Data: id, Index: uint16(i)})
+		for _, d := range written {
+			delete(d.shards, shardKey(id, d))
 		}
 		return erasure.Layout{}, fmt.Errorf("testbackend: %d of %d drives written: %w",
 			layout.Written(), layout.WriteQuorum(), erasure.ErrWriteQuorum)
@@ -108,7 +130,7 @@ func (s *Set) Read(ctx context.Context, id ids.DataID, layout erasure.Layout, si
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	corrupt := false
-	for i, did := range layout.Drives {
+	for _, did := range layout.Drives {
 		if did.IsZero() {
 			continue
 		}
@@ -116,7 +138,7 @@ func (s *Set) Read(ctx context.Context, id ids.DataID, layout erasure.Layout, si
 		if !ok {
 			continue
 		}
-		sh, ok := d.shards[ids.ShardID{Data: id, Index: uint16(i)}]
+		sh, ok := d.shards[shardKey(id, d)]
 		if !ok {
 			continue
 		}
@@ -136,9 +158,9 @@ func (s *Set) Read(ctx context.Context, id ids.DataID, layout erasure.Layout, si
 func (s *Set) Delete(_ context.Context, id ids.DataID, layout erasure.Layout) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for i, did := range layout.Drives {
+	for _, did := range layout.Drives {
 		if d, ok := s.byID[did]; ok {
-			delete(d.shards, ids.ShardID{Data: id, Index: uint16(i)})
+			delete(d.shards, shardKey(id, d))
 		}
 	}
 	return nil
@@ -166,24 +188,25 @@ func (s *Set) FailDrive(i int, on bool) {
 	s.drives[i].failWrites = on
 }
 
-// Corrupt flips a byte in the copy of shard i of id on drive i. It reports
-// whether such a copy exists.
+// Corrupt flips a byte in the copy of id held by drive i. It reports whether
+// such a copy exists.
 func (s *Set) Corrupt(id ids.DataID, i int) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	key := ids.ShardID{Data: id, Index: uint16(i)}
-	sh, ok := s.drives[i].shards[key]
+	d := s.drives[i]
+	key := shardKey(id, d)
+	sh, ok := d.shards[key]
 	if !ok || len(sh.data) == 0 {
 		return false
 	}
 	bad := append([]byte(nil), sh.data...)
 	bad[0] ^= 0xff
 	sh.data = bad
-	s.drives[i].shards[key] = sh
+	d.shards[key] = sh
 	return true
 }
 
-// dataIDs returns the distinct data ids that have at least one shard copy.
+// dataIDs adds the distinct data ids that have at least one shard copy to into.
 func (s *Set) dataIDs(into map[ids.DataID]struct{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -9,6 +9,10 @@ import (
 	"github.com/eukalpia/unio/internal/ids"
 )
 
+// maxSets bounds the sets of a registry. The placement hash is reduced modulo
+// the set count in 32 bits, so the count must fit in a uint32.
+const maxSets = 1 << 16
+
 // Registry is an in-memory erasure.Registry over a fixed list of Sets.
 type Registry struct {
 	sets []*Set
@@ -18,11 +22,16 @@ type Registry struct {
 var _ erasure.Registry = (*Registry)(nil)
 
 // NewRegistry returns a registry of n sets, each with k data and m parity
-// shards.
+// shards. It panics on a count no registry can have; that is a programming error
+// in the test that builds the registry.
 func NewRegistry(n, k, m int) *Registry {
+	if n < 1 || n > maxSets {
+		panic(fmt.Sprintf("testbackend: set count %d outside [1, %d]", n, maxSets))
+	}
 	r := &Registry{byID: make(map[ids.SetID]*Set, n)}
 	for i := 0; i < n; i++ {
-		s := NewSet(ids.SetID(i+1), k, m)
+		// i < n <= maxSets, checked above, so the id fits in a uint32.
+		s := NewSet(ids.SetID(i+1), k, m) // #nosec G115 -- i is below maxSets, checked above
 		r.sets = append(r.sets, s)
 		r.byID[s.ID()] = s
 	}
@@ -32,14 +41,17 @@ func NewRegistry(n, k, m int) *Registry {
 // Place implements erasure.Registry. Sets are chosen by hashing the key, so
 // a key always lands on the same set.
 func (r *Registry) Place(_ context.Context, bucket, key string, _ int64) (erasure.Set, error) {
-	if len(r.sets) == 0 {
+	count := len(r.sets)
+	if count == 0 || count > maxSets {
 		return nil, fmt.Errorf("testbackend: no erasure sets: %w", erasure.ErrUnknownSet)
 	}
 	h := fnv.New32a()
-	_, _ = h.Write([]byte(bucket))
+	_, _ = h.Write([]byte(bucket)) // hash.Hash writes never fail
 	_, _ = h.Write([]byte{0})
 	_, _ = h.Write([]byte(key))
-	return r.sets[int(h.Sum32()%uint32(len(r.sets)))], nil
+	// count is in [1, maxSets] here, so it fits in a uint32.
+	slot := h.Sum32() % uint32(count) // #nosec G115 -- count is checked above
+	return r.sets[slot], nil
 }
 
 // Get implements erasure.Registry.

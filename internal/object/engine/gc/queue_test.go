@@ -71,7 +71,11 @@ func newQueue(t *testing.T, cfg Config) *Queue {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = q.Close(context.Background()) })
+	t.Cleanup(func() {
+		if err := q.Close(context.Background()); err != nil {
+			t.Errorf("close queue: %v", err)
+		}
+	})
 	return q
 }
 

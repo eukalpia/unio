@@ -194,7 +194,9 @@ func TestCorruptShardsAreNeverServed(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := io.ReadAll(r)
-	_ = r.Close()
+	if cerr := r.Close(); cerr != nil {
+		t.Fatalf("close reader: %v", cerr)
+	}
 	if !errors.Is(err, erasure.ErrCorrupt) {
 		t.Fatalf("read of damaged part: err = %v, want ErrCorrupt", err)
 	}

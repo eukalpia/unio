@@ -38,7 +38,7 @@ func suiteConditional(t *testing.T, newLayer func(*testing.T) object.Layer) {
 				opts := object.GetOptions{Conditions: tt.cond}
 				r, err := l.GetObject(t.Context(), testBucket, "k", opts)
 				if err == nil {
-					r.Close()
+					closeReader(t, r)
 				}
 				expectCode(t, err, tt.want)
 				_, err = l.HeadObject(t.Context(), testBucket, "k", opts)
@@ -169,7 +169,7 @@ func suiteRanges(t *testing.T, newLayer func(*testing.T) object.Layer) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					defer r.Close()
+					t.Cleanup(func() { closeReader(t, r) })
 					if r.Offset != tt.wantOffset || r.Length != tt.wantLength {
 						t.Fatalf("window = [%d,+%d), want [%d,+%d)", r.Offset, r.Length, tt.wantOffset, tt.wantLength)
 					}
@@ -198,7 +198,7 @@ func suiteRanges(t *testing.T, newLayer func(*testing.T) object.Layer) {
 // readAllBytes reads a reader to the end and closes it.
 func readAllBytes(t *testing.T, r *object.Reader) []byte {
 	t.Helper()
-	defer r.Close()
+	t.Cleanup(func() { closeReader(t, r) })
 	got, err := io.ReadAll(r)
 	if err != nil {
 		t.Fatalf("read: %v", err)

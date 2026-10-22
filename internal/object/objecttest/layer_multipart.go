@@ -29,7 +29,10 @@ func (l *Layer) NewMultipartUpload(_ context.Context, bucketName, key string, op
 	stored := opts
 	stored.Conditions = object.Conditions{}
 	stored.UserMetadata = cloneMap(opts.UserMetadata)
-	id := newUploadID()
+	id, err := newUploadID()
+	if err != nil {
+		return "", err
+	}
 	l.uploads[id] = &upload{
 		bucket:    bucketName,
 		key:       key,

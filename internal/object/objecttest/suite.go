@@ -3,14 +3,15 @@ package objecttest
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
-	"github.com/eukalpia/unio/internal/object/engine/digest"
 	"io"
 	"math/rand/v2"
 	"testing"
 
 	"github.com/eukalpia/unio/internal/object"
+	"github.com/eukalpia/unio/internal/object/engine/digest"
 	"github.com/eukalpia/unio/internal/s3err"
 )
 
@@ -119,7 +120,7 @@ func suiteObjects(t *testing.T, newLayer func(*testing.T) object.Layer) {
 			l := newLayer(t)
 			ctx := t.Context()
 			bucket := mustBucket(t, l)
-			data := payload(size, uint64(size))
+			data := payload(size, seedOf(size))
 			info := mustPut(t, l, "obj", data)
 			if info.Size != int64(size) || info.ETag != md5Hex(data) || info.Key != "obj" || info.Bucket != bucket {
 				t.Fatalf("put info = %+v", info)
@@ -141,7 +142,7 @@ func suiteObjects(t *testing.T, newLayer func(*testing.T) object.Layer) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer r.Close()
+			t.Cleanup(func() { closeReader(t, r) })
 			if r.Offset != 0 || r.Length != int64(size) || r.Info.ETag != info.ETag {
 				t.Fatalf("reader window = [%d,+%d) info=%+v", r.Offset, r.Length, r.Info)
 			}
@@ -177,7 +178,7 @@ func suiteObjects(t *testing.T, newLayer func(*testing.T) object.Layer) {
 			t.Fatal(err)
 		}
 		checkMetadata(t, r.Info, opts)
-		r.Close()
+		closeReader(t, r)
 	})
 
 	t.Run("overwrite returns the new version and frees the old data", func(t *testing.T) {
@@ -382,7 +383,7 @@ func mustRead(t *testing.T, l object.Layer, key string, opts object.GetOptions) 
 	if err != nil {
 		t.Fatalf("get %q: %v", key, err)
 	}
-	defer r.Close()
+	t.Cleanup(func() { closeReader(t, r) })
 	got, err := io.ReadAll(r)
 	if err != nil {
 		t.Fatalf("read %q: %v", key, err)
@@ -436,13 +437,30 @@ func dataCount(t *testing.T, l object.Layer) int {
 func payload(n int, seed uint64) []byte {
 	r := rand.New(rand.NewPCG(seed, 0x756e696f)) // #nosec G404 -- deterministic test data, not a security boundary
 	b := make([]byte, n)
-	for i := 0; i < n; i += 8 {
-		v := r.Uint64()
-		for j := 0; j < 8 && i+j < n; j++ {
-			b[i+j] = byte(v >> (8 * j))
-		}
+	var word [8]byte
+	for i := 0; i < n; i += len(word) {
+		binary.LittleEndian.PutUint64(word[:], r.Uint64())
+		copy(b[i:], word[:])
 	}
 	return b
+}
+
+// seedOf derives the payload seed of a size. Sizes are never negative; the
+// check keeps that explicit before the conversion.
+func seedOf(n int) uint64 {
+	if n < 0 {
+		return 0
+	}
+	return uint64(n) // #nosec G115 -- n is non-negative, checked above
+}
+
+// closeReader closes r and fails the test if Close reports an error, so that a
+// broken reader cannot pass unnoticed.
+func closeReader(t *testing.T, r *object.Reader) {
+	t.Helper()
+	if err := r.Close(); err != nil {
+		t.Fatalf("close reader: %v", err)
+	}
 }
 
 func md5Hex(data []byte) string {

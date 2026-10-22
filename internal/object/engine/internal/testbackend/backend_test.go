@@ -31,7 +31,10 @@ func TestSetWriteReadRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer rc.Close()
-	got, _ := io.ReadAll(rc)
+	got, err := io.ReadAll(rc)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if string(got) != "erasur" {
 		t.Fatalf("window = %q", got)
 	}
@@ -98,7 +101,11 @@ func TestSetReadSkipsCorruptCopy(t *testing.T) {
 		t.Fatalf("read after one corrupt copy: %v", err)
 	}
 	defer rc.Close()
-	if got, _ := io.ReadAll(rc); string(got) != "payload" {
+	got, err := io.ReadAll(rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "payload" {
 		t.Fatalf("got %q", got)
 	}
 	s.Corrupt(id, 1)
@@ -132,7 +139,10 @@ func TestRegistryPlacesDeterministically(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, _ := r.Place(context.Background(), "bkt", "key", 1<<20)
+	b, err := r.Place(context.Background(), "bkt", "key", 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if a.ID() != b.ID() {
 		t.Fatal("same key placed on different sets")
 	}

@@ -52,7 +52,7 @@ func multipartChecksum(alg object.ChecksumAlgorithm, parts []meta.PartRecord) (o
 		return object.Checksum{}, fmt.Errorf("engine: composite checksum: %w", err)
 	}
 	for _, p := range parts {
-		_, _ = h.Write(p.Checksum.Value)
+		_, _ = h.Write(p.Checksum.Value) // hash writes never fail
 	}
 	return object.Checksum{
 		Algorithm: alg,
