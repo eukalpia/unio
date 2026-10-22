@@ -7,7 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
+	"log/slog"
 	"time"
 
 	"github.com/hashicorp/raft"
@@ -41,8 +41,9 @@ type Config struct {
 	// HeartbeatTimeout sets the follower and election timeouts, with the
 	// leader lease at half of it. Zero keeps the hashicorp defaults.
 	HeartbeatTimeout time.Duration
-	// Log receives Raft's diagnostics. It may be nil.
-	Log io.Writer
+	// Logger receives Raft's diagnostics. Nil discards them. See NewHCLogger
+	// for the levels and for what Raft may log.
+	Logger *slog.Logger
 	// LeaderNotify, when set, receives true when this replica becomes leader
 	// and false when it stops being leader. Raft blocks on it, so the owner
 	// must drain it.
@@ -79,11 +80,7 @@ func Start(cfg Config) (*Group, error) {
 		conf.ElectionTimeout = cfg.HeartbeatTimeout
 		conf.LeaderLeaseTimeout = cfg.HeartbeatTimeout / 2
 	}
-	if cfg.Log != nil {
-		conf.LogOutput = cfg.Log
-	} else {
-		conf.LogOutput = io.Discard
-	}
+	conf.Logger = NewHCLogger(cfg.Logger)
 	conf.NotifyCh = cfg.LeaderNotify
 	has, err := raft.HasExistingState(cfg.Logs, cfg.Stable, cfg.Snapshots)
 	if err != nil {

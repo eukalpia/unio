@@ -13,7 +13,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -36,6 +36,7 @@ import (
 type Store struct {
 	cfg       Config
 	opts      Options
+	logger    *slog.Logger
 	parts     map[ids.PartitionID]cluster.PartitionInfo
 	dataParts []ids.PartitionID
 	cache     *pebble.Cache
@@ -88,8 +89,11 @@ type Options struct {
 	// CacheSize is the Pebble block cache size in bytes, shared by all
 	// databases of the node. Default 64 MiB.
 	CacheSize int64
-	// Log receives Raft diagnostics. Nil discards them.
-	Log io.Writer
+	// Logger receives Raft's diagnostics and the store's warnings. Every line
+	// carries component=raft and partition=<id>. Raft's info lines are
+	// written at debug level. Lines carry metadata only, never object data or
+	// secrets. Nil discards them.
+	Logger *slog.Logger
 }
 
 // Defaults applied by Options.withDefaults.
@@ -114,6 +118,9 @@ func (o Options) withDefaults() Options {
 	}
 	if o.CacheSize <= 0 {
 		o.CacheSize = defaultCacheSize
+	}
+	if o.Logger == nil {
+		o.Logger = slog.New(slog.DiscardHandler)
 	}
 	return o
 }
@@ -153,9 +160,11 @@ func Open(ctx context.Context, cfg Config) (*Store, error) {
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
+	opts := cfg.Options.withDefaults()
 	s := &Store{
 		cfg:    cfg,
-		opts:   cfg.Options.withDefaults(),
+		opts:   opts,
+		logger: opts.Logger,
 		parts:  make(map[ids.PartitionID]cluster.PartitionInfo, len(cfg.Map.Partitions)),
 		fsms:   make(map[ids.PartitionID]*fsm.FSM),
 		groups: make(map[ids.PartitionID]*group.Group),
@@ -228,7 +237,8 @@ func (s *Store) startReplica(info cluster.PartitionInfo) error {
 	if err != nil {
 		return fmt.Errorf("raftstore: partition %d transport: %w", info.ID, err)
 	}
-	snaps, err := raft.NewFileSnapshotStore(filepath.Join(s.cfg.DataDir, "snapshots", name), snapshotsRetained, io.Discard)
+	logger := s.partitionLogger(info.ID)
+	snaps, err := raft.NewFileSnapshotStoreWithLogger(filepath.Join(s.cfg.DataDir, "snapshots", name), snapshotsRetained, group.NewHCLogger(logger))
 	if err != nil {
 		return fmt.Errorf("raftstore: partition %d snapshots: %w", info.ID, err)
 	}
@@ -247,7 +257,7 @@ func (s *Store) startReplica(info cluster.PartitionInfo) error {
 		SnapshotInterval:  s.opts.SnapshotInterval,
 		SnapshotThreshold: s.opts.SnapshotThreshold,
 		HeartbeatTimeout:  s.opts.HeartbeatTimeout,
-		Log:               s.cfg.Options.Log,
+		Logger:            logger,
 	})
 	if err != nil {
 		return err
@@ -278,6 +288,11 @@ func (s *Store) Close() error {
 		s.cache = nil
 	}
 	return errors.Join(errs...)
+}
+
+// partitionLogger returns the logger of one partition's Raft group.
+func (s *Store) partitionLogger(p ids.PartitionID) *slog.Logger {
+	return s.logger.With("component", "raft", "partition", uint32(p))
 }
 
 // replicasOf returns the nodes that host a partition, voters first.
