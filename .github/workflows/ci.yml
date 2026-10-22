@@ -68,20 +68,25 @@ jobs:
       # export data; `go run pkg@latest` may pick an incompatible build.
       - name: Install tools
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@latest
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install honnef.co/go/tools/cmd/staticcheck@v0.8.2
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
       # Released gosec binaries can lag behind the Go toolchain; when they
       # cannot read the toolchain's export data they type-check nothing and
       # still exit 0. Build it with a current golang.org/x/tools instead.
       - name: Build gosec
         env:
-          GOSEC_VERSION: v2.29.0
+          # v2.29.0, pinned by commit so a moved tag cannot change the tool.
+          GOSEC_COMMIT: deb54465fea23d19a77f037e11e6589021f8501d
+          XTOOLS_VERSION: v0.52.0
         run: |
           set -euo pipefail
           src="$(mktemp -d)"
-          git clone --quiet --depth 1 --branch "$GOSEC_VERSION" https://github.com/securego/gosec "$src"
+          git -C "$src" init --quiet
+          git -C "$src" fetch --quiet --depth 1 https://github.com/securego/gosec "$GOSEC_COMMIT"
+          git -C "$src" checkout --quiet FETCH_HEAD
+          test "$(git -C "$src" rev-parse HEAD)" = "$GOSEC_COMMIT"
           cd "$src"
-          go get golang.org/x/tools@latest
+          go get "golang.org/x/tools@$XTOOLS_VERSION"
           go mod tidy
           go build -o "$(go env GOPATH)/bin/gosec" ./cmd/gosec
       - name: staticcheck
