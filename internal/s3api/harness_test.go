@@ -28,16 +28,30 @@ func discardLogger() *slog.Logger {
 // when the test ends, and Serve must return without error.
 func startServer(t testing.TB, cfg s3api.Config, authz auth.Authorizer) string {
 	t.Helper()
+	return startServerWith(t, cfg, nil, authz, nil)
+}
+
+// startServerWith is startServer with the authenticator and the logger
+// injected. A nil authn is the fake that accepts any Authorization header, a
+// nil authz allows every action and a nil logger discards its records.
+func startServerWith(t testing.TB, cfg s3api.Config, authn auth.Authenticator, authz auth.Authorizer, logger *slog.Logger) string {
+	t.Helper()
 	if cfg.Addr == "" {
 		cfg.Addr = "127.0.0.1:0"
 	}
 	if cfg.Region == "" {
 		cfg.Region = "us-east-1"
 	}
+	if authn == nil {
+		authn = &fakes.Authenticator{}
+	}
 	if authz == nil {
 		authz = &fakes.Authorizer{}
 	}
-	srv, err := s3api.New(cfg, fakes.NewLayer(), &fakes.Authenticator{}, authz, discardLogger())
+	if logger == nil {
+		logger = discardLogger()
+	}
+	srv, err := s3api.New(cfg, fakes.NewLayer(), authn, authz, logger)
 	if err != nil {
 		t.Fatal(err)
 	}

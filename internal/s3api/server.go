@@ -40,16 +40,17 @@ const maxRequestBody = math.MaxInt
 // Server serves the S3 API. Create it with New, then call Run or Serve. A
 // Server serves at most one listener at a time.
 type Server struct {
-	cfg     Config
-	logger  *slog.Logger
-	router  *router.Router
-	env     *handlers.Env
-	authn   auth.Authenticator
-	authz   auth.Authorizer
-	tls     *tls.Config
-	hostID  string
-	limiter *middleware.Limiter
-	engine  *route.Engine
+	cfg          Config
+	logger       *slog.Logger
+	router       *router.Router
+	env          *handlers.Env
+	authn        auth.Authenticator
+	authz        auth.Authorizer
+	tls          *tls.Config
+	hostID       string
+	limiter      *middleware.Limiter
+	engine       *route.Engine
+	metricsToken tokenDigest
 
 	stop     chan struct{}
 	stopOnce sync.Once
@@ -90,10 +91,15 @@ func New(cfg Config, layer object.Layer, authn auth.Authenticator, authz auth.Au
 	if err != nil {
 		return nil, err
 	}
+	// The token is reduced to its digest here, so the Server holds no copy of
+	// the secret and the caller's slice can change afterwards without effect.
+	metricsToken := newTokenDigest(cfg.MetricsToken)
+	cfg.MetricsToken = nil
 	s := &Server{
-		cfg:    cfg,
-		logger: logger,
-		router: rt,
+		cfg:          cfg,
+		logger:       logger,
+		router:       rt,
+		metricsToken: metricsToken,
 		env: &handlers.Env{
 			Layer:     layer,
 			Region:    cfg.Region,

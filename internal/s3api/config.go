@@ -69,9 +69,22 @@ type Config struct {
 	// Readiness reports whether the node can serve requests. It backs
 	// /unio/health/ready. Nil means always ready.
 	Readiness func(ctx context.Context) error
-	// Metrics serves /unio/metrics. It requires the admin action. Nil makes the
-	// endpoint answer NotImplemented.
+	// Metrics serves /unio/metrics. A request with a Bearer token must present
+	// MetricsToken; any other request must be signed by a user with the admin
+	// action. Nil makes the endpoint answer NotImplemented.
 	Metrics http.Handler
+	// MetricsToken is the bearer token that /unio/metrics accepts in an
+	// "Authorization: Bearer <token>" header, for scrapers that cannot sign
+	// SigV4. Nil or empty disables the token. New keeps only a SHA-256 digest
+	// of it, so later changes to the slice have no effect. The token is
+	// compared in constant time. Its length is checked by internal/config,
+	// which requires at least 32 bytes; this package does not check it.
+	//
+	// A request that presents a Bearer credential is judged by the token
+	// alone. A wrong, empty or missing token, or any token while none is
+	// configured, is 403 AccessDenied and never falls back to SigV4. Without a
+	// Bearer header the endpoint keeps the SigV4 path with the admin action.
+	MetricsToken []byte
 	// BufferBudget bounds the memory of GET copy buffers. Nil selects a budget
 	// of DefaultBufferBudget bytes owned by the server.
 	BufferBudget *bufpool.Budget
