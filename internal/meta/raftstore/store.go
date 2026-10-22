@@ -97,6 +97,10 @@ type Options struct {
 	// CacheSize is the Pebble block cache size in bytes, shared by all
 	// databases of the node. Default 64 MiB.
 	CacheSize int64
+	// TransferTimeout bounds the leadership handover that Close performs for
+	// every group this node leads, in total. A handover that does not finish
+	// in time is logged, and Close goes on. Default 5s.
+	TransferTimeout time.Duration
 	// Logger receives Raft's diagnostics and the store's warnings. Every line
 	// carries component=raft and partition=<id>. Raft's info lines are
 	// written at debug level. Lines carry metadata only, never object data or
@@ -110,6 +114,7 @@ const (
 	defaultSnapshotInterval  = 2 * time.Minute
 	defaultSnapshotThreshold = 8192
 	defaultCacheSize         = 64 << 20
+	defaultTransferTimeout   = 5 * time.Second
 	snapshotsRetained        = 2
 )
 
@@ -126,6 +131,9 @@ func (o Options) withDefaults() Options {
 	}
 	if o.CacheSize <= 0 {
 		o.CacheSize = defaultCacheSize
+	}
+	if o.TransferTimeout <= 0 {
+		o.TransferTimeout = defaultTransferTimeout
 	}
 	if o.Logger == nil {
 		o.Logger = slog.New(slog.DiscardHandler)
@@ -184,7 +192,9 @@ func Open(ctx context.Context, cfg Config) (*Store, error) {
 		}
 	}
 	if err := s.openAll(ctx); err != nil {
-		return nil, errors.Join(err, s.Close())
+		// Nothing is serving yet, so the replicas that did start stop without a
+		// leadership handover.
+		return nil, errors.Join(err, s.closeWith(false))
 	}
 	return s, nil
 }

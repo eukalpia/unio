@@ -53,6 +53,7 @@ type Config struct {
 // Group is a running replica of one Raft group.
 type Group struct {
 	id           ids.PartitionID
+	local        raft.ServerID
 	raft         *raft.Raft
 	fsm          *fsm.FSM
 	applyTimeout time.Duration
@@ -99,6 +100,7 @@ func Start(cfg Config) (*Group, error) {
 	}
 	return &Group{
 		id:           cfg.Partition,
+		local:        conf.LocalID,
 		raft:         r,
 		fsm:          cfg.FSM,
 		applyTimeout: cfg.ApplyTimeout,
@@ -179,7 +181,9 @@ func (g *Group) Propose(ctx context.Context, data []byte) (*pb.ApplyResult, erro
 // mapApplyError classifies an error from Raft's Apply future.
 func mapApplyError(err error) error {
 	switch {
-	case errors.Is(err, raft.ErrNotLeader):
+	case errors.Is(err, raft.ErrNotLeader), errors.Is(err, raft.ErrLeadershipTransferInProgress):
+		// Raft rejects a command while a transfer runs before it appends it,
+		// so the command is safe to retry at another replica.
 		return meta.ErrNotLeader
 	case errors.Is(err, raft.ErrEnqueueTimeout):
 		return ErrBusy

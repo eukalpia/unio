@@ -85,8 +85,10 @@ func (c *testCluster) open(node ids.NodeID) error {
 	return nil
 }
 
-// kill makes a node unreachable and stops its store, as a crash would. Its
-// data directory is kept, so restart recovers the node from disk.
+// kill makes a node unreachable and stops its store, as a crash would. The
+// store stops without a leadership handover, because a crashed node cannot
+// hand anything over. Its data directory is kept, so restart recovers the node
+// from disk.
 func (c *testCluster) kill(node ids.NodeID) error {
 	if err := c.net.Kill(node); err != nil {
 		return fmt.Errorf("kill %s: %w", node, err)
@@ -96,7 +98,7 @@ func (c *testCluster) kill(node ids.NodeID) error {
 	delete(c.stores, node)
 	c.mu.Unlock()
 	if s != nil {
-		if err := s.Close(); err != nil {
+		if err := s.CloseWithoutTransferForTest(); err != nil {
 			return fmt.Errorf("close %s: %w", node, err)
 		}
 	}
@@ -111,9 +113,9 @@ func (c *testCluster) restart(node ids.NodeID) error {
 	return c.open(node)
 }
 
-// closeAll closes every running store. It takes every node off the network
-// first. Otherwise a store that stops while its peers still send it RPCs waits
-// for each RPC to time out.
+// closeAll stops every running store. Teardown skips the leadership handover,
+// and it takes every node off the network first. Otherwise a store that stops
+// while its peers still send it RPCs waits for each RPC to time out.
 func (c *testCluster) closeAll() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -123,7 +125,7 @@ func (c *testCluster) closeAll() {
 		}
 	}
 	for node, s := range c.stores {
-		if err := s.Close(); err != nil {
+		if err := s.CloseWithoutTransferForTest(); err != nil {
 			c.t.Errorf("close store %s: %v", node, err)
 		}
 		delete(c.stores, node)

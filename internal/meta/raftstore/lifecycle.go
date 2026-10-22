@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/eukalpia/unio/internal/ids"
@@ -89,22 +90,36 @@ func (s *Store) WaitReady(ctx context.Context) error {
 	}
 }
 
-// Close stops the Raft groups, then closes the state machines, the logs and
-// the cache. Ready reports ErrClosed from the moment Close starts. Close is
-// safe to call more than once and from several goroutines. Every call returns
-// the result of the first.
+// Close shuts the store down. Before it stops the groups, it hands leadership
+// of every group this node leads to another voter. The handovers run in
+// parallel and are bounded by Options.TransferTimeout in total. A handover
+// that fails or does not finish is logged, and Close goes on. Close then stops
+// the groups and closes the state machines, the logs and the cache.
+//
+// Close is safe to call more than once and from several goroutines. Every
+// call returns the result of the first.
 func (s *Store) Close() error {
-	s.closeOnce.Do(func() { s.closeErr = s.shutdown() })
+	return s.closeWith(true)
+}
+
+// closeWith stops the store. When transfer is false it skips the leadership
+// handover, as a crash would.
+func (s *Store) closeWith(transfer bool) error {
+	s.closeOnce.Do(func() { s.closeErr = s.shutdown(transfer) })
 	return s.closeErr
 }
 
-// shutdown stops the store.
-func (s *Store) shutdown() error {
+// shutdown stops the store. Ready reports ErrClosed from the moment it marks
+// the store closed, so a node that is leaving stops reporting ready.
+func (s *Store) shutdown(transfer bool) error {
 	s.mu.Lock()
 	s.closed = true
 	groups := s.groups
 	s.mu.Unlock()
 
+	if transfer {
+		s.transferLeadership(groups)
+	}
 	var errs []error
 	for _, g := range groups {
 		errs = append(errs, g.Close())
@@ -126,4 +141,24 @@ func (s *Store) shutdown() error {
 		s.cache = nil
 	}
 	return errors.Join(errs...)
+}
+
+// transferLeadership hands leadership of each group to another voter. The
+// handovers run in parallel and share one deadline of Options.TransferTimeout.
+// A group whose handover fails keeps its old leader until Raft elects a new
+// one, and the failure is logged.
+func (s *Store) transferLeadership(groups map[ids.PartitionID]*group.Group) {
+	ctx, cancel := context.WithTimeout(context.Background(), s.opts.TransferTimeout)
+	defer cancel()
+	var wg sync.WaitGroup
+	for p, g := range groups {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := g.TransferLeadership(ctx); err != nil {
+				s.partitionLogger(p).Warn("leadership transfer failed", "error", err)
+			}
+		}()
+	}
+	wg.Wait()
 }
