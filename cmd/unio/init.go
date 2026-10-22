@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -145,7 +146,7 @@ func createNewFile(path string, data []byte) error {
 	if path == "" {
 		return errors.New("--output is required")
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, credentialFileMode)
+	f, err := os.OpenFile(filepath.Clean(path), os.O_WRONLY|os.O_CREATE|os.O_EXCL, credentialFileMode)
 	if err != nil {
 		if errors.Is(err, fs.ErrExist) {
 			return fmt.Errorf("refusing to overwrite %s: the file already exists", path)

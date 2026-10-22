@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 
 	"go.yaml.in/yaml/v3"
@@ -76,7 +77,7 @@ func readConfigFile(ctx context.Context, path string, cfg *Config) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	f, err := os.Open(path)
+	f, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		return fmt.Errorf("cannot open config file %s: %w", path, err)
 	}

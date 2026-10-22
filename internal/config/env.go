@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -81,7 +82,7 @@ func readSecretFile(ctx context.Context, path string) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	f, err := os.Open(path)
+	f, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		return "", fmt.Errorf("cannot open secret file %s: %w", path, err)
 	}
