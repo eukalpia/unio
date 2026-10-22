@@ -11,7 +11,11 @@
 // on the S3 endpoint) are returned separately from errors.
 package config
 
-import "time"
+import (
+	"time"
+
+	"github.com/eukalpia/unio/internal/ids"
+)
 
 // Config is the complete configuration of one node.
 type Config struct {
@@ -30,8 +34,9 @@ type Config struct {
 
 // NodeConfig identifies this node and where it listens.
 type NodeConfig struct {
-	// ID is this node's name. It must equal the host part of the drive
-	// endpoints that belong to this node, for example node1.
+	// ID is the host of this node, as written in its drive endpoints, for
+	// example node1 or unio-0.unio-hl.default.svc.cluster.local. It is compared
+	// without case. NodeID derives the node's identity from it.
 	ID string `yaml:"id"`
 	// S3Address is the listen address of the S3 API, for example ":9000".
 	S3Address string `yaml:"s3_address"`
@@ -144,16 +149,21 @@ type MetricsConfig struct {
 }
 
 // LocalDrives returns the drives owned by this node, that is, the endpoints
-// whose host equals Node.ID. It returns nil before Load has resolved the
-// drives.
+// whose host equals Node.ID, ignoring case. It returns nil before Load has
+// resolved the drives.
 func (c *Config) LocalDrives() []Endpoint {
-	var local []Endpoint
-	for _, d := range c.Cluster.Drives {
-		if d.Host == c.Node.ID {
-			local = append(local, d)
-		}
+	return localDrives(c.Node.ID, c.Cluster.Drives)
+}
+
+// NodeID returns the identity of this node, which is NodeIDFromHost applied to
+// Node.ID. Load guarantees that it is valid. Before Load it returns "" for an
+// unusable Node.ID.
+func (c *Config) NodeID() ids.NodeID {
+	id, err := ids.NodeIDFromHost(c.Node.ID)
+	if err != nil {
+		return ""
 	}
-	return local
+	return id
 }
 
 // TLSEnabled reports whether the S3 endpoint is configured to serve HTTPS.

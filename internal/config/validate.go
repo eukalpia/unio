@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/eukalpia/unio/internal/ids"
 )
 
 // Bounds enforced by Validate.
@@ -68,9 +70,9 @@ func Validate(c *Config) ([]string, error) {
 // checkNode validates the node identity and listen addresses.
 func checkNode(c *Config, r *report) {
 	if c.Node.ID == "" {
-		r.errorf("node.id is required: set UNIO_NODE_ID to this node's name, which must equal the host of its endpoints (for example node1)")
-	} else if !validHost(c.Node.ID) {
-		r.errorf("node.id %q is not a valid host name; use letters, digits, '-' and '.'", c.Node.ID)
+		r.errorf("node.id is required: set UNIO_NODE_ID to the host of this node's endpoints, for example node1 or unio-0.unio-hl.default.svc.cluster.local")
+	} else if _, err := ids.NodeIDFromHost(c.Node.ID); err != nil {
+		r.errorf("node.id: %w (UNIO_NODE_ID)", err)
 	}
 	s3Port, err := listenPort(c.Node.S3Address)
 	if err != nil {
@@ -101,9 +103,10 @@ func checkCluster(c *Config, r *report) []Endpoint {
 		return nil
 	}
 	checkSchemes(drives, r)
+	checkNodeIDs(drives, r)
 	local := localDrives(c.Node.ID, drives)
 	if c.Node.ID != "" && len(local) == 0 {
-		r.errorf("no endpoint belongs to node %q: the host of at least one endpoint must equal node.id (endpoint hosts: %s)", c.Node.ID, strings.Join(hosts(drives), ", "))
+		r.errorf("no endpoint belongs to node %q: the host of at least one endpoint must equal node.id, ignoring case (endpoint hosts: %s)", c.Node.ID, strings.Join(distinctHosts(drives), ", "))
 	}
 	if portErr == nil {
 		checkLocalPorts(local, internodePort, r)
@@ -134,6 +137,26 @@ func checkSchemes(drives []Endpoint, r *report) {
 	}
 }
 
+// checkNodeIDs requires that no two distinct endpoint hosts name the same node.
+// Node ids come from the first DNS label of a host, so for example
+// unio-0.a.example and unio-0.b.example would both be node unio-0, and the
+// error names both hosts. Hosts are compared without case, as DNS names are.
+func checkNodeIDs(drives []Endpoint, r *report) {
+	owner := make(map[ids.NodeID]string)
+	for _, host := range distinctHosts(drives) {
+		id, err := ids.NodeIDFromHost(host)
+		if err != nil {
+			r.errorf("endpoint host %q cannot name a node: %w", host, err)
+			continue
+		}
+		if first, taken := owner[id]; taken {
+			r.errorf("endpoint hosts %q and %q both name node %q; give each node a host whose first DNS label differs", first, host, id)
+			continue
+		}
+		owner[id] = host
+	}
+}
+
 // checkLocalPorts requires local endpoints to use the internode port this node listens on.
 func checkLocalPorts(local []Endpoint, internodePort int, r *report) {
 	for _, d := range local {
@@ -149,7 +172,7 @@ func checkLocalPorts(local []Endpoint, internodePort int, r *report) {
 func checkNodeCount(drives []Endpoint, r *report) {
 	counts := make(map[string]int)
 	for _, d := range drives {
-		counts[d.Host]++
+		counts[strings.ToLower(d.Host)]++
 	}
 	switch {
 	case len(counts) == 1 && len(drives) == 1:
@@ -369,27 +392,36 @@ func listenPort(addr string) (int, error) {
 	return port, nil
 }
 
-// localDrives returns the endpoints whose host equals nodeID.
+// localDrives returns the endpoints whose host is nodeID, ignoring case.
 func localDrives(nodeID string, drives []Endpoint) []Endpoint {
 	var out []Endpoint
 	for _, d := range drives {
-		if d.Host == nodeID {
+		if strings.EqualFold(d.Host, nodeID) {
 			out = append(out, d)
 		}
 	}
 	return out
 }
 
-// hosts returns the distinct host names in drives, sorted.
-func hosts(drives []Endpoint) []string {
-	seen := make(map[string]struct{})
-	var out []string
+// distinctHosts returns the host names in drives, with names that differ only
+// in case counted once, sorted by their lower-case form. Each name is shown as
+// it first appears in drives.
+func distinctHosts(drives []Endpoint) []string {
+	seen := make(map[string]string)
 	for _, d := range drives {
-		if _, ok := seen[d.Host]; !ok {
-			seen[d.Host] = struct{}{}
-			out = append(out, d.Host)
+		key := strings.ToLower(d.Host)
+		if _, ok := seen[key]; !ok {
+			seen[key] = d.Host
 		}
 	}
-	sort.Strings(out)
+	keys := make([]string, 0, len(seen))
+	for k := range seen {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, seen[k])
+	}
 	return out
 }

@@ -18,8 +18,34 @@ func TestValidate(t *testing.T) {
 	}{
 		{name: "valid cluster"},
 		{name: "node id missing", mutate: func(c *Config) { c.Node.ID = "" }, wantErr: "node.id is required"},
-		{name: "node id invalid", mutate: func(c *Config) { c.Node.ID = "no_de" }, wantErr: "not a valid host name"},
+		{name: "node id invalid", mutate: func(c *Config) { c.Node.ID = "no_de" }, wantErr: "node.id: host \"no_de\""},
 		{name: "node id matches no endpoint", mutate: func(c *Config) { c.Node.ID = "node9" }, wantErr: "no endpoint belongs to node \"node9\""},
+		{name: "node id matches an endpoint ignoring case", mutate: func(c *Config) { c.Node.ID = "NODE1" }},
+		{name: "node id with a trailing dot", mutate: func(c *Config) { c.Node.ID = "node1." }, wantErr: "trailing dot"},
+		{name: "kubernetes fqdn endpoints", mutate: func(c *Config) {
+			c.Node.ID = "unio-0.unio-hl.default.svc.cluster.local"
+			c.Cluster.Endpoints = []string{"https://unio-{0...3}.unio-hl.default.svc.cluster.local:9100/data{1...4}"}
+		}},
+		{name: "ipv4 endpoints", mutate: func(c *Config) {
+			c.Node.ID = "10.0.0.1"
+			c.Cluster.Endpoints = []string{"https://10.0.0.{1...4}:9100/data{1...4}"}
+		}},
+		{name: "ipv6 endpoint", mutate: func(c *Config) {
+			c.Node.ID = "fd00::1"
+			c.Cluster.Endpoints = []string{"https://[fd00::1]:9100/data{1...4}"}
+		}},
+		{name: "two hosts with the same first label", mutate: func(c *Config) {
+			c.Node.ID = "unio-0.a.example"
+			c.Cluster.Endpoints = []string{"https://unio-0.a.example:9100/data1", "https://unio-0.b.example:9100/data1"}
+		}, wantErr: "both name node \"unio-0\""},
+		{name: "ipv4 host and dns host name the same node", mutate: func(c *Config) {
+			c.Node.ID = "ip-10-0-0-5"
+			c.Cluster.Endpoints = []string{"https://ip-10-0-0-5:9100/data1", "https://10.0.0.5:9100/data1"}
+		}, wantErr: "both name node \"ip-10-0-0-5\""},
+		{name: "endpoint host with an underscore", mutate: func(c *Config) {
+			c.Node.ID = "node_1"
+			c.Cluster.Endpoints = []string{"https://node_1:9100/data1"}
+		}, wantErr: "host \"node_1\""},
 		{name: "s3 address without port", mutate: func(c *Config) { c.Node.S3Address = "9000" }, wantErr: "node.s3_address"},
 		{name: "s3 port out of range", mutate: func(c *Config) { c.Node.S3Address = ":70000" }, wantErr: "node.s3_address"},
 		{name: "same ports", mutate: func(c *Config) { c.Node.S3Address = ":9100" }, wantErr: "must use different ports"},

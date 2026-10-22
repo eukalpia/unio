@@ -6,9 +6,10 @@ import (
 	"net"
 	"net/url"
 	"path"
-	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/eukalpia/unio/internal/ids"
 )
 
 // Endpoint identifies one drive of the cluster: the node that owns it and
@@ -25,9 +26,6 @@ type Endpoint struct {
 	// Path is the absolute, clean path of the drive.
 	Path string
 }
-
-// dnsLabel matches one RFC 1123 host name label.
-var dnsLabel = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
 
 // maxEndpointLength bounds the textual length of an endpoint.
 const maxEndpointLength = 512
@@ -54,8 +52,8 @@ func ParseEndpoint(raw string) (Endpoint, error) {
 		return Endpoint{}, fmt.Errorf("endpoint %q must not contain a query or fragment", raw)
 	}
 	host := u.Hostname()
-	if !validHost(host) {
-		return Endpoint{}, fmt.Errorf("endpoint %q: invalid host name %q", raw, host)
+	if _, err := ids.NodeIDFromHost(host); err != nil {
+		return Endpoint{}, fmt.Errorf("endpoint %q: %w", raw, err)
 	}
 	portStr := u.Port()
 	port, err := strconv.Atoi(portStr)
@@ -66,22 +64,6 @@ func ParseEndpoint(raw string) (Endpoint, error) {
 		return Endpoint{}, fmt.Errorf("endpoint %q: %w", raw, err)
 	}
 	return Endpoint{Scheme: scheme, Host: host, Port: port, Path: u.Path}, nil
-}
-
-// validHost reports whether host is a DNS host name or an IP address.
-func validHost(host string) bool {
-	if host == "" || len(host) > 253 {
-		return false
-	}
-	if net.ParseIP(host) != nil {
-		return true
-	}
-	for _, label := range strings.Split(host, ".") {
-		if !dnsLabel.MatchString(label) {
-			return false
-		}
-	}
-	return true
 }
 
 // validDrivePath checks that p is an absolute, clean path that is not the root.
