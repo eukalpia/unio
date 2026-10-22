@@ -13,14 +13,15 @@ import (
 	"github.com/eukalpia/unio/internal/ids"
 )
 
-// readFrames is the number of stripes a read holds at once: one being served
-// and one being fetched. A read's memory is therefore bounded by two frames,
-// whatever the object size.
-const readFrames = 2
-
 // Read implements erasure.Set. Data shards are read directly when they are
 // healthy. A damaged or unreadable data shard is replaced by parity blocks and
 // the stripe is reconstructed. Every damaged shard is queued for repair.
+//
+// The producer starts at once and takes one frame from the budget per stripe.
+// It never waits for budget while holding a frame, and the consumer releases
+// each frame as soon as its bytes are copied out. So a read makes progress
+// with a budget of a single frame, and N open reads on a budget of N frames
+// all drain.
 //
 // The returned reader fetches stripes in the background, so it must be closed
 // even if it is not read to the end.
@@ -49,17 +50,7 @@ func (s *Set) Read(ctx context.Context, id ids.DataID, layout erasure.Layout, si
 		streams:  s.streamsFor(layout, id, size, g.stripe, span.EndStripe),
 		reported: make([]bool, s.k+s.m),
 		cancel:   cancel,
-		out:      make(chan *frame, readFrames),
-		free:     make(chan *frame, readFrames),
-	}
-	for range readFrames {
-		f, err := newFrame(ctx, g, s.k+s.m)
-		if err != nil {
-			r.drainFrames()
-			cancel()
-			return nil, fmt.Errorf("erasure/rs: read %s: %w", id, err)
-		}
-		r.free <- f
+		out:      make(chan *frame),
 	}
 	r.wg.Add(1)
 	go r.produce(ctx)
@@ -67,7 +58,9 @@ func (s *Set) Read(ctx context.Context, id ids.DataID, layout erasure.Layout, si
 }
 
 // reader streams a byte range of one object. A producer goroutine fetches
-// stripes in order into two frames; the consumer copies bytes out of them.
+// stripes in order, one frame at a time; the consumer copies bytes out of the
+// frame it holds. A read holds at most two frames: the one being copied from,
+// and the one the producer has fetched and is about to hand over.
 type reader struct {
 	s        *Set
 	id       ids.DataID
@@ -80,8 +73,7 @@ type reader struct {
 
 	pos, end int64 // object offsets: next byte to return, and end of the range
 	cur      *frame
-	out      chan *frame // fetched frames, in stripe order
-	free     chan *frame // frames the producer may fill
+	out      chan *frame // fetched frames, in stripe order; unbuffered
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
 	// perr is the producer's terminal error. It is written before out is
@@ -98,19 +90,24 @@ func (r *reader) produce(ctx context.Context) {
 	defer close(r.out)
 	defer r.closeStreams()
 	for st := r.span.FirstStripe; st < r.span.EndStripe; st++ {
-		var f *frame
-		select {
-		case f = <-r.free:
-		case <-ctx.Done():
-			r.perr = fmt.Errorf("erasure/rs: read %s: %w", r.id, context.Cause(ctx))
+		// Holding no frame here, the producer may wait for budget.
+		f, err := newFrame(ctx, r.g, r.s.k+r.s.m)
+		if err != nil {
+			r.perr = fmt.Errorf("erasure/rs: read %s: %w", r.id, err)
 			return
 		}
 		if err := r.fetch(ctx, f, st); err != nil {
-			r.free <- f
+			f.release()
 			r.perr = err
 			return
 		}
-		r.out <- f
+		select {
+		case r.out <- f:
+		case <-ctx.Done():
+			f.release()
+			r.perr = fmt.Errorf("erasure/rs: read %s: %w", r.id, context.Cause(ctx))
+			return
+		}
 	}
 }
 
@@ -170,19 +167,6 @@ func (r *reader) closeStreams() {
 	}
 }
 
-// drainFrames releases the frames waiting in free. It is used before the
-// producer starts, and by Close after it has stopped.
-func (r *reader) drainFrames() {
-	for {
-		select {
-		case f := <-r.free:
-			f.release()
-		default:
-			return
-		}
-	}
-}
-
 // Read implements io.Reader.
 func (r *reader) Read(p []byte) (int, error) {
 	if r.err != nil {
@@ -211,14 +195,17 @@ func (r *reader) Read(p []byte) (int, error) {
 	n := r.cur.copyOut(p[:min(int64(len(p)), stop-r.pos)], int(r.pos-start))
 	r.pos += int64(n)
 	if r.pos == stop {
-		r.free <- r.cur
+		// Release before the next receive: the producer may need the budget
+		// this frame holds in order to fetch the next stripe.
+		r.cur.release()
 		r.cur = nil
 	}
 	return n, nil
 }
 
-// Close stops the producer, waits for it, and releases the read's frames.
-// It is safe to call more than once.
+// Close stops the producer, waits for it, and releases the frame the consumer
+// still holds. Frames the producer had not handed over were released by the
+// producer itself. It is safe to call more than once.
 func (r *reader) Close() error {
 	if r.closed {
 		return nil
@@ -233,10 +220,6 @@ func (r *reader) Close() error {
 		r.cur.release()
 		r.cur = nil
 	}
-	for f := range r.out {
-		f.release()
-	}
-	r.drainFrames()
 	return nil
 }
 

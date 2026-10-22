@@ -75,6 +75,9 @@ func New(id ids.SetID, drives []drive.Drive, dataShards, parityShards int, opts 
 	if err != nil {
 		return nil, err
 	}
+	if need := frameSize(dataShards, parityShards, opts.StripeSize); int64(need) > opts.Budget.Total() {
+		return nil, fmt.Errorf("erasure/rs: budget of %d bytes holds less than one stripe frame of %d bytes", opts.Budget.Total(), need)
+	}
 	enc, err := reedsolomon.New(dataShards, parityShards,
 		reedsolomon.WithAutoGoroutines(bitrot.ShardBlockSize(opts.StripeSize, dataShards)))
 	if err != nil {
@@ -114,6 +117,12 @@ type geom struct {
 	blocks *bufpool.Pool // one block
 }
 
+// frameSize returns the budget of one stripe frame: k+m blocks of ceil(stripe/k)
+// bytes. A read or write holds at most a few frames at once.
+func frameSize(k, m, stripe int) int {
+	return (k + m) * bitrot.ShardBlockSize(stripe, k)
+}
+
 // geomFor returns the geometry for stripe size stripe, creating it on first
 // use. It fails if one frame does not fit in the budget.
 func (s *Set) geomFor(stripe int) (*geom, error) {
@@ -124,7 +133,7 @@ func (s *Set) geomFor(stripe int) (*geom, error) {
 		return nil, fmt.Errorf("erasure/rs: stripe size %d must be positive", stripe)
 	}
 	block := bitrot.ShardBlockSize(stripe, s.k)
-	frame := (s.k + s.m) * block
+	frame := frameSize(s.k, s.m, stripe)
 	if int64(frame) > s.opts.Budget.Total() {
 		return nil, fmt.Errorf("erasure/rs: stripe of %d bytes needs %d bytes of buffers; budget is %d",
 			stripe, frame, s.opts.Budget.Total())

@@ -29,7 +29,9 @@ type Options struct {
 	StripeSize int
 	// Budget bounds the buffer memory of the set. Nil selects a private
 	// budget of DefaultBudget bytes. Share one budget between sets to bound
-	// the memory of a node.
+	// the memory of a node. It must hold at least one stripe frame, that is
+	// (k+m)*ceil(StripeSize/k) bytes; New rejects a smaller budget. With
+	// exactly one frame, reads and writes proceed one stripe at a time.
 	Budget *bufpool.Budget
 	// StallTimeout is the longest a write waits for one drive to accept a
 	// block. A drive that stalls longer is dropped from the write.
