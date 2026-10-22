@@ -28,7 +28,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 COPY . .
 
-# Drive mount points for the volumes in deploy/compose/cluster-4x4.yml.
+# Drive mount points for the volumes in deploy/compose/cluster-4x4.yml and
+# deploy/compose/single.yml.
 # A named volume copies the owner of an existing image directory; without
 # these, Docker creates the mount point as root and the nonroot process cannot
 # write to it. They are copied in the runtime stage as the contents of
@@ -68,6 +69,8 @@ COPY --from=builder /out/unio /usr/local/bin/unio
 COPY --from=builder --chown=65532:65532 /out/drives/ /
 
 # S3 (9000) and internode UniWire (9100). Publish S3 only; 9100 stays internal.
+# Readiness is served on the S3 port at /unio/health/ready, and liveness at
+# /unio/health/live.
 EXPOSE 9000 9100
 
 # Numeric UID so that Kubernetes runAsNonRoot can verify the user.
@@ -76,5 +79,7 @@ USER 65532:65532
 ENTRYPOINT ["/usr/local/bin/unio"]
 CMD ["server"]
 
+# The probe asks for readiness, so the container is healthy only when the node
+# can serve requests. The probe runs in the container, against the S3 port.
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
-  CMD ["/usr/local/bin/unio", "healthcheck"]
+  CMD ["/usr/local/bin/unio", "healthcheck", "--url", "http://127.0.0.1:9000/unio/health/ready"]
