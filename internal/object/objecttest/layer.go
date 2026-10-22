@@ -249,7 +249,7 @@ func (l *Layer) PutObject(ctx context.Context, bucketName, key string, body obje
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.quorumFail {
+	if l.quorumFail && int64(len(data)) > object.DefaultInlineThreshold {
 		return object.Info{}, quorumError()
 	}
 	b, err := l.bucketLocked(bucketName)
@@ -475,6 +475,9 @@ func (l *Layer) CopyObject(ctx context.Context, src object.Ref, dstBucket, dstKe
 	info.Checksum, err = copyChecksum(data, opts, srcInfo)
 	if err != nil {
 		return object.Info{}, err
+	}
+	if l.quorumFail && int64(len(data)) > object.DefaultInlineThreshold {
+		return object.Info{}, quorumError()
 	}
 	b.commit(dstKey, info, &content{data: data})
 	return *info, nil

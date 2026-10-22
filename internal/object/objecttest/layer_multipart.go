@@ -97,6 +97,9 @@ func (l *Layer) CopyObjectPart(_ context.Context, src object.Ref, bucketName, ke
 			return object.PartInfo{}, err
 		}
 	}
+	if l.quorumFail {
+		return object.PartInfo{}, quorumError()
+	}
 	data := append([]byte(nil), srcContent.data[off:off+length]...)
 	ck, err := copyPartChecksum(data, u.opts.ChecksumAlgorithm)
 	if err != nil {
