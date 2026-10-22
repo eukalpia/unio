@@ -34,7 +34,7 @@ func BenchmarkSummarize(b *testing.B) {
 func BenchmarkRecorderSuccess(b *testing.B) {
 	// The limit is smaller than b.N on purpose: the benchmark then covers both
 	// the append path and the dropped-counter path.
-	r := NewRecorder(1 << 20)
+	r := NewRecorder(1<<20, testRNG(1))
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		r.Success(time.Millisecond, 4096)

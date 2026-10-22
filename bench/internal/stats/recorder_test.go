@@ -8,7 +8,7 @@ import (
 )
 
 func TestRecorderCountsSuccessesAndFailures(t *testing.T) {
-	r := NewRecorder(10)
+	r := NewRecorder(10, testRNG(1))
 	r.Success(1*time.Millisecond, 100)
 	r.Success(3*time.Millisecond, 200)
 	r.Failure()
@@ -39,7 +39,7 @@ func TestRecorderLimitDropsSamplesButCountsOperations(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			r := NewRecorder(tc.limit)
+			r := NewRecorder(tc.limit, testRNG(1))
 			for i := 0; i < tc.successes; i++ {
 				r.Success(time.Millisecond, 10)
 			}
@@ -61,7 +61,7 @@ func TestRecorderLimitDropsSamplesButCountsOperations(t *testing.T) {
 }
 
 func TestNewRecorderNegativeLimitIsZero(t *testing.T) {
-	r := NewRecorder(-4)
+	r := NewRecorder(-4, testRNG(1))
 	r.Success(time.Millisecond, 1)
 	if c := Merge(r); len(c.Samples) != 0 || c.Dropped != 1 {
 		t.Fatalf("negative limit: samples %d dropped %d, want 0 and 1", len(c.Samples), c.Dropped)
@@ -69,10 +69,10 @@ func TestNewRecorderNegativeLimitIsZero(t *testing.T) {
 }
 
 func TestMergeConcatenatesAndSumsCounters(t *testing.T) {
-	a := NewRecorder(10)
+	a := NewRecorder(10, testRNG(1))
 	a.Success(1*time.Millisecond, 5)
 	a.Failure()
-	b := NewRecorder(10)
+	b := NewRecorder(10, testRNG(1))
 	b.Success(2*time.Millisecond, 7)
 	b.Success(3*time.Millisecond, 9)
 
@@ -127,7 +127,7 @@ func TestRecordersAcrossGoroutines(t *testing.T) {
 	const workers, perWorker = 64, 1000
 	recs := make([]*Recorder, workers)
 	for i := range recs {
-		recs[i] = NewRecorder(SampleLimit(workers))
+		recs[i] = NewRecorder(SampleLimit(workers), testRNG(uint64(i)+1))
 	}
 	var wg sync.WaitGroup
 	for i := range recs {

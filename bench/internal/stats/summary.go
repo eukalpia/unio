@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"cmp"
 	"slices"
 	"time"
 )
@@ -11,9 +12,11 @@ const mib = 1 << 20
 // Summary is the result of one operation type. Its JSON field names are part
 // of the report schema and must not change without a schema version bump.
 //
-// Operations counts successful operations. Latency statistics cover the kept
-// samples only; DroppedSamples counts successful operations whose latency was
-// discarded because the recorder reached its limit.
+// Operations counts successful operations. The percentiles and the mean are
+// estimates of the whole window from weighted samples, so they describe every
+// operation, not only the kept ones. Min and Max are the extremes of the kept
+// samples. DroppedSamples counts successful operations that no sample
+// represents.
 type Summary struct {
 	Operations      int64   `json:"operations"`
 	Errors          int64   `json:"errors"`
@@ -47,30 +50,39 @@ func Summarize(c Collected, elapsed time.Duration) Summary {
 		DurationSeconds: seconds(elapsed),
 		OpsPerSecond:    perSecond(float64(c.Operations), elapsed),
 		MiBPerSecond:    perSecond(float64(c.Bytes)/mib, elapsed),
-		LatencyMs:       latency(c.Samples),
+		LatencyMs:       latency(c),
 	}
 }
 
-// latency computes min, mean, percentiles and max from one sorted copy of the
-// samples.
-func latency(samples []time.Duration) Latency {
-	if len(samples) == 0 {
+// latency computes the statistics of a collection from one sorted copy of its
+// samples. The mean and the percentiles are weighted by the observations each
+// sample represents. Min and max are the extremes of the samples.
+func latency(c Collected) Latency {
+	n := len(c.Samples)
+	if n == 0 {
 		return Latency{}
 	}
-	sorted := slices.Clone(samples)
-	slices.Sort(sorted)
+	items := make([]weightedSample, n)
+	var totalWeight, weightedSum float64
+	for i, d := range c.Samples {
+		w := weightAt(c, i)
+		items[i] = weightedSample{d: d, w: w}
+		totalWeight += w
+		weightedSum += float64(d) * w
+	}
+	slices.SortFunc(items, func(a, b weightedSample) int { return cmp.Compare(a.d, b.d) })
 
-	var sum float64
-	for _, d := range sorted {
-		sum += float64(d)
+	var mean float64
+	if totalWeight > 0 {
+		mean = weightedSum / totalWeight
 	}
 	return Latency{
-		Min:  toMs(float64(sorted[0])),
-		Mean: toMs(sum / float64(len(sorted))),
-		P50:  toMs(float64(percentileSorted(sorted, 50))),
-		P95:  toMs(float64(percentileSorted(sorted, 95))),
-		P99:  toMs(float64(percentileSorted(sorted, 99))),
-		Max:  toMs(float64(sorted[len(sorted)-1])),
+		Min:  toMs(float64(items[0].d)),
+		Mean: toMs(mean),
+		P50:  toMs(float64(weightedPercentile(items, 50, totalWeight))),
+		P95:  toMs(float64(weightedPercentile(items, 95, totalWeight))),
+		P99:  toMs(float64(weightedPercentile(items, 99, totalWeight))),
+		Max:  toMs(float64(items[n-1].d)),
 	}
 }
 

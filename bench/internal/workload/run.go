@@ -84,7 +84,12 @@ func Run(ctx context.Context, spec Spec, cfg RunConfig) (Result, error) {
 	recs := make([][]*stats.Recorder, cfg.Concurrency)
 	var wg sync.WaitGroup
 	for id := range cfg.Concurrency {
-		recs[id] = newRecorders(len(spec.Ops), limit)
+		// The sampler decides which latencies each recorder keeps. It is seeded
+		// per worker from the complement of the worker's operation stream, so
+		// the two streams differ and the run is repeatable.
+		// #nosec G404 -- chooses which latency samples to keep; not security sensitive
+		sampler := rand.New(rand.NewPCG(cfg.Seed, ^streams[id]))
+		recs[id] = newRecorders(len(spec.Ops), limit, sampler)
 		wg.Add(1)
 		go func(id int, own []*stats.Recorder) {
 			defer wg.Done()
@@ -122,11 +127,12 @@ func validate(spec Spec, cfg RunConfig) error {
 	return nil
 }
 
-// newRecorders returns one recorder per operation type for a single worker.
-func newRecorders(ops, limit int) []*stats.Recorder {
+// newRecorders returns one recorder per operation type for a single worker. The
+// recorders share rng, which only that worker's goroutine uses.
+func newRecorders(ops, limit int, rng *rand.Rand) []*stats.Recorder {
 	out := make([]*stats.Recorder, ops)
 	for i := range out {
-		out[i] = stats.NewRecorder(limit)
+		out[i] = stats.NewRecorder(limit, rng)
 	}
 	return out
 }
