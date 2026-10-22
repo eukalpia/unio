@@ -1,7 +1,7 @@
 // Package uniwire is the internode transport: request/response RPC and
 // one-shot streams between nodes over mutual TLS 1.3 (ADR 0003).
 //
-// Wire format
+// # Wire format
 //
 // Every connection starts with a 6-byte preamble: the magic "UNIW", the
 // protocol version (1) and the kind (1 = RPC, 2 = Stream). Anything else is
@@ -28,7 +28,7 @@
 // and a StreamTrailer whose error field is the outcome. A connection whose
 // body cannot be completed is closed, because its framing is lost.
 //
-// Errors
+// # Errors
 //
 // A failed call carries an S3 code, a client-safe message and the wire name
 // of the outermost registered sentinel (see errors.go). The caller sees a
@@ -36,7 +36,7 @@
 // code. Causes that are not registered and not *s3err.Error arrive as
 // InternalError with no detail.
 //
-// Trust
+// # Trust
 //
 // Each side verifies the peer's certificate chain and node identity during
 // the handshake (see package pki). A client also checks that the peer is the
