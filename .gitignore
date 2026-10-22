@@ -27,3 +27,7 @@ testdata/fuzz/**/corpus-cache/
 *.swp
 .DS_Store
 Thumbs.db
+
+# Example environment files are documentation, not secrets
+!.env.example
+!**/.env.example
