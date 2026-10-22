@@ -1,0 +1,13 @@
+version: v2
+modules:
+  - path: api/proto
+lint:
+  use:
+    - STANDARD
+  except:
+    - PACKAGE_VERSION_SUFFIX
+    # Zero values are meaningful defaults that mirror the Go constants.
+    - ENUM_ZERO_VALUE_SUFFIX
+breaking:
+  use:
+    - FILE

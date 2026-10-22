@@ -19,7 +19,7 @@ read it before opening a pull request.
 
 | Tool | Version |
 |---|---|
-| Go | 1.25 or newer |
+| Go | 1.26 or newer (the project toolchain is 1.27) |
 | OS | Linux or macOS. On Windows, use **WSL2** (Ubuntu) |
 | C compiler | gcc or clang, only for the race detector (`-race` needs cgo) |
 | Docker | For cluster, integration and benchmark tests |

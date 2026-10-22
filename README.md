@@ -50,7 +50,7 @@ Key decisions are recorded in [docs/adr](docs/adr/README.md).
 
 ## Technology
 
-- Go 1.25, pure Go, no CGO
+- Go 1.26+, pure Go, no CGO
 - [CloudWeGo Hertz](https://github.com/cloudwego/hertz) for the S3 API
 - [bytedance/sonic](https://github.com/bytedance/sonic) for JSON
 - [hashicorp/raft](https://github.com/hashicorp/raft) and
