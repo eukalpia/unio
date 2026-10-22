@@ -65,16 +65,19 @@ func (s *Store) Authenticate(ctx context.Context, req *auth.Request) (*auth.Resu
 	return s.authn.Authenticate(ctx, req)
 }
 
-// keyLookup resolves an access key, from the cache when possible.
+// keyLookup resolves an access key, from the cache when possible. The epoch
+// is taken before the load, so an invalidation that completes during the load
+// keeps the loaded value out of the cache.
 func (s *Store) keyLookup(ctx context.Context, accessKey string) (keyLookup, error) {
 	if kl, ok := s.keys.get(accessKey); ok {
 		return kl, nil
 	}
+	epoch := s.keys.epoch()
 	kl, err := s.loadKey(ctx, accessKey)
 	if err != nil {
 		return keyLookup{}, err
 	}
-	s.keys.put(accessKey, kl)
+	s.keys.putAt(accessKey, kl, epoch)
 	return kl, nil
 }
 
@@ -109,16 +112,18 @@ func (s *Store) loadKey(ctx context.Context, accessKey string) (keyLookup, error
 	return keyLookup{found: true, entry: keyEntry{secret: secret, user: rec.User}}, nil
 }
 
-// userLookup resolves a user and its policy, from the cache when possible.
+// userLookup resolves a user and its policy, from the cache when possible. As
+// in keyLookup, the epoch is taken before the load.
 func (s *Store) userLookup(ctx context.Context, name string) (userLookup, error) {
 	if ul, ok := s.users.get(name); ok {
 		return ul, nil
 	}
+	epoch := s.users.epoch()
 	ul, err := s.loadUser(ctx, name)
 	if err != nil {
 		return userLookup{}, err
 	}
-	s.users.put(name, ul)
+	s.users.putAt(name, ul, epoch)
 	return ul, nil
 }
 
