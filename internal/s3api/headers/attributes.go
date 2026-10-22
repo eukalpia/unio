@@ -16,7 +16,7 @@ const storageClassDefault = "STANDARD"
 // ParseObjectAttributes builds the destination attributes of a PUT, CreateMultipartUpload
 // or CopyObject with REPLACE. It fills ContentType, ContentEncoding, ContentDisposition,
 // ContentLanguage, CacheControl, Expires (verbatim strings, at most 1024 bytes, no control
-// bytes), UserMetadata (ParseUserMetadata), Tags (ParseTagging), StorageClass
+// bytes), UserMetadata (ParseUserMetadata), Tags (object.DecodeTags, kept in encoded form), StorageClass
 // (x-amz-storage-class: STANDARD, REDUCED_REDUNDANCY, STANDARD_IA, ONEZONE_IA,
 // INTELLIGENT_TIERING, GLACIER, DEEP_ARCHIVE, GLACIER_IR; an absent header yields
 // "STANDARD"; anything else returns InvalidStorageClass), ChecksumAlgorithm (from
@@ -52,9 +52,11 @@ func ParseObjectAttributes(h http.Header) (object.PutOptions, error) {
 	if err != nil {
 		return object.PutOptions{}, err
 	}
-	if opts.Tags, err = ParseTagging(tags); err != nil {
+	set, err := object.DecodeTags(tags)
+	if err != nil {
 		return object.PutOptions{}, err
 	}
+	opts.Tags = object.EncodeTags(set)
 
 	class, ok, err := singleHeader(h, "X-Amz-Storage-Class", s3err.InvalidStorageClass)
 	if err != nil {

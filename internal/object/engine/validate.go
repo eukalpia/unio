@@ -29,8 +29,8 @@ func validatePutOptions(opts object.PutOptions) error {
 	if opts.ChecksumAlgorithm > object.ChecksumSHA256 {
 		return s3err.Errorf(s3err.InvalidArgument, "unknown checksum algorithm")
 	}
-	if tags := opts.Tags; tags != "" && strings.Count(tags, "&")+1 > object.MaxTags {
-		return s3err.Errorf(s3err.InvalidTag, "more than %d tags", object.MaxTags)
+	if _, err := object.DecodeTags(opts.Tags); err != nil {
+		return err
 	}
 	return nil
 }

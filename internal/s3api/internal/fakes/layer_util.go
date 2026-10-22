@@ -2,7 +2,6 @@ package fakes
 
 import (
 	"maps"
-	"net/url"
 	"slices"
 	"time"
 
@@ -72,23 +71,8 @@ func checkPutOptions(opts object.PutOptions) error {
 	if err := object.ValidateUserMetadata(opts.UserMetadata); err != nil {
 		return err
 	}
-	return validateTags(opts.Tags)
-}
-
-// validateTags checks that the URL-encoded tag set parses and holds at most
-// object.MaxTags tags.
-func validateTags(tags string) error {
-	if tags == "" {
-		return nil
-	}
-	parsed, err := url.ParseQuery(tags)
-	if err != nil {
-		return s3err.Wrap(s3err.InvalidTag, err)
-	}
-	if len(parsed) > object.MaxTags {
-		return s3err.Errorf(s3err.InvalidTag, "an object can have at most %d tags", object.MaxTags)
-	}
-	return nil
+	_, err := object.DecodeTags(opts.Tags)
+	return err
 }
 
 // pageSize returns the effective page size for a requested maximum. Zero, or
