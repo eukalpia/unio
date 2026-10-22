@@ -72,6 +72,11 @@ func (e *Engine) CopyObjectPart(ctx context.Context, src object.Ref, bucket, key
 		return object.PartInfo{}, err
 	}
 	c := contentOf(srcRec)
+	// A GET stops at the end of the object, but a copy range must lie inside
+	// it: S3 answers a range that reaches past the end with InvalidRange.
+	if opts.SourceRange != nil && opts.SourceRange.End >= c.size {
+		return object.PartInfo{}, s3err.Errorf(s3err.InvalidRange, "the copy source range is past the end of the object")
+	}
 	off, length, err := c.window(opts.SourceRange)
 	if err != nil {
 		return object.PartInfo{}, err
