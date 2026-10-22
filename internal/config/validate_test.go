@@ -22,6 +22,17 @@ func TestValidate(t *testing.T) {
 		{name: "node id matches no endpoint", mutate: func(c *Config) { c.Node.ID = "node9" }, wantErr: "no endpoint belongs to node \"node9\""},
 		{name: "node id matches an endpoint ignoring case", mutate: func(c *Config) { c.Node.ID = "NODE1" }},
 		{name: "node id with a trailing dot", mutate: func(c *Config) { c.Node.ID = "node1." }, wantErr: "trailing dot"},
+		{name: "region with upper case", mutate: func(c *Config) { c.Node.Region = "US-EAST-1" }, wantErr: "node.region \"US-EAST-1\""},
+		{name: "region empty", mutate: func(c *Config) { c.Node.Region = "" }, wantErr: "node.region \"\""},
+		{name: "region longer than 32", mutate: func(c *Config) { c.Node.Region = strings.Repeat("a", 33) }, wantErr: "node.region"},
+		{name: "region of 32 characters", mutate: func(c *Config) { c.Node.Region = strings.Repeat("a", 32) }},
+		{name: "region with underscore", mutate: func(c *Config) { c.Node.Region = "eu_west" }, wantErr: "node.region"},
+		{name: "virtual host domains", mutate: func(c *Config) { c.Node.Domains = []string{"s3.example.com", "S3.Local"} }},
+		{name: "domain is an ip address", mutate: func(c *Config) { c.Node.Domains = []string{"10.0.0.1"} }, wantErr: "is an IP address"},
+		{name: "domain with trailing dot", mutate: func(c *Config) { c.Node.Domains = []string{"s3.example.com."} }, wantErr: "trailing dot"},
+		{name: "domain with underscore", mutate: func(c *Config) { c.Node.Domains = []string{"s_3.example.com"} }, wantErr: "node.domains entry \"s_3.example.com\""},
+		{name: "domain with surrounding blank", mutate: func(c *Config) { c.Node.Domains = []string{" s3.example.com"} }, wantErr: "surrounding blanks"},
+		{name: "empty domain", mutate: func(c *Config) { c.Node.Domains = []string{""} }, wantErr: "surrounding blanks"},
 		{name: "kubernetes fqdn endpoints", mutate: func(c *Config) {
 			c.Node.ID = "unio-0.unio-hl.default.svc.cluster.local"
 			c.Cluster.Endpoints = []string{"https://unio-{0...3}.unio-hl.default.svc.cluster.local:9100/data{1...4}"}

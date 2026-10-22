@@ -8,6 +8,8 @@ const (
 	DefaultS3Address = ":9000"
 	// DefaultInternodeAddress is the default internode listen address.
 	DefaultInternodeAddress = ":9100"
+	// DefaultRegion is the default S3 region of the node.
+	DefaultRegion = "us-east-1"
 	// DefaultPartitions is the default number of metadata partitions.
 	DefaultPartitions = 16
 	// DefaultInlineThreshold is the default largest inline object (ADR-0005).
@@ -44,6 +46,7 @@ func Defaults() Config {
 		Node: NodeConfig{
 			S3Address:        DefaultS3Address,
 			InternodeAddress: DefaultInternodeAddress,
+			Region:           DefaultRegion,
 		},
 		Metadata: MetadataConfig{Partitions: DefaultPartitions},
 		Storage: StorageConfig{

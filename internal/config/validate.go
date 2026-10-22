@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -74,6 +75,14 @@ func checkNode(c *Config, r *report) {
 	} else if _, err := ids.NodeIDFromHost(c.Node.ID); err != nil {
 		r.errorf("node.id: %w (UNIO_NODE_ID)", err)
 	}
+	if !regionPattern.MatchString(c.Node.Region) {
+		r.errorf("node.region %q must match ^[a-z0-9-]{1,32}$, for example us-east-1 (UNIO_REGION)", c.Node.Region)
+	}
+	for _, d := range c.Node.Domains {
+		if err := checkDomain(d); err != nil {
+			r.errorf("node.domains entry %q: %v (UNIO_DOMAINS)", d, err)
+		}
+	}
 	s3Port, err := listenPort(c.Node.S3Address)
 	if err != nil {
 		r.errorf("node.s3_address: %v (UNIO_S3_ADDRESS)", err)
@@ -85,6 +94,23 @@ func checkNode(c *Config, r *report) {
 	if err == nil && s3Port == internodePort {
 		r.errorf("node.s3_address and node.internode_address must use different ports (both are %d)", s3Port)
 	}
+}
+
+// regionPattern is the form of a node region, such as us-east-1.
+var regionPattern = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
+
+// checkDomain requires a virtual-host suffix to be a DNS name, written without
+// surrounding blanks. An IP address is not a DNS name, and the name must pass
+// the same label rules as a node host.
+func checkDomain(d string) error {
+	if d == "" || d != strings.TrimSpace(d) {
+		return errors.New("must be a DNS name without surrounding blanks")
+	}
+	if net.ParseIP(d) != nil {
+		return errors.New("is an IP address; it must be a DNS name")
+	}
+	_, err := ids.NodeIDFromHost(d)
+	return err
 }
 
 // checkCluster validates the endpoints, the cluster secret and node membership.

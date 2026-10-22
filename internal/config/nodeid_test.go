@@ -69,3 +69,27 @@ func TestValidateAcceptsHostsThatDifferOnlyInCase(t *testing.T) {
 		t.Fatalf("one host written in two cases is one node: %v", err)
 	}
 }
+
+func TestDefaultRegionAndDomainsFromEnvironment(t *testing.T) {
+	cfg, _, err := Load(context.Background(), Options{Env: validEnv()})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Node.Region != "us-east-1" || len(cfg.Node.Domains) != 0 {
+		t.Fatalf("defaults: region %q, domains %v", cfg.Node.Region, cfg.Node.Domains)
+	}
+
+	env := validEnv()
+	env["UNIO_REGION"] = "eu-west-3"
+	env["UNIO_DOMAINS"] = "s3.example.com, s3.local"
+	cfg, _, err = Load(context.Background(), Options{Env: env, Flags: map[string]string{"region": "ap-south-1"}})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Node.Region != "ap-south-1" {
+		t.Fatalf("flag must override the environment: region %q", cfg.Node.Region)
+	}
+	if got := strings.Join(cfg.Node.Domains, ","); got != "s3.example.com,s3.local" {
+		t.Fatalf("domains = %q", got)
+	}
+}

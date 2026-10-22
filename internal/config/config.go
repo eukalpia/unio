@@ -43,6 +43,14 @@ type NodeConfig struct {
 	// InternodeAddress is the listen address of the internode protocol, for
 	// example ":9100".
 	InternodeAddress string `yaml:"internode_address"`
+	// Region is the S3 region this node serves. SigV4 credential scopes must
+	// name it. It is 1 to 32 characters from lowercase letters, digits and
+	// hyphens, and the default is us-east-1.
+	Region string `yaml:"region"`
+	// Domains are the virtual-host suffixes under which buckets are addressed,
+	// for example s3.example.com, so that bucket.s3.example.com names the bucket
+	// bucket. Each must be a DNS name.
+	Domains []string `yaml:"domains"`
 }
 
 // TLSConfig holds the optional certificate of the S3 endpoint.
