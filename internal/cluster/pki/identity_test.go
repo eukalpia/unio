@@ -66,6 +66,27 @@ func TestLoadIdentityFromOperatorFiles(t *testing.T) {
 	}
 }
 
+// TestLoadIdentityCleansPaths loads files through a path that detours through a
+// directory that does not exist. It loads only if the path is cleaned first.
+func TestLoadIdentityCleansPaths(t *testing.T) {
+	ca := mustCA(t, testSecret)
+	cert, err := ca.IssueNode("node-clean", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	certFile, keyFile, caFile := writeOperatorFiles(t, dir, cert.Certificate[0], cert.PrivateKey, ca.PEM())
+	// filepath.Join would clean the detour away before LoadIdentity sees it, so
+	// the path is built by hand.
+	detour := func(path string) string {
+		sep := string(filepath.Separator)
+		return filepath.Dir(path) + sep + "missing" + sep + ".." + sep + filepath.Base(path)
+	}
+	if _, err := LoadIdentity(detour(certFile), detour(keyFile), detour(caFile)); err != nil {
+		t.Fatalf("cleaned path rejected: %v", err)
+	}
+}
+
 func TestLoadIdentityErrors(t *testing.T) {
 	ca := mustCA(t, testSecret)
 	cert, err := ca.IssueNode("node-op", nil)

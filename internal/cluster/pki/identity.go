@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/eukalpia/unio/internal/ids"
@@ -45,6 +46,9 @@ func (ca *CA) NewIdentity(id ids.NodeID, hosts []string, opts IssuerOptions) (*I
 // authentication. Renewing it is the operator's job: LoadIdentity does not
 // renew.
 func LoadIdentity(certFile, keyFile, caFile string) (*Identity, error) {
+	certFile = filepath.Clean(certFile)
+	keyFile = filepath.Clean(keyFile)
+	caFile = filepath.Clean(caFile)
 	pair, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		return nil, fmt.Errorf("pki: load node key pair: %w", err)
@@ -58,7 +62,11 @@ func LoadIdentity(certFile, keyFile, caFile string) (*Identity, error) {
 	}
 	pair.Leaf = leaf
 
-	pemBytes, err := os.ReadFile(caFile)
+	// The CA path is chosen by the operator who configures the node, and the
+	// file holds public certificates only, so reading it is the purpose of
+	// this function.
+	pemBytes, err := os.ReadFile(caFile) // #nosec G304 -- operator-configured path, cleaned above; public CA certificates only
+
 	if err != nil {
 		return nil, fmt.Errorf("pki: read CA file: %w", err)
 	}
