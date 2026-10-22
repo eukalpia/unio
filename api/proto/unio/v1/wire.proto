@@ -22,6 +22,9 @@ message StreamHeader {
   string method = 2;
   bytes payload = 3;
   int64 length = 4;
+  // Time the callee may spend on the request, relative to receipt. Zero means
+  // no deadline. Only set on the caller's header.
+  int64 timeout_nanos = 5;
 }
 
 // StreamTrailer ends the callee's reply. An unset error means success.

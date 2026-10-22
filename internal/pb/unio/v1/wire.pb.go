@@ -92,11 +92,14 @@ func (x *RPCError) GetSentinel() string {
 // followed by length raw bytes (an upload). The callee's header is followed by
 // length raw bytes (a download) and then a StreamTrailer.
 type StreamHeader struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Method        string                 `protobuf:"bytes,2,opt,name=method,proto3" json:"method,omitempty"`
-	Payload       []byte                 `protobuf:"bytes,3,opt,name=payload,proto3" json:"payload,omitempty"`
-	Length        int64                  `protobuf:"varint,4,opt,name=length,proto3" json:"length,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Id      uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Method  string                 `protobuf:"bytes,2,opt,name=method,proto3" json:"method,omitempty"`
+	Payload []byte                 `protobuf:"bytes,3,opt,name=payload,proto3" json:"payload,omitempty"`
+	Length  int64                  `protobuf:"varint,4,opt,name=length,proto3" json:"length,omitempty"`
+	// Time the callee may spend on the request, relative to receipt. Zero means
+	// no deadline. Only set on the caller's header.
+	TimeoutNanos  int64 `protobuf:"varint,5,opt,name=timeout_nanos,json=timeoutNanos,proto3" json:"timeout_nanos,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -155,6 +158,13 @@ func (x *StreamHeader) GetPayload() []byte {
 func (x *StreamHeader) GetLength() int64 {
 	if x != nil {
 		return x.Length
+	}
+	return 0
+}
+
+func (x *StreamHeader) GetTimeoutNanos() int64 {
+	if x != nil {
+		return x.TimeoutNanos
 	}
 	return 0
 }
@@ -1809,12 +1819,13 @@ const file_unio_v1_wire_proto_rawDesc = "" +
 	"\bRPCError\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x1a\n" +
-	"\bsentinel\x18\x03 \x01(\tR\bsentinel\"h\n" +
+	"\bsentinel\x18\x03 \x01(\tR\bsentinel\"\x8d\x01\n" +
 	"\fStreamHeader\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x16\n" +
 	"\x06method\x18\x02 \x01(\tR\x06method\x12\x18\n" +
 	"\apayload\x18\x03 \x01(\fR\apayload\x12\x16\n" +
-	"\x06length\x18\x04 \x01(\x03R\x06length\"H\n" +
+	"\x06length\x18\x04 \x01(\x03R\x06length\x12#\n" +
+	"\rtimeout_nanos\x18\x05 \x01(\x03R\ftimeoutNanos\"H\n" +
 	"\rStreamTrailer\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12'\n" +
 	"\x05error\x18\x02 \x01(\v2\x11.unio.v1.RPCErrorR\x05error\"4\n" +
