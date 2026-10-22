@@ -13,10 +13,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  detect:
+    name: Detect Go module
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.check.outputs.go }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          if [ -f go.mod ]; then echo "go=true" >> "$GITHUB_OUTPUT"; else echo "go=false" >> "$GITHUB_OUTPUT"; fi
+
   test:
     name: Build and test
+    needs: detect
+    if: needs.detect.outputs.go == 'true'
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('go.mod') != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -38,8 +50,9 @@ jobs:
 
   lint:
     name: Lint and security
+    needs: detect
+    if: needs.detect.outputs.go == 'true'
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('go.mod') != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
