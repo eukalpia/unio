@@ -64,6 +64,9 @@ func (d *Drive) checkAbsent(id ids.ShardID) error {
 	if d.closed {
 		return drive.ErrClosed
 	}
+	if err := d.faultError(); err != nil {
+		return err
+	}
 	if _, err := d.lookup(id); err == nil {
 		return drive.ErrShardExists
 	} else if !errors.Is(err, drive.ErrShardNotFound) {
@@ -81,6 +84,9 @@ func (d *Drive) enqueue(ctx context.Context, r *request) error {
 	if d.closed {
 		return drive.ErrClosed
 	}
+	if err := d.faultError(); err != nil {
+		return err
+	}
 	return d.submit(ctx, r)
 }
 
@@ -92,7 +98,7 @@ func (d *Drive) writeBlob(ctx context.Context, id ids.ShardID, r io.Reader, size
 		return err
 	}
 	if err := d.blobs.Write(ctx, tmp, r, size); err != nil {
-		return fmt.Errorf("local: shard %s: %w", id, err)
+		return d.checkSync(fmt.Errorf("local: shard %s: %w", id, err))
 	}
 	req := newRequest(reqBlob, id)
 	req.tmp = tmp

@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/eukalpia/unio/internal/bufpool"
+	"github.com/eukalpia/unio/internal/drive/local/internal/syncerr"
 )
 
 // copyExact reads exactly size bytes from r in chunks of at most len(buf)
@@ -59,7 +60,7 @@ func writeBuffered(ctx context.Context, pool *bufpool.Pool, path string, r io.Re
 		return werr
 	})
 	if err == nil {
-		err = f.Sync()
+		err = syncerr.Wrap("fsync", path, f.Sync())
 	}
 	if cerr := f.Close(); err == nil && cerr != nil {
 		err = cerr

@@ -33,11 +33,12 @@ var errInjected = errors.New("injected fault")
 // report an error, must not be visible now or after a restart, and must not
 // stop later writes.
 func TestFailedCommitIsInvisibleAndDriveRecovers(t *testing.T) {
+	// A failed fsync is not recoverable: it makes the drive faulty (see
+	// fsync_test.go). Only a failure before anything reaches the disk is.
 	cases := []struct {
 		name  string
 		point faults.Point
 	}{
-		{"segment-sync", faults.SegmentSync},
 		{"index-commit", faults.IndexCommit},
 	}
 	for _, tc := range cases {

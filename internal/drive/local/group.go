@@ -7,6 +7,7 @@ import (
 
 	"github.com/eukalpia/unio/internal/drive/local/index"
 	"github.com/eukalpia/unio/internal/drive/local/internal/faults"
+	"github.com/eukalpia/unio/internal/drive/local/internal/syncerr"
 	"github.com/eukalpia/unio/internal/drive/local/segment"
 	"github.com/eukalpia/unio/internal/ids"
 )
@@ -139,7 +140,7 @@ func (d *Drive) afterCommit(r *request) error {
 			return nil
 		}
 		if err := d.blobs.Remove(r.final); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
+			return d.checkSync(err)
 		}
 	case reqRetire:
 		return d.segs.retire(r.seg)
@@ -150,14 +151,18 @@ func (d *Drive) afterCommit(r *request) error {
 // commit makes the staged work durable: segment bytes first, then the index.
 // The index commit includes the committed end of the active segment, so a
 // crash between the two leaves only uncommitted bytes past the end.
+//
+// A failed fsync makes the drive faulty and every request of the group fails
+// with it, because each of them depends on that fsync. A failure before
+// anything reaches the disk is ordinary and recoverable.
 func (d *Drive) commit(g *group) error {
 	if g.appended {
 		if d.opts.SyncPolicy == SyncAlways {
 			if err := d.opts.hooks.Check(faults.SegmentSync); err != nil {
-				return err
+				return d.markFaulty(syncerr.Wrap("fdatasync", d.active.Path(), err))
 			}
 			if err := d.active.Sync(); err != nil {
-				return err
+				return d.markFaulty(err)
 			}
 		} else {
 			d.dirty = true
@@ -172,8 +177,15 @@ func (d *Drive) commit(g *group) error {
 	sync := d.opts.SyncPolicy == SyncAlways
 	if !sync {
 		d.dirty = true
+		return g.batch.Commit(false)
 	}
-	return g.batch.Commit(sync)
+	if err := d.opts.hooks.Check(faults.IndexSync); err != nil {
+		return d.markFaulty(syncerr.Wrap("index wal sync", d.lay.index, err))
+	}
+	if err := g.batch.Commit(true); err != nil {
+		return d.markFaulty(err)
+	}
+	return nil
 }
 
 // appendRecord appends rec to the active segment, rolling to a new segment

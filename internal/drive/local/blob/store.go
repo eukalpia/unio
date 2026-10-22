@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/eukalpia/unio/internal/bufpool"
+	"github.com/eukalpia/unio/internal/drive/local/internal/syncerr"
 	"github.com/eukalpia/unio/internal/ids"
 )
 
@@ -107,11 +108,11 @@ func (s *Store) Place(tmpPath, final string) error {
 		return fmt.Errorf("blob: place %s: %w", final, err)
 	}
 	if err := syncDir(dir); err != nil {
-		return fmt.Errorf("blob: sync %s: %w", dir, err)
+		return syncerr.Wrap("fsync dir", dir, err)
 	}
 	if created {
 		if err := syncDir(s.blobs); err != nil {
-			return fmt.Errorf("blob: sync %s: %w", s.blobs, err)
+			return syncerr.Wrap("fsync dir", s.blobs, err)
 		}
 	}
 	return nil
@@ -124,7 +125,7 @@ func (s *Store) Remove(path string) error {
 		return fmt.Errorf("blob: remove %s: %w", path, err)
 	}
 	if err := syncDir(filepath.Dir(path)); err != nil {
-		return fmt.Errorf("blob: sync %s: %w", filepath.Dir(path), err)
+		return syncerr.Wrap("fsync dir", filepath.Dir(path), err)
 	}
 	return nil
 }

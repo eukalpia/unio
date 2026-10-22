@@ -10,6 +10,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/eukalpia/unio/internal/bufpool"
+	"github.com/eukalpia/unio/internal/drive/local/internal/syncerr"
 )
 
 // writeFile writes a blob with O_DIRECT, bypassing the page cache for the
@@ -84,7 +85,7 @@ func finishBuffered(path string, off int64, tail []byte) error {
 	}
 	if err := f.Sync(); err != nil {
 		_ = f.Close()
-		return fmt.Errorf("blob: sync %s: %w", path, err)
+		return syncerr.Wrap("fsync", path, err)
 	}
 	if err := f.Close(); err != nil {
 		return fmt.Errorf("blob: close %s: %w", path, err)

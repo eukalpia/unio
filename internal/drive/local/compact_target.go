@@ -44,6 +44,9 @@ type compactTarget struct {
 
 // Sealed implements compact.Target.
 func (t compactTarget) Sealed() []compact.Segment {
+	if t.d.faultError() != nil {
+		return nil // a faulty drive makes no changes, so there is nothing to compact
+	}
 	return t.d.stats.sealedSegments()
 }
 

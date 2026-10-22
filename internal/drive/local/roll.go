@@ -5,6 +5,8 @@ import (
 	"os"
 
 	"github.com/eukalpia/unio/internal/drive/local/index"
+	"github.com/eukalpia/unio/internal/drive/local/internal/faults"
+	"github.com/eukalpia/unio/internal/drive/local/internal/syncerr"
 	"github.com/eukalpia/unio/internal/drive/local/segment"
 )
 
@@ -18,7 +20,7 @@ func (d *Drive) roll() error {
 		return err
 	}
 	if err := old.Sync(); err != nil {
-		return err
+		return d.markFaulty(err)
 	}
 	newID := d.nextID
 	next, err := d.createSegment(newID)
@@ -33,7 +35,7 @@ func (d *Drive) roll() error {
 		return d.abandon(next, err)
 	}
 	if err := b.Commit(true); err != nil {
-		return d.abandon(next, err)
+		return d.abandon(next, d.markFaulty(err))
 	}
 
 	d.segs.add(newID, next)
@@ -64,8 +66,12 @@ func (d *Drive) createSegment(id uint64) (*segment.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("local: create segment %d: %w", id, err)
 	}
-	if err := syncDir(d.lay.segments); err != nil {
-		return nil, d.abandon(f, fmt.Errorf("local: sync segments: %w", err))
+	err = d.opts.hooks.Check(faults.DirSync)
+	if err == nil {
+		err = syncDir(d.lay.segments)
+	}
+	if err != nil {
+		return nil, d.abandon(f, d.markFaulty(syncerr.Wrap("fsync dir", d.lay.segments, err)))
 	}
 	return f, nil
 }

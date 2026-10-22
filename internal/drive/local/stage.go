@@ -59,7 +59,7 @@ func (d *Drive) stageBlob(g *group, r *request) error {
 		return err
 	}
 	if err := d.blobs.Place(r.tmp, r.final); err != nil {
-		return err
+		return d.checkSync(err)
 	}
 	g.placed = append(g.placed, r.final)
 	return g.stagePut(r.id, index.Location{Kind: index.KindBlob, Length: r.size, Created: r.created})

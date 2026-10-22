@@ -57,7 +57,11 @@ type Drive struct {
 	committedEnd int64
 	poisoned     bool
 	dirty        bool
-	bgErr        error
+
+	// faultMu guards fault, which the committer, Close and every operation read.
+	// Once set, the drive refuses mutations and never retries a sync.
+	faultMu sync.Mutex
+	fault   error
 }
 
 var _ drive.Drive = (*Drive)(nil)
@@ -91,7 +95,7 @@ func (d *Drive) Info(ctx context.Context) (drive.Info, error) {
 		Total:    total,
 		Free:     free,
 		Used:     used,
-		Online:   true,
+		Online:   d.faultError() == nil,
 	}, nil
 }
 
@@ -170,11 +174,9 @@ func (d *Drive) Close() error {
 	<-d.committed
 
 	var errs []error
-	if d.bgErr != nil {
-		errs = append(errs, d.bgErr)
-	}
-	if err := d.syncIfDirty(); err != nil {
-		errs = append(errs, fmt.Errorf("local: final sync: %w", err))
+	_ = d.syncIfDirty() // a failure marks the drive faulty, which is reported below
+	if err := d.faultError(); err != nil {
+		errs = append(errs, err)
 	}
 	if err := d.segs.closeAll(); err != nil {
 		errs = append(errs, err)

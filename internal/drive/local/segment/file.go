@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/eukalpia/unio/internal/drive/local/internal/syncerr"
 )
 
 // File is one segment file. Appends (Append, SetEnd, Truncate) are not safe
@@ -78,10 +80,7 @@ func (f *File) Append(rec []byte) (int64, error) {
 
 // Sync flushes appended data to stable storage.
 func (f *File) Sync() error {
-	if err := syncData(f.f); err != nil {
-		return fmt.Errorf("segment: sync %s: %w", f.path, err)
-	}
-	return nil
+	return syncerr.Wrap("fdatasync", f.path, syncData(f.f))
 }
 
 // Truncate changes the file size.

@@ -3,6 +3,9 @@ package local
 import (
 	"fmt"
 	"time"
+
+	"github.com/eukalpia/unio/internal/drive/local/internal/faults"
+	"github.com/eukalpia/unio/internal/drive/local/internal/syncerr"
 )
 
 // runCommitter is the only goroutine that mutates the index or appends to
@@ -25,9 +28,7 @@ func (d *Drive) runCommitter() {
 		case <-d.stop:
 			return
 		case <-tick:
-			if err := d.syncIfDirty(); err != nil && d.bgErr == nil {
-				d.bgErr = err
-			}
+			_ = d.syncIfDirty() // a failure marks the drive faulty
 			continue
 		case r := <-d.reqs:
 			buf = append(buf[:0], r)
@@ -56,6 +57,10 @@ func gather(buf []*request, reqs <-chan *request) []*request {
 // handle stages one request. A request that fails before staging is answered
 // at once. A staged request is answered when the group commits.
 func (d *Drive) handle(g *group, r *request) {
+	if err := d.faultError(); err != nil {
+		r.reply <- err // a faulty drive makes no further changes
+		return
+	}
 	var err error
 	switch r.kind {
 	case reqPut:
@@ -81,16 +86,20 @@ func (d *Drive) handle(g *group, r *request) {
 }
 
 // syncIfDirty makes batched writes durable. It runs on the batch interval
-// under SyncBatch, and at Close.
+// under SyncBatch, and at Close. A failed sync marks the drive faulty. After a
+// fault it does nothing, so the failed fsync is never retried.
 func (d *Drive) syncIfDirty() error {
-	if !d.dirty {
+	if !d.dirty || d.faultError() != nil {
 		return nil
 	}
+	if err := d.opts.hooks.Check(faults.SegmentSync); err != nil {
+		return d.markFaulty(syncerr.Wrap("fdatasync", d.active.Path(), err))
+	}
 	if err := d.active.Sync(); err != nil {
-		return err
+		return d.markFaulty(err)
 	}
 	if err := d.idx.Sync(); err != nil {
-		return err
+		return d.markFaulty(err)
 	}
 	d.dirty = false
 	return nil

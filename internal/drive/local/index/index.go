@@ -17,6 +17,7 @@ import (
 	"github.com/cockroachdb/pebble/v2"
 	"github.com/cockroachdb/pebble/v2/vfs"
 
+	"github.com/eukalpia/unio/internal/drive/local/internal/syncerr"
 	"github.com/eukalpia/unio/internal/ids"
 )
 
@@ -64,6 +65,7 @@ type SegmentMeta struct {
 // Index is a shard index backed by Pebble. It is safe for concurrent use.
 type Index struct {
 	mu     sync.RWMutex
+	dir    string
 	db     *pebble.DB
 	closed bool
 }
@@ -82,7 +84,7 @@ func Open(dir string, cache *pebble.Cache) (*Index, error) {
 	if err != nil {
 		return nil, fmt.Errorf("index: open %s: %w", dir, err)
 	}
-	return &Index{db: db}, nil
+	return &Index{dir: dir, db: db}, nil
 }
 
 // read runs fn while the index is open. It returns ErrClosed after Close.
@@ -237,7 +239,7 @@ func (x *Index) Segments() (map[uint64]SegmentMeta, error) {
 func (x *Index) Sync() error {
 	return x.read(func(db *pebble.DB) error {
 		if err := db.LogData(nil, pebble.Sync); err != nil {
-			return fmt.Errorf("index: sync: %w", err)
+			return syncerr.Wrap("index wal sync", x.dir, err)
 		}
 		return nil
 	})

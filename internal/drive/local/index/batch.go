@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/cockroachdb/pebble/v2"
+
+	"github.com/eukalpia/unio/internal/drive/local/internal/syncerr"
 	"github.com/eukalpia/unio/internal/ids"
 )
 
@@ -77,6 +79,11 @@ func (b *Batch) Commit(sync bool) error {
 		_ = b.b.Close()
 		b.b = nil
 		if err != nil {
+			if sync {
+				// A failed write of the write-ahead log is treated as a failed sync:
+				// the drive cannot tell which of the two failed.
+				return syncerr.Wrap("index wal sync", b.x.dir, err)
+			}
 			return fmt.Errorf("index: commit %d operations: %w", n, err)
 		}
 		return nil
