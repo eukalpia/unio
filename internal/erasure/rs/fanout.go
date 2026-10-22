@@ -122,7 +122,7 @@ func (fo *fanout) runDriver(t *target, tctx context.Context, pr *io.PipeReader, 
 // dispatcher closes it.
 func (fo *fanout) runFeeder(t *target, pw *io.PipeWriter) {
 	defer fo.wg.Done()
-	bw := bitrot.NewWriter(pw)
+	bw := bitrot.NewWriter(pw, bitrot.Position{Data: t.shard.Data, Shard: t.shard.Index})
 	var werr error
 	for f := range t.ch {
 		if werr == nil {

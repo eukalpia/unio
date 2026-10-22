@@ -9,18 +9,18 @@ import (
 // benchBlock is a typical block: a 1 MiB stripe split across 8 shards.
 const benchBlock = 128 << 10
 
-func BenchmarkSum(b *testing.B) {
+func BenchmarkDigest(b *testing.B) {
 	data := make([]byte, benchBlock)
 	b.SetBytes(int64(len(data)))
 	b.ReportAllocs()
 	for b.Loop() {
-		_ = Sum(data)
+		_ = digest(testPos, 7, data)
 	}
 }
 
 func BenchmarkWriteBlock(b *testing.B) {
 	data := make([]byte, benchBlock)
-	w := NewWriter(io.Discard)
+	w := NewWriter(io.Discard, testPos)
 	b.SetBytes(int64(len(data)))
 	b.ReportAllocs()
 	for b.Loop() {
@@ -33,7 +33,7 @@ func BenchmarkWriteBlock(b *testing.B) {
 func BenchmarkReadBlock(b *testing.B) {
 	data := make([]byte, benchBlock)
 	var buf bytes.Buffer
-	if err := NewWriter(&buf).WriteBlock(data); err != nil {
+	if err := NewWriter(&buf, testPos).WriteBlock(data); err != nil {
 		b.Fatal(err)
 	}
 	stream := buf.Bytes()
@@ -42,7 +42,7 @@ func BenchmarkReadBlock(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {
-		r := NewReader(bytes.NewReader(stream))
+		r := NewReader(bytes.NewReader(stream), testPos)
 		if err := r.ReadBlock(dst); err != nil {
 			b.Fatal(err)
 		}
@@ -56,4 +56,15 @@ func BenchmarkSpan(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
+}
+
+// BenchmarkBlockSeed measures the per-block cost the position binding adds
+// on top of hashing the block data.
+func BenchmarkBlockSeed(b *testing.B) {
+	b.ReportAllocs()
+	var sink uint64
+	for b.Loop() {
+		sink += blockSeed(testPos.Data, testPos.Shard, uint64(sink&7))
+	}
+	_ = sink
 }

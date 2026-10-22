@@ -177,7 +177,7 @@ func verifyShard(ctx context.Context, k int, g *geom, d drive.Drive, sid ids.Sha
 		return false
 	}
 	defer buf.Release()
-	br := bitrot.NewReader(rc)
+	br := bitrot.NewReader(rc, bitrot.Position{Data: sid.Data, Shard: sid.Index})
 	for st := range bitrot.Stripes(size, g.stripe) {
 		if br.ReadBlock(buf.Bytes()[:bitrot.BlockLen(size, k, g.stripe, st)]) != nil {
 			return false
