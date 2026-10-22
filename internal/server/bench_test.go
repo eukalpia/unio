@@ -78,3 +78,22 @@ func BenchmarkPut1MiBCluster(b *testing.B) {
 	}
 	putLoad(b, client(rs[0].node.S3Addr().String()), 1<<20, 32)
 }
+
+// BenchmarkPut4KiBCluster writes 4 KiB objects, which the engine stores
+// inline in the metadata, from 32 clients to a four-node cluster.
+func BenchmarkPut4KiBCluster(b *testing.B) {
+	nodes := []*testNode{
+		newTestNode(b, "127.0.0.1", 4),
+		newTestNode(b, "127.0.0.2", 4),
+		newTestNode(b, "127.0.0.3", 4),
+		newTestNode(b, "127.0.0.4", 4),
+	}
+	var rs []*running
+	for _, n := range nodes {
+		rs = append(rs, serve(b, loadConfig(b, n, nodes, map[string]string{"UNIO_MEMORY_BUDGET": "1GiB", "UNIO_METADATA_PARTITIONS": "16"})))
+	}
+	for _, r := range rs {
+		waitReady(b, r.node.S3Addr().String())
+	}
+	putLoad(b, client(rs[0].node.S3Addr().String()), 4<<10, 32)
+}
