@@ -57,7 +57,7 @@ func fixedClock(t time.Time) func() time.Time {
 // authRequest converts a raw HTTP request into the transport-independent
 // view that the authenticator takes. The body, if any, is wrapped as an
 // io.Reader.
-func authRequest(t *testing.T, r *http.Request) *auth.Request {
+func authRequest(t testing.TB, r *http.Request) *auth.Request {
 	t.Helper()
 	var body io.Reader
 	if r.Body != nil {
@@ -79,7 +79,7 @@ func authRequest(t *testing.T, r *http.Request) *auth.Request {
 }
 
 // newHTTPRequest builds a request for the given absolute URL.
-func newHTTPRequest(t *testing.T, method, rawURL string, body []byte) *http.Request {
+func newHTTPRequest(t testing.TB, method, rawURL string, body []byte) *http.Request {
 	t.Helper()
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -108,7 +108,7 @@ func sdkCredentials() aws.Credentials {
 
 // signHeader signs r with the SDK signer for S3 (path not re-escaped, as
 // S3 requires) and returns it.
-func signHeader(t *testing.T, r *http.Request, payloadHash string, when time.Time) *http.Request {
+func signHeader(t testing.TB, r *http.Request, payloadHash string, when time.Time) *http.Request {
 	t.Helper()
 	signer := v4.NewSigner(func(o *v4.SignerOptions) { o.DisableURIPathEscaping = true })
 	r.Header.Set("X-Amz-Content-Sha256", payloadHash)
@@ -120,7 +120,7 @@ func signHeader(t *testing.T, r *http.Request, payloadHash string, when time.Tim
 
 // presignURL returns a presigned URL for r produced by the SDK presigner,
 // valid for expires seconds from when.
-func presignURL(t *testing.T, r *http.Request, expires int, when time.Time) string {
+func presignURL(t testing.TB, r *http.Request, expires int, when time.Time) string {
 	t.Helper()
 	q := r.URL.Query()
 	q.Set("X-Amz-Expires", strconv.Itoa(expires))

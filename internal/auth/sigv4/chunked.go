@@ -243,7 +243,7 @@ func (c *chunkedReader) parseChunkHeader(line []byte) (int64, [sha256.Size]byte,
 		}
 		return size, sig, nil
 	}
-	if !bytes.HasPrefix(ext, []byte(chunkSigPrefix)) {
+	if len(ext) < len(chunkSigPrefix) || string(ext[:len(chunkSigPrefix)]) != chunkSigPrefix {
 		return 0, sig, framing("missing chunk-signature")
 	}
 	sig, ok := decodeSignature(ext[len(chunkSigPrefix):])
