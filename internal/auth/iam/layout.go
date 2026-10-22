@@ -33,6 +33,10 @@ type userRecord struct {
 	Name    string    `json:"name"`
 	Created time.Time `json:"created"`
 	Enabled bool      `json:"enabled"`
+	// Deleting marks a user whose deletion is in progress. Such a user is
+	// disabled and treated as absent, and its name cannot be reused until
+	// the record is removed.
+	Deleting bool `json:"deleting"`
 }
 
 // keyRecord is the stored form of an access key. Secret is the sealed secret

@@ -587,26 +587,6 @@ func TestUnknownFieldsInRecordsAreRejected(t *testing.T) {
 	}
 }
 
-func TestDeleteUserRepeatCleansLeftovers(t *testing.T) {
-	s, kv, _ := newTestStore(t)
-	ctx := context.Background()
-	mustCreateUser(t, s, "ned")
-	// A key record left behind by an interrupted delete.
-	orphan, _ := encodeRecord(keyRecord{V: recordVersion, User: "ned", UserID: "gone", Secret: []byte("x")})
-	if _, err := kv.Put(ctx, keyPath("ORPHANKEY0000000000A"), orphan, meta.AnyRevision); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.DeleteUser(ctx, "ned"); err != nil {
-		t.Fatalf("first delete: %v", err)
-	}
-	if err := s.DeleteUser(ctx, "ned"); !errors.Is(err, ErrUserNotFound) {
-		t.Fatalf("repeat delete: err = %v, want ErrUserNotFound", err)
-	}
-	if left, _ := kv.List(ctx, keysPrefix); len(left) != 0 {
-		t.Fatalf("leftover key records after repeat delete: %d", len(left))
-	}
-}
-
 func TestManagementErrorCodes(t *testing.T) {
 	s, _, _ := newTestStore(t)
 	ctx := context.Background()

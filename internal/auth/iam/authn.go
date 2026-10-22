@@ -144,6 +144,11 @@ func (s *Store) loadUser(ctx context.Context, name string) (userLookup, error) {
 	if err != nil {
 		return userLookup{}, fmt.Errorf("iam: corrupt user record: %w", err)
 	}
+	if rec.Deleting {
+		// A user being deleted is treated as absent, so it cannot authenticate
+		// or be authorized while its records are removed.
+		return userLookup{}, nil
+	}
 	pol, err := s.loadPolicy(ctx, name, rec.ID)
 	if err != nil {
 		return userLookup{}, err
