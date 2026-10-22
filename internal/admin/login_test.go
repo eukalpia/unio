@@ -187,36 +187,98 @@ func TestLoginRateLimitCountsValidAttempts(t *testing.T) {
 	expectError(t, f.serve(f.request(http.MethodPost, BasePath+"/session", good)), http.StatusTooManyRequests, "SlowDown")
 }
 
+// sessionBody is the decoded body of GET session.
+type sessionBody struct {
+	AccessKey string  `json:"accessKey"`
+	ExpiresAt *string `json:"expiresAt"`
+	CSRF      *string `json:"csrf"`
+}
+
 func TestGetSession(t *testing.T) {
+	f := newFixture(t)
+	key, secret := f.createUser("alice", fullPolicy)
+	token, csrf := f.login(key, secret)
+
+	resp := f.serve(with(f.get(BasePath+"/session"), withCookie(token)))
+	expectStatus(t, resp, http.StatusOK)
+	expectNoStore(t, resp)
+	var out sessionBody
+	mustUnmarshal(t, resp.Body, &out)
+	if out.AccessKey != key || out.ExpiresAt == nil {
+		t.Fatalf("body %s: want accessKey %q and an expiry", resp.Body, key)
+	}
+	if out.CSRF == nil || *out.CSRF != csrf {
+		t.Fatalf("csrf = %v, want the token the login returned", out.CSRF)
+	}
+}
+
+// TestGetSessionCSRFResumesAfterReload checks that the token from GET session
+// is accepted on a following state change, which is what a reloaded console
+// needs. The login is not repeated.
+func TestGetSessionCSRFResumesAfterReload(t *testing.T) {
 	f := newFixture(t)
 	key, secret := f.createUser("alice", fullPolicy)
 	token, _ := f.login(key, secret)
 
 	resp := f.serve(with(f.get(BasePath+"/session"), withCookie(token)))
 	expectStatus(t, resp, http.StatusOK)
-	expectNoStore(t, resp)
-	var out struct {
-		AccessKey string  `json:"accessKey"`
-		ExpiresAt *string `json:"expiresAt"`
-	}
+	var out sessionBody
 	mustUnmarshal(t, resp.Body, &out)
-	if out.AccessKey != key || out.ExpiresAt == nil {
-		t.Fatalf("body %s: want accessKey %q and an expiry", resp.Body, key)
+	if out.CSRF == nil {
+		t.Fatalf("no csrf in %s", resp.Body)
 	}
+
+	create := with(f.request(http.MethodPost, BasePath+"/buckets", map[string]string{"name": "resumed"}),
+		withCookie(token), withCSRF(*out.CSRF))
+	expectStatus(t, f.serve(create), http.StatusCreated)
 }
 
-func TestGetSessionWithSigV4HasNullExpiry(t *testing.T) {
+func TestGetSessionWithSigV4HasNullExpiryAndCSRF(t *testing.T) {
 	f := newFixture(t)
 	key, secret := f.createUser("alice", fullPolicy)
 	resp := f.serve(f.sigv4(credsOf(key, secret), http.MethodGet, BasePath+"/session", "", nil))
 	expectStatus(t, resp, http.StatusOK)
+	expectNoStore(t, resp)
 	var out map[string]any
 	mustUnmarshal(t, resp.Body, &out)
-	if out["expiresAt"] != nil {
-		t.Errorf("expiresAt = %v, want null for a signed caller", out["expiresAt"])
+	if v, ok := out["expiresAt"]; !ok || v != nil {
+		t.Errorf("expiresAt = %v (present %v), want null for a signed caller", v, ok)
+	}
+	if v, ok := out["csrf"]; !ok || v != nil {
+		t.Errorf("csrf = %v (present %v), want null for a signed caller", v, ok)
 	}
 	if out["accessKey"] != key {
 		t.Errorf("accessKey = %v", out["accessKey"])
+	}
+}
+
+// TestGetSessionRefusesStaleCookiesWithoutCSRF checks that an expired or
+// tampered cookie gets 401, and that the body carries no CSRF token.
+func TestGetSessionRefusesStaleCookiesWithoutCSRF(t *testing.T) {
+	cases := []struct {
+		name  string
+		build func(f *fixture, token string) Request
+	}{
+		{"expired", func(f *fixture, token string) Request {
+			f.clock.Advance(SessionTTL + time.Second)
+			return with(f.get(BasePath+"/session"), withCookie(token))
+		}},
+		{"tampered", func(f *fixture, token string) Request {
+			return with(f.get(BasePath+"/session"), withCookie(tamper(token)))
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t)
+			key, secret := f.createUser("alice", fullPolicy)
+			token, _ := f.login(key, secret)
+			resp := f.serve(tc.build(f, token))
+			expectError(t, resp, http.StatusUnauthorized, "AccessDenied")
+			if strings.Contains(string(resp.Body), "csrf") {
+				t.Errorf("the refusal carries a csrf field: %s", resp.Body)
+			}
+			expectNoStore(t, resp)
+		})
 	}
 }
 

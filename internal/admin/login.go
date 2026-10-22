@@ -33,11 +33,14 @@ type sessionReply struct {
 	CSRF      string `json:"csrf"`
 }
 
-// sessionView is the body of GET session. ExpiresAt is null for a caller that
-// signed each request and has no session.
+// sessionView is the body of GET session. ExpiresAt and CSRF are null for a
+// caller that signed each request and has no session. CSRF is set only when the
+// session cookie authenticated the request. It lets the console resume after a
+// page reload. The response is same-origin only, and the cookie is SameSite=Strict.
 type sessionView struct {
 	AccessKey string  `json:"accessKey"`
 	ExpiresAt *string `json:"expiresAt"`
+	CSRF      *string `json:"csrf"`
 }
 
 // login checks an access key and secret, and on success issues a session
@@ -108,6 +111,10 @@ func (s *Service) sessionGet(c *call) (Response, error) {
 	if !c.p.expiresAt.IsZero() {
 		v := c.p.expiresAt.UTC().Format(time.RFC3339)
 		view.ExpiresAt = &v
+	}
+	if c.p.viaCookie {
+		t := s.csrfToken(c.p.cookie)
+		view.CSRF = &t
 	}
 	return jsonResponse(http.StatusOK, view)
 }
