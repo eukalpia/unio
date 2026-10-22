@@ -12,6 +12,9 @@ import (
 var (
 	// ErrUserExists is returned when creating a user whose name is taken.
 	ErrUserExists = s3err.NewSentinel("iam: user already exists", s3err.EntityAlreadyExists)
+	// ErrUserDeleting is returned when creating a user whose name is still
+	// being deleted. The caller may retry once the deletion has finished.
+	ErrUserDeleting = s3err.NewSentinel("iam: user deletion in progress, retry", s3err.ConditionalRequestConflict)
 	// ErrUserNotFound is returned for operations on a missing user.
 	ErrUserNotFound = s3err.NewSentinel("iam: user not found", s3err.NoSuchEntity)
 	// ErrAccessKeyNotFound is returned for operations on a missing key.
