@@ -215,7 +215,7 @@ func (s *Server) newHertz(ln net.Listener) *server.Hertz {
 	}
 	h := server.New(opts...)
 	h.Use(
-		middleware.RequestID(s.hostID),
+		middleware.RequestID(s.hostID, s.logger),
 		middleware.WriteDeadline(s.cfg.WriteIdleTimeout),
 		middleware.AccessLog(s.logger),
 		middleware.Recover(s.logger),

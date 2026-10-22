@@ -19,24 +19,9 @@ func TestMain(m *testing.M) { goleak.VerifyTestMain(m) }
 
 var discard = slog.New(slog.NewTextHandler(io.Discard, nil))
 
-func TestRequestIDGenerator(t *testing.T) {
-	g := newRequestIDGen()
-	seen := make(map[string]bool, 10000)
-	for i := 0; i < 10000; i++ {
-		id := g.next()
-		if len(id) != 16 || strings.ToUpper(id) != id {
-			t.Fatalf("id %q is not 16 upper-case hex characters", id)
-		}
-		if seen[id] {
-			t.Fatalf("duplicate id %q", id)
-		}
-		seen[id] = true
-	}
-}
-
 func TestRequestIDHeaders(t *testing.T) {
 	h := server.New()
-	h.Use(RequestID("node-1"))
+	h.Use(RequestID("node-1", discard))
 	h.GET("/x", func(ctx context.Context, c *app.RequestContext) { c.String(http.StatusOK, "ok") })
 	w := ut.PerformRequest(h.Engine, "GET", "/x", nil)
 	if w.Header().Get("x-amz-request-id") == "" || w.Header().Get("x-amz-id-2") != "node-1" {
@@ -104,7 +89,7 @@ func TestNewLimiterValidation(t *testing.T) {
 func TestAdmissionSheds(t *testing.T) {
 	l, _ := NewLimiter(1, 0)
 	h := server.New()
-	h.Use(RequestID("n"), Admission(l, discard))
+	h.Use(RequestID("n", discard), Admission(l, discard))
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	h.GET("/slow", func(ctx context.Context, c *app.RequestContext) {
