@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/cockroachdb/pebble/v2"
@@ -42,8 +43,15 @@ type Store struct {
 	cache     *pebble.Cache
 	logs      *logstore.Store
 	fsms      map[ids.PartitionID]*fsm.FSM
-	groups    map[ids.PartitionID]*group.Group
 	router    *router.Router
+
+	// mu guards groups and closed. Ready reads them while Close changes them.
+	mu     sync.RWMutex
+	groups map[ids.PartitionID]*group.Group
+	closed bool
+
+	closeOnce sync.Once
+	closeErr  error
 }
 
 // Compile-time interface checks.
@@ -265,29 +273,6 @@ func (s *Store) startReplica(info cluster.PartitionInfo) error {
 	s.groups[info.ID] = g
 	s.router.AddGroup(info.ID, g)
 	return nil
-}
-
-// Close stops the Raft groups, then closes the state machines, the logs and
-// the cache. It returns the first error and is safe to call more than once.
-func (s *Store) Close() error {
-	var errs []error
-	for _, g := range s.groups {
-		errs = append(errs, g.Close())
-	}
-	s.groups = map[ids.PartitionID]*group.Group{}
-	for _, f := range s.fsms {
-		errs = append(errs, f.Close())
-	}
-	s.fsms = map[ids.PartitionID]*fsm.FSM{}
-	if s.logs != nil {
-		errs = append(errs, s.logs.Close())
-		s.logs = nil
-	}
-	if s.cache != nil {
-		s.cache.Unref()
-		s.cache = nil
-	}
-	return errors.Join(errs...)
 }
 
 // partitionLogger returns the logger of one partition's Raft group.

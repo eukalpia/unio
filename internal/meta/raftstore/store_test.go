@@ -28,18 +28,28 @@ type testCluster struct {
 	nodes []ids.NodeID
 	m     *cluster.Map
 	dirs  map[ids.NodeID]string
+	opts  raftstore.Options
 
 	mu     sync.Mutex
 	stores map[ids.NodeID]*raftstore.Store
 }
 
-// openTestCluster starts n nodes and registers their cleanup with t.
+// openTestCluster starts n nodes with the test heartbeat and registers their
+// cleanup with t.
 func openTestCluster(t testing.TB, n int) *testCluster {
+	t.Helper()
+	return openTestClusterWith(t, n, raftstore.Options{HeartbeatTimeout: testHeartbeat})
+}
+
+// openTestClusterWith starts n nodes with opts and registers their cleanup
+// with t.
+func openTestClusterWith(t testing.TB, n int, opts raftstore.Options) *testCluster {
 	t.Helper()
 	c := &testCluster{
 		t:      t,
 		net:    metatest.NewCluster(n),
 		dirs:   make(map[ids.NodeID]string),
+		opts:   opts,
 		stores: make(map[ids.NodeID]*raftstore.Store),
 	}
 	for i := 1; i <= n; i++ {
@@ -64,7 +74,7 @@ func (c *testCluster) open(node ids.NodeID) error {
 		DataDir: c.dirs[node],
 		RPC:     c.net.RPC(node),
 		Net:     c.net.RaftNetwork(node),
-		Options: raftstore.Options{HeartbeatTimeout: testHeartbeat},
+		Options: c.opts,
 	})
 	if err != nil {
 		return err
@@ -101,10 +111,17 @@ func (c *testCluster) restart(node ids.NodeID) error {
 	return c.open(node)
 }
 
-// closeAll closes every running store.
+// closeAll closes every running store. It takes every node off the network
+// first. Otherwise a store that stops while its peers still send it RPCs waits
+// for each RPC to time out.
 func (c *testCluster) closeAll() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	for node := range c.stores {
+		if err := c.net.Kill(node); err != nil {
+			c.t.Errorf("take down %s: %v", node, err)
+		}
+	}
 	for node, s := range c.stores {
 		if err := s.Close(); err != nil {
 			c.t.Errorf("close store %s: %v", node, err)
