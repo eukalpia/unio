@@ -123,7 +123,7 @@ func (f *FSM) readParts(q *pb.ListPartsQuery) (*pb.ReadResult, error) {
 		if p.Number <= q.PartNumberMarker {
 			continue
 		}
-		if q.Limit > 0 && uint32(len(res.Parts)) == q.Limit {
+		if q.Limit > 0 && int64(len(res.Parts)) == int64(q.Limit) {
 			res.More = true
 			break
 		}
