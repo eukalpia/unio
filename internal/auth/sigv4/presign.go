@@ -171,10 +171,13 @@ func (a *Authenticator) verifyPresignedParams(ctx context.Context, req *auth.Req
 	}
 	if v := req.Header.Values("X-Amz-Content-Sha256"); len(v) > 0 {
 		// A streaming marker on a presigned request would leave aws-chunked
-		// framing in the body, so it is refused.
+		// framing in the body, so it is refused before the generic check.
 		if pl, err := parsePayloadHash(v[0]); err == nil && pl.kind != payloadUnsigned && pl.kind != payloadDigest {
 			return nil, s3err.Errorf(s3err.InvalidRequest, "streaming payloads cannot be presigned")
 		}
+	}
+	if err := requireHeadersSigned(req.Header, hdr.signedHeaders); err != nil {
+		return nil, err
 	}
 	id, key, err := a.resolve(ctx, hdr.scope)
 	if err != nil {
