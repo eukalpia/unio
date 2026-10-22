@@ -47,7 +47,7 @@ func (s *Store) Lookup(ctx context.Context, accessKey string) (string, auth.Iden
 	if accessKey == s.rootKey {
 		return s.rootSecret, auth.Identity{AccessKey: accessKey, Root: true}, nil
 	}
-	if !validAccessKeyID(accessKey) {
+	if !auth.ValidAccessKeyID(accessKey) {
 		return "", auth.Identity{}, sigv4.ErrUnknownAccessKey
 	}
 	kl, err := s.keyLookup(ctx, accessKey)

@@ -25,7 +25,7 @@ type Config struct {
 	// KEK is the 32-byte key-encryption key, usually from DeriveKEK. Required.
 	KEK []byte
 	// RootAccessKey and RootSecret are the root credentials. They are
-	// required, validated by ValidateRootCredentials, and kept only in
+	// required, validated by auth.ValidateRootCredentials, and kept only in
 	// memory. Root bypasses policies.
 	RootAccessKey string
 	RootSecret    string
@@ -69,7 +69,7 @@ func New(kv meta.SystemKV, cfg Config) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("iam: key-encryption key: %w", err)
 	}
-	if err := ValidateRootCredentials(cfg.RootAccessKey, cfg.RootSecret); err != nil {
+	if err := auth.ValidateRootCredentials(cfg.RootAccessKey, cfg.RootSecret); err != nil {
 		return nil, err
 	}
 	if cfg.Region == "" {

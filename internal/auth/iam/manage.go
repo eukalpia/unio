@@ -222,7 +222,7 @@ func (s *Store) CreateAccessKey(ctx context.Context, user string) (auth.AccessKe
 
 // DeleteAccessKey removes an access key. Its cached entry is dropped at once.
 func (s *Store) DeleteAccessKey(ctx context.Context, accessKeyID string) error {
-	if !validAccessKeyID(accessKeyID) {
+	if !auth.ValidAccessKeyID(accessKeyID) {
 		return ErrAccessKeyNotFound
 	}
 	if err := s.deleteKey(ctx, keyPath(accessKeyID)); err != nil {
