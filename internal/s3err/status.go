@@ -11,6 +11,7 @@ var httpStatus = map[Code]int{
 	BucketAlreadyOwnedByYou:            http.StatusConflict,
 	BucketNotEmpty:                     http.StatusConflict,
 	ConditionalRequestConflict:         http.StatusConflict,
+	DeleteConflict:                     http.StatusConflict,
 	EntityTooLarge:                     http.StatusBadRequest,
 	EntityAlreadyExists:                http.StatusConflict,
 	EntityTooSmall:                     http.StatusBadRequest,

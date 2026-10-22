@@ -13,6 +13,7 @@ const (
 	BucketAlreadyOwnedByYou            Code = "BucketAlreadyOwnedByYou"
 	BucketNotEmpty                     Code = "BucketNotEmpty"
 	ConditionalRequestConflict         Code = "ConditionalRequestConflict"
+	DeleteConflict                     Code = "DeleteConflict"
 	EntityTooLarge                     Code = "EntityTooLarge"
 	EntityAlreadyExists                Code = "EntityAlreadyExists"
 	EntityTooSmall                     Code = "EntityTooSmall"

@@ -51,6 +51,9 @@ func TestHTTPStatus(t *testing.T) {
 	if InvalidPartNumber.HTTPStatus() != http.StatusRequestedRangeNotSatisfiable {
 		t.Fatalf("InvalidPartNumber status = %d, want 416", InvalidPartNumber.HTTPStatus())
 	}
+	if DeleteConflict.HTTPStatus() != http.StatusConflict {
+		t.Fatal("DeleteConflict must map to 409")
+	}
 }
 
 func TestWrapHidesCause(t *testing.T) {

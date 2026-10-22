@@ -8,5 +8,7 @@
 //
 // Evaluation follows the IAM rules: an explicit Deny in any matching
 // statement wins, an Allow must match otherwise, and everything else is
-// denied.
+// denied. EvaluateAll applies these rules to a set of documents, such as a
+// user's inline policy together with its attached managed policies, as one
+// union.
 package policy

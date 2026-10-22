@@ -13,6 +13,7 @@ var genericMessages = map[s3err.Code]string{
 	s3err.BucketAlreadyOwnedByYou:            "The bucket you tried to create already exists, and you own it.",
 	s3err.BucketNotEmpty:                     "The bucket you tried to delete is not empty.",
 	s3err.ConditionalRequestConflict:         "A conflicting operation occurred. Please try again.",
+	s3err.DeleteConflict:                     "The entity cannot be deleted while it is still in use.",
 	s3err.EntityAlreadyExists:                "The entity you tried to create already exists.",
 	s3err.EntityTooLarge:                     "Your proposed upload exceeds the maximum allowed size.",
 	s3err.EntityTooSmall:                     "Your proposed upload is smaller than the minimum allowed object size.",
