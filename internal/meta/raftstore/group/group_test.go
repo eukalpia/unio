@@ -13,6 +13,7 @@ import (
 
 	"github.com/cockroachdb/pebble/v2"
 	"github.com/hashicorp/raft"
+	"go.uber.org/goleak"
 
 	"github.com/eukalpia/unio/internal/ids"
 	"github.com/eukalpia/unio/internal/meta"
@@ -280,6 +281,43 @@ func TestConcurrentReadsAreLinearizable(t *testing.T) {
 	for err := range errs {
 		if err != nil {
 			t.Errorf("concurrent read: %v", err)
+		}
+	}
+}
+
+// TestCloseWithVerificationsInFlight closes a replica while concurrent reads
+// are verifying leadership, then closes the rest of the cluster. hashicorp/raft
+// can strand a VerifyLeader request that is queued as its raft instance stops,
+// and a stranded request blocks its caller forever. Close must wait for the
+// verifications it started, so that the goroutine check after each cluster
+// finds nothing left behind.
+func TestCloseWithVerificationsInFlight(t *testing.T) {
+	for i := 0; i < 40; i++ {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			c := newTestCluster(t, 3)
+			leader := c.awaitLeader()
+			q := &pb.ReadQuery{Query: &pb.ReadQuery_KvGet{KvGet: &pb.KVGetQuery{Key: "x"}}}
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			var wg sync.WaitGroup
+			for j := 0; j < 8; j++ {
+				for _, nd := range c.nodes {
+					wg.Add(1)
+					go func(g *group.Group) {
+						defer wg.Done()
+						for k := 0; k < 3; k++ {
+							_, _ = g.Read(ctx, q)
+						}
+					}(nd.g)
+				}
+			}
+			if err := leader.g.Close(); err != nil {
+				t.Fatalf("close: %v", err)
+			}
+			wg.Wait()
+		})
+		if err := goleak.Find(); err != nil {
+			t.Fatalf("iteration %d: %v", i, err)
 		}
 	}
 }
