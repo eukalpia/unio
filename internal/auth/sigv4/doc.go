@@ -9,21 +9,42 @@
 //
 // # Signed headers
 //
-// A header is only protected if the signature covers it, so the signed
-// header list is checked against the request:
+// A header is protected only if the signature covers it. What must be signed
+// depends on the form of the request.
 //
-//   - host is always signed, and so is date when it is the signing time;
-//   - x-amz-content-sha256 must be present in a header request. It is the
-//     only binding of the body to the signature, so it must be signed too;
-//   - every x-amz-* header present must be signed, as must Content-MD5 and
-//     the object headers S3 stores (Content-Type, Cache-Control,
-//     Content-Disposition, Content-Encoding, Content-Language, Expires).
+// Header auth (the Authorization header) requires:
 //
-// A missing signature on a present header fails with AccessDenied and the
+//   - host, and date when it is the signing time;
+//   - x-amz-content-sha256, present and signed. It is the only binding of
+//     the body to the signature. An unsigned digest could be replaced
+//     together with the body;
+//   - every x-amz-* header that is present;
+//   - Content-MD5, Content-Type, Cache-Control, Content-Disposition,
+//     Content-Encoding, Content-Language and Expires, when present. An
+//     unsigned Content-MD5 could be replaced together with the body, and the
+//     others are stored with the object.
+//
+// A presigned URL (X-Amz-* query parameters) requires:
+//
+//   - host;
+//   - every x-amz-* header that is present.
+//
+// The object headers listed above may be unsigned on a presigned URL. The
+// URL is generated before the request is sent, and a client such as a
+// browser adds Content-Type after presigning. S3 accepts that flow, and so
+// does this server. When one of those headers is listed in X-Amz-SignedHeaders,
+// its value must match, as for any signed header. A presigned request's body
+// is covered by UNSIGNED-PAYLOAD and so is not signed. A client that wants
+// the body bound lists the checksum or Content-MD5 in X-Amz-SignedHeaders.
+// x-amz-checksum-* headers are always signed, so they bind the body in both
+// forms.
+//
+// A missing signature on a required header fails with AccessDenied and the
 // message "There were headers present in the request which were not
 // signed". The AWS SDKs sign every header they send, except Authorization,
-// User-Agent, X-Amzn-Trace-Id, Expect and Transfer-Encoding. Other headers,
-// such as Accept-Encoding, are not covered by this rule.
+// User-Agent, X-Amzn-Trace-Id, Expect and Transfer-Encoding, so SDK requests
+// meet this rule in both forms. Headers outside the rule, such as
+// Accept-Encoding, are never covered and do not affect the signature.
 //
 // Secrets never leave this package: they are used to derive signing keys
 // and are not logged or included in errors. Signatures are compared in
