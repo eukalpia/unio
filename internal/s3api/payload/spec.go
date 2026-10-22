@@ -1,7 +1,7 @@
 package payload
 
 import (
-	"crypto/md5"
+	"crypto/md5" // #nosec G501 -- MD5 is required by the S3 protocol (ETag, Content-MD5); not used for security
 	"crypto/sha256"
 	"errors"
 	"fmt"

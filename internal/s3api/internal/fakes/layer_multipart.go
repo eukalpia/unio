@@ -2,7 +2,7 @@ package fakes
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/md5" // #nosec G501 -- MD5 is required by the S3 protocol (ETag, Content-MD5); not used for security
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -119,7 +119,7 @@ func (l *Layer) CopyObjectPart(ctx context.Context, src object.Ref, bucketName, 
 		return object.PartInfo{}, s3err.Errorf(s3err.EntityTooLarge, "part exceeds %d bytes", int64(object.MaxPartSize))
 	}
 	data := obj.data[off : off+n]
-	digest := md5.Sum(data)
+	digest := md5.Sum(data) // #nosec G401 -- MD5 is required by the S3 protocol (ETag, Content-MD5); not used for security
 	part := &storedPart{
 		info: object.PartInfo{
 			PartNumber: partNumber,
@@ -212,7 +212,7 @@ func (l *Layer) CompleteMultipartUpload(ctx context.Context, bucketName, key, up
 		digests = append(digests, p.digest[:]...)
 		partData = append(partData, p.data)
 	}
-	whole := md5.Sum(digests)
+	whole := md5.Sum(digests) // #nosec G401 -- MD5 is required by the S3 protocol (ETag, Content-MD5); not used for security
 	etagOut := hex.EncodeToString(whole[:]) + "-" + strconv.Itoa(len(selected))
 	info := infoFromPut(bucketName, key, size, etagOut, u.opts)
 	info.Parts = len(selected)

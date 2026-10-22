@@ -8,7 +8,7 @@ package payload
 
 import (
 	"bytes"
-	"crypto/md5"
+	"crypto/md5" // #nosec G501 -- MD5 is required by the S3 protocol (ETag, Content-MD5); not used for security
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -68,7 +68,7 @@ func New(r io.Reader, spec Spec) (*Body, error) {
 	b := &Body{
 		r:               r,
 		size:            spec.Size,
-		md5h:            md5.New(),
+		md5h:            md5.New(), // #nosec G401 -- MD5 is required by the S3 protocol (ETag, Content-MD5); not used for security
 		wantMD5:         bytes.Clone(spec.ContentMD5),
 		algo:            spec.Algorithm,
 		trailer:         spec.Trailer,

@@ -1,7 +1,7 @@
 package payload
 
 import (
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505 -- SHA-1 is required by the S3 protocol (x-amz-checksum-sha1); not used for security
 	"crypto/sha256"
 	"hash"
 	"hash/crc32"
@@ -41,7 +41,7 @@ func newHash(a object.ChecksumAlgorithm) hash.Hash {
 	case object.ChecksumCRC64NVME:
 		return crc64nvme.New()
 	case object.ChecksumSHA1:
-		return sha1.New()
+		return sha1.New() // #nosec G401 -- SHA-1 is required by the S3 protocol (x-amz-checksum-sha1); not used for security
 	case object.ChecksumSHA256:
 		return sha256.New()
 	default:
