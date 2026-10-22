@@ -46,7 +46,10 @@ type ListObjectsV2Result struct {
 	// StartAfter is the key the listing started after, if any.
 	StartAfter string
 	// ContinuationToken is the token supplied by the request, if any.
-	ContinuationToken string
+	// EchoContinuationToken reports that the request carried the parameter, so
+	// the element is sent even when the token is empty, as S3 does.
+	ContinuationToken     string
+	EchoContinuationToken bool
 	// NextContinuationToken is the token for the next page, if any.
 	NextContinuationToken string
 	// EncodingType is "url" when key-like values are percent-encoded.

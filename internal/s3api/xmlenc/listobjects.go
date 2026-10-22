@@ -17,7 +17,7 @@ func AppendListObjectsV2(dst []byte, r *ListObjectsV2Result) []byte {
 		dst = appendKeyElem(dst, "StartAfter", r.StartAfter, urlEnc)
 	}
 	// Continuation tokens are opaque and never percent-encoded.
-	if r.ContinuationToken != "" {
+	if r.ContinuationToken != "" || r.EchoContinuationToken {
 		dst = appendTextElem(dst, "ContinuationToken", r.ContinuationToken)
 	}
 	if r.NextContinuationToken != "" {
