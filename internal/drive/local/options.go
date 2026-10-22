@@ -50,6 +50,10 @@ type Options struct {
 	// ClusterID, when set, must match the cluster id in the drive's format
 	// record. Open refuses drives that belong to another cluster.
 	ClusterID string
+	// ExpectedID, when non-zero, must match the drive id in the format record.
+	// Open refuses a drive whose id differs, with ErrDriveIDMismatch, so that a
+	// drive moved to another slot cannot serve that slot's shards.
+	ExpectedID ids.DriveID
 	// NodeID and Endpoint are reported by Info.
 	NodeID   ids.NodeID
 	Endpoint string
