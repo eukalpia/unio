@@ -36,7 +36,7 @@ type testNode struct {
 }
 
 // newTestNode picks free ports on host and creates drives drive directories.
-func newTestNode(t *testing.T, host string, drives int) *testNode {
+func newTestNode(t testing.TB, host string, drives int) *testNode {
 	t.Helper()
 	n := &testNode{host: host, s3Port: freePort(t, host), wirePort: freePort(t, host)}
 	base := t.TempDir()
@@ -59,7 +59,7 @@ func endpoints(nodes []*testNode) string {
 
 // loadConfig returns the configuration of self in the cluster of nodes,
 // through config.Load as the CLI would build it. extra overrides variables.
-func loadConfig(t *testing.T, self *testNode, nodes []*testNode, extra map[string]string) *config.Config {
+func loadConfig(t testing.TB, self *testNode, nodes []*testNode, extra map[string]string) *config.Config {
 	t.Helper()
 	env := map[string]string{
 		"UNIO_NODE_ID":             self.host,
@@ -107,7 +107,7 @@ func (r *running) stop(t *testing.T) {
 
 // serve starts a node with cfg and serves it until the test ends or stop is
 // called.
-func serve(t *testing.T, cfg *config.Config) *running {
+func serve(t testing.TB, cfg *config.Config) *running {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(testWriter{t}, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	n, err := Start(context.Background(), cfg, logger)
@@ -132,7 +132,7 @@ func serve(t *testing.T, cfg *config.Config) *running {
 
 // waitReady polls the readiness endpoint of the node at addr until it
 // reports ready.
-func waitReady(t *testing.T, addr string) {
+func waitReady(t testing.TB, addr string) {
 	t.Helper()
 	deadline := time.Now().Add(60 * time.Second)
 	for {
@@ -163,7 +163,7 @@ func client(addr string) *s3.Client {
 }
 
 // freePort returns a port on host that was free a moment ago.
-func freePort(t *testing.T, host string) int {
+func freePort(t testing.TB, host string) int {
 	t.Helper()
 	ln, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
 	if err != nil {
@@ -184,7 +184,7 @@ func discardLogger() *slog.Logger {
 }
 
 // testWriter sends log output to the test log.
-type testWriter struct{ t *testing.T }
+type testWriter struct{ t testing.TB }
 
 func (w testWriter) Write(p []byte) (int, error) {
 	w.t.Helper()
