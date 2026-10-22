@@ -23,7 +23,8 @@
 //	partition meta  M | name
 //
 // ^ts is the bitwise NOT of the timestamp, so newer versions sort first. The
-// null version uses ts 0, which sorts after every real version of its key.
+// timestamps are the partition commit counter, starting at 1. A null version is
+// an ordinary version with an empty version id, not a special timestamp.
 //
 // The package validates structure only. Key validity (UTF-8, length, NUL) is
 // the object layer's job. Parse functions return errors wrapping ErrMalformed
