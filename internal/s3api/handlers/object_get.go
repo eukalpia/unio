@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
+	"math"
 
 	"github.com/eukalpia/unio/internal/object"
 	"github.com/eukalpia/unio/internal/s3api/headers"
+	"github.com/eukalpia/unio/internal/s3err"
 )
 
 // responseOverrides maps the response-* query parameters, which let an
@@ -31,7 +34,10 @@ func (e *Env) GetObject(c *Call, head bool) error {
 	if err != nil {
 		return err
 	}
-	partNumber, err := queryInt(q, "partNumber", 0, 1, object.MaxPartNumber)
+	// A number beyond the parts of the object is not a malformed request: the
+	// layer answers InvalidPartNumber for it. Only a number that cannot be an
+	// int32 is rejected here.
+	partNumber, err := queryInt(q, "partNumber", 0, 1, math.MaxInt32)
 	if err != nil {
 		return err
 	}
@@ -46,7 +52,7 @@ func (e *Env) GetObject(c *Call, head bool) error {
 	if head {
 		info, err := e.Layer.HeadObject(c.Ctx, c.Route.Bucket, c.Route.Key, opts)
 		if err != nil {
-			return err
+			return readError(c, partNumber, err)
 		}
 		if info.Size < 0 {
 			return setContentLength(&c.RC.Response.Header, info.Size)
@@ -59,7 +65,7 @@ func (e *Env) GetObject(c *Call, head bool) error {
 
 	reader, err := e.Layer.GetObject(c.Ctx, c.Route.Bucket, c.Route.Key, opts)
 	if err != nil {
-		return err
+		return readError(c, partNumber, err)
 	}
 	if reader.Length < 0 {
 		_ = reader.Close()
@@ -90,6 +96,27 @@ func (e *Env) GetObject(c *Call, head bool) error {
 	}
 	e.streamObject(c, reader, buf)
 	return nil
+}
+
+// readError returns the error of a failed read, as the client sees it. A 304
+// response carries the ETag and Last-Modified of the object, as RFC 9110
+// requires, and the layer reports them in the cause of the NotModified error.
+// A part number that names no part of the object is InvalidPartNumber, which S3
+// answers with 416; the layer reports it as InvalidArgument with a cause that
+// says so.
+func readError(c *Call, partNumber int, err error) error {
+	var validators interface{ NotModifiedInfo() object.Info }
+	if s3err.Is(err, s3err.NotModified) && errors.As(err, &validators) {
+		info := validators.NotModifiedInfo()
+		h := &c.RC.Response.Header
+		h.Set("ETag", headers.QuoteETag(info.ETag))
+		h.Set("Last-Modified", httpTime(info.ModTime))
+	}
+	var missing interface{ NoSuchPart() bool }
+	if partNumber > 0 && errors.As(err, &missing) && missing.NoSuchPart() {
+		return s3err.Errorf(s3err.InvalidPartNumber, "The requested partnumber is not satisfiable.")
+	}
+	return err
 }
 
 // rangeStatus returns 206 with Content-Range for a range request, and 200 for
