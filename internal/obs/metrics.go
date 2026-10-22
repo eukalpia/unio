@@ -1,6 +1,8 @@
 package obs
 
 import (
+	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -26,12 +28,9 @@ type Metrics struct {
 }
 
 // NewMetrics returns a Metrics with every family registered on its own
-// registry, together with the Go and process collectors.
-//
-// The descriptors are fixed constants registered on a fresh registry, so a
-// registration failure is a programming error. The constructor has no error
-// return, and MustRegister reports such an error at startup.
-func NewMetrics() *Metrics {
+// registry, together with the Go and process collectors. It returns an error
+// rather than panicking if a family cannot be registered.
+func NewMetrics() (*Metrics, error) {
 	reg := prometheus.NewRegistry()
 	m := &Metrics{
 		registry: reg,
@@ -80,7 +79,7 @@ func NewMetrics() *Metrics {
 			Help: "Number of objects waiting in the garbage collection queue.",
 		}),
 	}
-	reg.MustRegister(
+	if err := registerAll(reg,
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 		m.httpRequests,
@@ -93,8 +92,22 @@ func NewMetrics() *Metrics {
 		m.raftApply,
 		m.bufpoolInUse,
 		m.gcQueueDepth,
-	)
-	return m
+	); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// registerAll registers every collector on reg and returns all failures joined,
+// so that a bad family is reported rather than panicking the caller.
+func registerAll(reg *prometheus.Registry, cs ...prometheus.Collector) error {
+	var errs []error
+	for _, c := range cs {
+		if err := reg.Register(c); err != nil {
+			errs = append(errs, fmt.Errorf("register metric family: %w", err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // Registry returns the registry that holds every family of m. Serve it with

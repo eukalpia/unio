@@ -138,7 +138,7 @@ func TestNewMetricsFamilies(t *testing.T) {
 		{family: "go_goroutines", wantType: "GAUGE"},
 		{family: "process_cpu_seconds_total", wantType: "COUNTER"},
 	}
-	m := NewMetrics()
+	m := newTestMetrics(t)
 	observeEveryFamily(m)
 	types := familyTypes(t, m.Registry())
 	for _, tc := range tests {
@@ -153,8 +153,8 @@ func TestNewMetricsFamilies(t *testing.T) {
 
 func TestMetricsAreIsolatedFromGlobalRegistry(t *testing.T) {
 	t.Parallel()
-	a := NewMetrics()
-	b := NewMetrics()
+	a := newTestMetrics(t)
+	b := newTestMetrics(t)
 	if a.Registry() == b.Registry() {
 		t.Fatal("two instances share a registry")
 	}
@@ -206,7 +206,7 @@ func TestObserveHTTPRequest(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			m := NewMetrics()
+			m := newTestMetrics(t)
 			m.ObserveHTTPRequest(tc.op, tc.status, 5*time.Millisecond, tc.in, tc.out)
 			reg := m.Registry()
 			labels := map[string]string{"op": tc.wantOp, "status": tc.wantStatus}
@@ -228,7 +228,7 @@ func TestObserveHTTPRequest(t *testing.T) {
 
 func TestObserveHTTPRequestIgnoresNegativeBytes(t *testing.T) {
 	t.Parallel()
-	m := NewMetrics()
+	m := newTestMetrics(t)
 	m.ObserveHTTPRequest("PutObject", 200, time.Millisecond, 100, 200)
 	m.ObserveHTTPRequest("PutObject", 200, time.Millisecond, -50, -1)
 	op := map[string]string{"op": "PutObject"}
@@ -253,7 +253,7 @@ func TestObserveErasure(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			m := NewMetrics()
+			m := newTestMetrics(t)
 			m.ObserveErasureWrite(2*time.Millisecond, tc.err)
 			m.ObserveErasureRead(3*time.Millisecond, tc.err)
 			labels := map[string]string{"result": tc.wantResult}
@@ -284,7 +284,7 @@ func TestObserveDriveError(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			m := NewMetrics()
+			m := newTestMetrics(t)
 			m.IncDriveError(tc.drive, tc.kind)
 			m.IncDriveError(tc.drive, tc.kind)
 			labels := map[string]string{"drive": tc.wantDrive, "kind": tc.wantKind}
@@ -297,7 +297,7 @@ func TestObserveDriveError(t *testing.T) {
 
 func TestCardinalityIsBounded(t *testing.T) {
 	t.Parallel()
-	m := NewMetrics()
+	m := newTestMetrics(t)
 	for i := range 500 {
 		m.IncDriveError(strings.Repeat("x", 65+i), "io")
 	}
@@ -329,7 +329,7 @@ func TestObserveRaftApply(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			m := NewMetrics()
+			m := newTestMetrics(t)
 			m.ObserveRaftApply(tc.partition, 4*time.Millisecond)
 			labels := map[string]string{"partition": tc.want}
 			if got := histogramCount(t, m.Registry(), "unio_raft_apply_duration_seconds", labels); got != 1 {
@@ -354,7 +354,7 @@ func TestGauges(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			m := NewMetrics()
+			m := newTestMetrics(t)
 			tc.set(m)
 			if got := sampleValue(t, m.Registry(), tc.family, nil); got != tc.want {
 				t.Fatalf("%s = %v, want %v", tc.family, got, tc.want)
@@ -367,7 +367,7 @@ func TestHistogramBuckets(t *testing.T) {
 	t.Parallel()
 	t.Run("http duration uses the explicit 1ms to 60s ladder", func(t *testing.T) {
 		t.Parallel()
-		m := NewMetrics()
+		m := newTestMetrics(t)
 		m.ObserveHTTPRequest("GetObject", 200, time.Millisecond, 0, 0)
 		want := []float64{0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60}
 		got := histogramBounds(t, m.Registry(), "unio_http_request_duration_seconds")
@@ -393,7 +393,7 @@ func TestHistogramBuckets(t *testing.T) {
 	for _, tc := range erasure {
 		t.Run(tc.name+" is exponential from 100us to about 10s", func(t *testing.T) {
 			t.Parallel()
-			m := NewMetrics()
+			m := newTestMetrics(t)
 			tc.observe(m)
 			got := histogramBounds(t, m.Registry(), tc.family)
 			if len(got) < 2 {

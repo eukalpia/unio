@@ -103,12 +103,12 @@ func TestMetricsHandler(t *testing.T) {
 	})
 	t.Run("empty token is an error", func(t *testing.T) {
 		t.Parallel()
-		if _, err := MetricsHandler(NewMetrics(), nil); err == nil {
+		if _, err := MetricsHandler(newTestMetrics(t), nil); err == nil {
 			t.Fatal("MetricsHandler with empty token error = nil, want error")
 		}
 	})
 
-	m := NewMetrics()
+	m := newTestMetrics(t)
 	m.ObserveHTTPRequest("GetObject", 200, time.Millisecond, 1, 2)
 	h, err := MetricsHandler(m, []byte(testToken))
 	if err != nil {
