@@ -358,6 +358,10 @@ func (t *Transport) serveStream(nc net.Conn, from ids.NodeID) {
 	}
 }
 
+// callerGrace is how long a served transfer outlives the deadline the caller
+// sent with it.
+const callerGrace = time.Second
+
 // serveTransfer runs the handler for one stream request and writes its reply.
 // It reports whether the connection can carry another transfer.
 func (t *Transport) serveTransfer(nc net.Conn, from ids.NodeID, hdr *uniov1.StreamHeader) bool {
@@ -366,7 +370,11 @@ func (t *Transport) serveTransfer(nc net.Conn, from ids.NodeID, hdr *uniov1.Stre
 	}
 	limit := t.lim.StreamTimeout
 	if hdr.TimeoutNanos > 0 {
-		limit = min(limit, time.Duration(hdr.TimeoutNanos))
+		// The caller's own deadline must end a transfer before this side
+		// does, so the caller reports its timeout as a timeout. Ending first
+		// here would close the connection while the caller still waits, and
+		// the caller would report an unavailable peer instead.
+		limit = min(limit, time.Duration(hdr.TimeoutNanos)+callerGrace)
 	}
 	ctx, cancel := context.WithTimeout(t.serveCtx, limit)
 	defer cancel()
