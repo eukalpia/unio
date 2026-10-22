@@ -220,8 +220,8 @@ func (s *Store) SetUserPolicy(ctx context.Context, user string, doc []byte) erro
 }
 
 // SetUserEnabled enables or disables a user. A disabled user's keys stop
-// authenticating and the user is denied everything. This is not part of
-// auth.IAM, and it is the only way to disable a user.
+// authenticating and the user is denied everything. Local caches are
+// cleared at once; other nodes see the change within CacheTTL.
 func (s *Store) SetUserEnabled(ctx context.Context, user string, enabled bool) error {
 	if !validUserName(user) {
 		return ErrUserNotFound

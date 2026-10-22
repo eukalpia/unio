@@ -34,35 +34,35 @@ func TestParseRejects(t *testing.T) {
 		doc  string
 		want s3err.Code
 	}{
-		{"not json", `{`, s3err.InvalidArgument},
-		{"trailing garbage", `{"Version":"2012-10-17","Statement":[{` + ok + `}]} x`, s3err.InvalidArgument},
-		{"array at top", `[]`, s3err.InvalidArgument},
-		{"missing version", `{"Statement":[{` + ok + `}]}`, s3err.InvalidArgument},
-		{"wrong version", `{"Version":"2008-10-17","Statement":[{` + ok + `}]}`, s3err.InvalidArgument},
-		{"numeric version", `{"Version":2012,"Statement":[{` + ok + `}]}`, s3err.InvalidArgument},
-		{"unknown top-level key", `{"Version":"2012-10-17","Extra":1,"Statement":[{` + ok + `}]}`, s3err.InvalidArgument},
-		{"duplicate top-level key", `{"Version":"2012-10-17","Version":"2012-10-17","Statement":[{` + ok + `}]}`, s3err.InvalidArgument},
-		{"missing statement", `{"Version":"2012-10-17"}`, s3err.InvalidArgument},
-		{"empty statement", `{"Version":"2012-10-17","Statement":[]}`, s3err.InvalidArgument},
-		{"statement is object", `{"Version":"2012-10-17","Statement":{` + ok + `}}`, s3err.InvalidArgument},
-		{"statement entry not object", `{"Version":"2012-10-17","Statement":["x"]}`, s3err.InvalidArgument},
-		{"unknown statement key", `{"Version":"2012-10-17","Statement":[{` + ok + `,"Foo":1}]}`, s3err.InvalidArgument},
-		{"duplicate effect", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Effect":"Deny","Action":"s3:GetObject","Resource":"*"}]}`, s3err.InvalidArgument},
-		{"lower-case effect", `{"Version":"2012-10-17","Statement":[{"Effect":"allow","Action":"s3:GetObject","Resource":"*"}]}`, s3err.InvalidArgument},
-		{"missing effect", `{"Version":"2012-10-17","Statement":[{"Action":"s3:GetObject","Resource":"*"}]}`, s3err.InvalidArgument},
-		{"missing action", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Resource":"*"}]}`, s3err.InvalidArgument},
-		{"empty action list", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":[],"Resource":"*"}]}`, s3err.InvalidArgument},
-		{"non-string action", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":[1],"Resource":"*"}]}`, s3err.InvalidArgument},
-		{"action without service", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"GetObject","Resource":"*"}]}`, s3err.InvalidArgument},
-		{"action with space", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:Get Object","Resource":"*"}]}`, s3err.InvalidArgument},
-		{"resource outside s3", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:iam:::role/x"}]}`, s3err.InvalidArgument},
-		{"resource with space", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:s3:::b /k"}]}`, s3err.InvalidArgument},
-		{"missing resource", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:GetObject"}]}`, s3err.InvalidArgument},
-		{"principal", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"*"}]}`, s3err.InvalidArgument},
-		{"condition refused", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:GetObject","Resource":"*","Condition":{"IpAddress":{"aws:SourceIp":"10.0.0.0/8"}}}]}`, s3err.NotImplemented},
-		{"not action refused", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","NotAction":"s3:DeleteObject","Resource":"*"}]}`, s3err.NotImplemented},
-		{"not resource refused", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:GetObject","NotResource":"*"}]}`, s3err.NotImplemented},
-		{"sid too long", `{"Version":"2012-10-17","Statement":[{"Sid":"` + strings.Repeat("a", 300) + `",` + ok + `}]}`, s3err.InvalidArgument},
+		{"not json", `{`, s3err.MalformedPolicy},
+		{"trailing garbage", `{"Version":"2012-10-17","Statement":[{` + ok + `}]} x`, s3err.MalformedPolicy},
+		{"array at top", `[]`, s3err.MalformedPolicy},
+		{"missing version", `{"Statement":[{` + ok + `}]}`, s3err.MalformedPolicy},
+		{"wrong version", `{"Version":"2008-10-17","Statement":[{` + ok + `}]}`, s3err.MalformedPolicy},
+		{"numeric version", `{"Version":2012,"Statement":[{` + ok + `}]}`, s3err.MalformedPolicy},
+		{"unknown top-level key", `{"Version":"2012-10-17","Extra":1,"Statement":[{` + ok + `}]}`, s3err.MalformedPolicy},
+		{"duplicate top-level key", `{"Version":"2012-10-17","Version":"2012-10-17","Statement":[{` + ok + `}]}`, s3err.MalformedPolicy},
+		{"missing statement", `{"Version":"2012-10-17"}`, s3err.MalformedPolicy},
+		{"empty statement", `{"Version":"2012-10-17","Statement":[]}`, s3err.MalformedPolicy},
+		{"statement is object", `{"Version":"2012-10-17","Statement":{` + ok + `}}`, s3err.MalformedPolicy},
+		{"statement entry not object", `{"Version":"2012-10-17","Statement":["x"]}`, s3err.MalformedPolicy},
+		{"unknown statement key", `{"Version":"2012-10-17","Statement":[{` + ok + `,"Foo":1}]}`, s3err.MalformedPolicy},
+		{"duplicate effect", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Effect":"Deny","Action":"s3:GetObject","Resource":"*"}]}`, s3err.MalformedPolicy},
+		{"lower-case effect", `{"Version":"2012-10-17","Statement":[{"Effect":"allow","Action":"s3:GetObject","Resource":"*"}]}`, s3err.MalformedPolicy},
+		{"missing effect", `{"Version":"2012-10-17","Statement":[{"Action":"s3:GetObject","Resource":"*"}]}`, s3err.MalformedPolicy},
+		{"missing action", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Resource":"*"}]}`, s3err.MalformedPolicy},
+		{"empty action list", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":[],"Resource":"*"}]}`, s3err.MalformedPolicy},
+		{"non-string action", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":[1],"Resource":"*"}]}`, s3err.MalformedPolicy},
+		{"action without service", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"GetObject","Resource":"*"}]}`, s3err.MalformedPolicy},
+		{"action with space", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:Get Object","Resource":"*"}]}`, s3err.MalformedPolicy},
+		{"resource outside s3", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:iam:::role/x"}]}`, s3err.MalformedPolicy},
+		{"resource with space", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:s3:::b /k"}]}`, s3err.MalformedPolicy},
+		{"missing resource", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:GetObject"}]}`, s3err.MalformedPolicy},
+		{"principal", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"*"}]}`, s3err.MalformedPolicy},
+		{"condition refused", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:GetObject","Resource":"*","Condition":{"IpAddress":{"aws:SourceIp":"10.0.0.0/8"}}}]}`, s3err.MalformedPolicy},
+		{"not action refused", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","NotAction":"s3:DeleteObject","Resource":"*"}]}`, s3err.MalformedPolicy},
+		{"not resource refused", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:GetObject","NotResource":"*"}]}`, s3err.MalformedPolicy},
+		{"sid too long", `{"Version":"2012-10-17","Statement":[{"Sid":"` + strings.Repeat("a", 300) + `",` + ok + `}]}`, s3err.MalformedPolicy},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -84,7 +84,7 @@ func TestParseRejects(t *testing.T) {
 func TestParseRejectsOversizedDocument(t *testing.T) {
 	pad := strings.Repeat(" ", MaxDocumentSize)
 	doc := `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:GetObject","Resource":"*"}]}` + pad
-	if _, err := Parse([]byte(doc)); !s3err.Is(err, s3err.InvalidArgument) {
+	if _, err := Parse([]byte(doc)); !s3err.Is(err, s3err.MalformedPolicy) {
 		t.Fatalf("oversized document: err = %v", err)
 	}
 }
@@ -92,7 +92,7 @@ func TestParseRejectsOversizedDocument(t *testing.T) {
 func TestParseTooManyStatements(t *testing.T) {
 	stmt := `{"Effect":"Allow","Action":"s3:GetObject","Resource":"*"}`
 	doc := `{"Version":"2012-10-17","Statement":[` + strings.Repeat(stmt+",", maxStatements) + stmt + `]}`
-	if _, err := Parse([]byte(doc)); !s3err.Is(err, s3err.InvalidArgument) {
+	if _, err := Parse([]byte(doc)); !s3err.Is(err, s3err.MalformedPolicy) {
 		t.Fatalf("statement limit not enforced: %v", err)
 	}
 }

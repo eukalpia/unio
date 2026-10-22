@@ -6,12 +6,11 @@ import (
 	"github.com/eukalpia/unio/internal/s3err"
 )
 
-// Error is a policy validation failure. It implements s3err.Coder, so the
-// S3 layer can report it with the right code.
+// Error is a policy document failure: malformed JSON, an unknown or
+// unsupported element, or a value outside the accepted form. S3 reports every
+// such failure as MalformedPolicy, and the message names the element at
+// fault. Error implements s3err.Coder, so the S3 layer reports it correctly.
 type Error struct {
-	// Code is InvalidArgument for malformed documents and NotImplemented for
-	// elements this version does not support.
-	Code s3err.Code
 	// Msg describes the problem. It names document elements, never values
 	// supplied by the caller beyond a bounded prefix.
 	Msg string
@@ -24,16 +23,10 @@ func (e *Error) Error() string {
 
 // S3Code implements s3err.Coder.
 func (e *Error) S3Code() s3err.Code {
-	return e.Code
+	return s3err.MalformedPolicy
 }
 
-// invalid returns an InvalidArgument error for a malformed document.
+// invalid returns the error for a document that fails validation.
 func invalid(format string, args ...any) *Error {
-	return &Error{Code: s3err.InvalidArgument, Msg: fmt.Sprintf(format, args...)}
-}
-
-// unsupported returns a NotImplemented error for an element this version
-// does not support.
-func unsupported(format string, args ...any) *Error {
-	return &Error{Code: s3err.NotImplemented, Msg: fmt.Sprintf(format, args...)}
+	return &Error{Msg: fmt.Sprintf(format, args...)}
 }

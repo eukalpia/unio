@@ -31,9 +31,9 @@ var (
 	statementKeys = []string{"Sid", "Effect", "Action", "Resource"}
 	// unsupportedKeys are valid IAM elements that this version refuses.
 	unsupportedKeys = map[string]string{
-		"Condition":   "Condition is not supported yet",
-		"NotAction":   "NotAction is not supported yet",
-		"NotResource": "NotResource is not supported yet",
+		"Condition":   "Condition is not supported in this version",
+		"NotAction":   "NotAction is not supported in this version",
+		"NotResource": "NotResource is not supported in this version",
 	}
 )
 
@@ -174,7 +174,7 @@ func members(n *ast.Node, ctx string, allowed []string) (map[string]ast.Node, er
 	var p ast.Pair
 	for it.Next(&p) {
 		if msg, ok := unsupportedKeys[p.Key]; ok {
-			return nil, unsupported("%s", msg)
+			return nil, invalid("%s", msg)
 		}
 		if p.Key == "Principal" {
 			return nil, invalid("Principal is not allowed in an identity policy")

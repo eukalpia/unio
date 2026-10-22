@@ -76,14 +76,17 @@ func TestPresignedRejectsBadParameters(t *testing.T) {
 		{"malformed credential", func(q url.Values) { q.Set("X-Amz-Credential", "AKIA/20130524") }},
 		{"bad date", func(q url.Values) { q.Set("X-Amz-Date", "2013-05-24") }},
 		{"date does not match scope", func(q url.Values) { q.Set("X-Amz-Date", "20130525T000000Z") }},
+		{"scope names another region", func(q url.Values) {
+			q.Set("X-Amz-Credential", docAccessKey+"/20130524/eu-west-1/s3/aws4_request")
+		}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			r := newHTTPRequest(t, http.MethodGet, presignedDocURL(c.edit), nil)
 			a := newTestAuthenticator(docNow.Add(time.Minute))
 			_, err := a.Authenticate(context.Background(), authRequest(t, r))
-			if !s3err.Is(err, s3err.AuthorizationHeaderMalformed) {
-				t.Fatalf("err = %v, want AuthorizationHeaderMalformed", err)
+			if !s3err.Is(err, s3err.AuthorizationQueryParametersError) {
+				t.Fatalf("err = %v, want AuthorizationQueryParametersError", err)
 			}
 		})
 	}
