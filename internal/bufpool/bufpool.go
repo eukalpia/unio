@@ -1,8 +1,12 @@
 // Package bufpool provides fixed-size, reusable buffers drawn from a shared
 // memory budget. Every hot path allocates its I/O buffers here so that total
-// buffer memory is bounded by configuration (architecture section 11):
-// when the budget is exhausted, Get blocks until a buffer is released or the
-// caller's context is done.
+// buffer memory is bounded by configuration (architecture section 11).
+//
+// The budget charges the real size of every buffer that exists, whether it is
+// in use or kept idle for reuse, including alignment slack. When the budget
+// is exhausted, Get first reclaims idle buffers from every pool sharing the
+// budget and then blocks until a buffer is released or the caller's context
+// is done.
 package bufpool
 
 import (
@@ -15,11 +19,20 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
+// DefaultMaxIdle is the number of idle buffers a pool keeps for reuse unless
+// WithMaxIdle says otherwise.
+const DefaultMaxIdle = 16
+
 // Budget is a memory limit shared by any number of pools.
 type Budget struct {
-	sem   *semaphore.Weighted
-	total int64
-	inUse atomic.Int64
+	sem     *semaphore.Weighted
+	total   int64
+	inUse   atomic.Int64 // bytes charged for buffers handed out
+	idle    atomic.Int64 // bytes charged for buffers kept for reuse
+	waiters atomic.Int64 // Get calls blocked on the semaphore
+
+	mu    sync.Mutex
+	pools []*Pool
 }
 
 // NewBudget returns a budget of the given number of bytes.
@@ -33,38 +46,77 @@ func NewBudget(bytes int64) *Budget {
 // Total returns the budget size in bytes.
 func (b *Budget) Total() int64 { return b.total }
 
-// InUse returns the bytes currently held by outstanding buffers.
+// InUse returns the bytes charged for buffers currently handed out.
 func (b *Budget) InUse() int64 { return b.inUse.Load() }
+
+// Idle returns the bytes charged for buffers kept for reuse.
+func (b *Budget) Idle() int64 { return b.idle.Load() }
+
+// reclaim drops the idle buffers of every pool sharing the budget, returning
+// their bytes to the budget.
+func (b *Budget) reclaim() {
+	b.mu.Lock()
+	pools := append([]*Pool(nil), b.pools...)
+	b.mu.Unlock()
+	for _, p := range pools {
+		p.dropIdle()
+	}
+}
+
+func (b *Budget) register(p *Pool) {
+	b.mu.Lock()
+	b.pools = append(b.pools, p)
+	b.mu.Unlock()
+}
 
 // Pool hands out buffers of one size.
 type Pool struct {
-	size   int
-	align  int
-	budget *Budget
-	free   sync.Pool
+	size    int
+	align   int
+	charge  int64 // bytes actually allocated per buffer, alignment slack included
+	maxIdle int
+	budget  *Budget
+
+	mu   sync.Mutex
+	idle [][]byte
 }
 
 // Option configures a Pool.
 type Option func(*Pool)
 
 // WithAlignment makes every buffer start at an address that is a multiple
-// of align (a power of two), as required for O_DIRECT I/O.
+// of align (a power of two), as required for O_DIRECT I/O. The alignment
+// slack is charged to the budget.
 func WithAlignment(align int) Option {
 	return func(p *Pool) { p.align = align }
 }
 
+// WithMaxIdle sets how many idle buffers the pool keeps for reuse. Zero
+// disables reuse.
+func WithMaxIdle(n int) Option {
+	return func(p *Pool) { p.maxIdle = n }
+}
+
 // NewPool returns a pool of size-byte buffers charged against budget.
 func NewPool(size int, budget *Budget, opts ...Option) *Pool {
-	if size <= 0 || int64(size) > budget.total {
-		panic(fmt.Sprintf("bufpool: invalid buffer size %d for budget %d", size, budget.total))
-	}
-	p := &Pool{size: size, align: 1, budget: budget}
+	p := &Pool{size: size, align: 1, maxIdle: DefaultMaxIdle, budget: budget}
 	for _, o := range opts {
 		o(p)
 	}
 	if p.align <= 0 || p.align&(p.align-1) != 0 {
 		panic(fmt.Sprintf("bufpool: alignment %d is not a power of two", p.align))
 	}
+	if p.maxIdle < 0 {
+		panic(fmt.Sprintf("bufpool: negative idle limit %d", p.maxIdle))
+	}
+	p.charge = int64(size)
+	if p.align > 1 {
+		p.charge += int64(p.align)
+	}
+	if size <= 0 || p.charge > budget.total {
+		panic(fmt.Sprintf("bufpool: buffer of %d bytes (%d charged) does not fit budget %d", size, p.charge, budget.total))
+	}
+	budget.register(p)
 	return p
 }
 
@@ -82,40 +134,100 @@ type Buffer struct {
 // Bytes returns the full-size buffer.
 func (b *Buffer) Bytes() []byte { return b.b }
 
-// Release returns the buffer to its pool and frees its budget.
+// Release returns the buffer to its pool. The buffer is kept for reuse, still
+// charged to the budget, unless the pool is full or a Get is waiting for
+// budget; otherwise its bytes return to the budget.
 func (b *Buffer) Release() {
 	if !b.released.CompareAndSwap(false, true) {
 		return
 	}
 	p := b.pool
-	p.free.Put(&b.b)
-	p.budget.inUse.Add(-int64(p.size))
-	p.budget.sem.Release(int64(p.size))
+	bud := p.budget
+	bud.inUse.Add(-p.charge)
+	if bud.waiters.Load() == 0 && p.keepIdle(b.b) {
+		// A Get may have started waiting after the check above and reclaimed
+		// before the buffer was stored. Waiters register before reclaiming,
+		// so re-checking here guarantees one side frees the idle budget.
+		if bud.waiters.Load() > 0 {
+			p.dropIdle()
+		}
+		return
+	}
+	bud.sem.Release(p.charge)
 }
 
 // Get returns a buffer, waiting for budget if necessary. It fails only when
 // ctx is done.
 func (p *Pool) Get(ctx context.Context) (*Buffer, error) {
-	if err := p.budget.sem.Acquire(ctx, int64(p.size)); err != nil {
-		return nil, fmt.Errorf("bufpool: waiting for %d bytes: %w", p.size, err)
+	if buf, ok := p.TryGet(); ok {
+		return buf, nil
 	}
-	return p.take(), nil
+	bud := p.budget
+	bud.waiters.Add(1)
+	defer bud.waiters.Add(-1)
+	bud.reclaim()
+	if err := bud.sem.Acquire(ctx, p.charge); err != nil {
+		return nil, fmt.Errorf("bufpool: waiting for %d bytes: %w", p.charge, err)
+	}
+	return p.handOut(p.alloc()), nil
 }
 
-// TryGet returns a buffer if budget is available right now.
+// TryGet returns a buffer if one is idle or budget is available right now.
 func (p *Pool) TryGet() (*Buffer, bool) {
-	if !p.budget.sem.TryAcquire(int64(p.size)) {
+	if b, ok := p.takeIdle(); ok {
+		return p.handOut(b), true
+	}
+	if !p.budget.sem.TryAcquire(p.charge) {
 		return nil, false
 	}
-	return p.take(), true
+	return p.handOut(p.alloc()), true
 }
 
-func (p *Pool) take() *Buffer {
-	p.budget.inUse.Add(int64(p.size))
-	if v, ok := p.free.Get().(*[]byte); ok {
-		return &Buffer{pool: p, b: *v}
+func (p *Pool) handOut(b []byte) *Buffer {
+	p.budget.inUse.Add(p.charge)
+	return &Buffer{pool: p, b: b}
+}
+
+// takeIdle pops an idle buffer; its budget charge moves from idle to in use.
+func (p *Pool) takeIdle() ([]byte, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	n := len(p.idle)
+	if n == 0 {
+		return nil, false
 	}
-	return &Buffer{pool: p, b: p.alloc()}
+	b := p.idle[n-1]
+	p.idle[n-1] = nil
+	p.idle = p.idle[:n-1]
+	p.budget.idle.Add(-p.charge)
+	return b, true
+}
+
+// keepIdle stores b for reuse, keeping its budget charge, if there is room.
+func (p *Pool) keepIdle(b []byte) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.idle) >= p.maxIdle {
+		return false
+	}
+	p.idle = append(p.idle, b)
+	p.budget.idle.Add(p.charge)
+	return true
+}
+
+// dropIdle frees every idle buffer and returns their bytes to the budget.
+func (p *Pool) dropIdle() {
+	p.mu.Lock()
+	n := len(p.idle)
+	clear(p.idle)
+	p.idle = p.idle[:0]
+	p.mu.Unlock()
+	if n == 0 {
+		return
+	}
+	freed := int64(n) * p.charge
+	p.budget.idle.Add(-freed)
+	p.budget.sem.Release(freed)
 }
 
 func (p *Pool) alloc() []byte {
