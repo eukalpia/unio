@@ -22,6 +22,7 @@ message Command {
     AbortUpload abort_upload = 7;
     FenceBucket fence_bucket = 8;
     SetPartitionVersioning set_partition_versioning = 9;
+    UpdateTags update_tags = 10;
 
     CreateBucket create_bucket = 20;
     MarkBucketDeleting mark_bucket_deleting = 21;
@@ -74,6 +75,17 @@ message UpdateLayout {
   // 16-byte DataID the caller expects the part to reference.
   bytes data = 5;
   ErasureLayout layout = 6;
+}
+
+// UpdateTags replaces the stored tag set of one version: the latest version
+// when version_id is empty. It changes nothing else and creates no version.
+message UpdateTags {
+  uint64 bucket_id = 1;
+  string key = 2;
+  string version_id = 3;
+  // The tag set in its stored form (object.EncodeTags). The state machine
+  // validates it, so a set that breaks the tag rules is rejected.
+  string tags = 4;
 }
 
 // CreateUpload registers an in-progress multipart upload.
@@ -179,6 +191,8 @@ message ApplyResult {
   PartRecord replaced_part = 6;
   BucketRecord bucket = 7;
   uint64 revision = 8;
+  // Set by UpdateTags to the updated version. It carries no inline content.
+  ObjectRecord object = 9;
 }
 
 // GetObjectQuery reads one version (the latest when version_id is empty).

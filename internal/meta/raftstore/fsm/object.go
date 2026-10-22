@@ -262,6 +262,45 @@ func (f *FSM) updateLayout(b *pebble.Batch, c *pb.UpdateLayout) (*pb.ApplyResult
 	return &pb.ApplyResult{}, nil
 }
 
+// updateTags replaces the tag set of one version and nothing else. A missing
+// key or version is an error, and so is a delete marker: the check and the
+// write happen in one batch, so no concurrent write can slip between them.
+// The reply carries the updated record without its inline content.
+func (f *FSM) updateTags(b *pebble.Batch, c *pb.UpdateTags) (*pb.ApplyResult, error) {
+	if err := validUpdateTags(c); err != nil {
+		return nil, err
+	}
+	bucket := ids.BucketID(c.BucketId)
+	rec, dbKey, err := f.resolveVersion(bucket, []byte(c.Key), c.VersionId)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case rec == nil && c.VersionId == "":
+		return nil, s3err.Errorf(s3err.NoSuchKey, "object does not exist")
+	case rec == nil:
+		return nil, s3err.Errorf(s3err.NoSuchVersion, "version does not exist")
+	case rec.DeleteMarker && c.VersionId == "":
+		// The latest version is a marker: the key reads as absent, as in S3.
+		return nil, s3err.Errorf(s3err.NoSuchKey, "object does not exist")
+	case rec.DeleteMarker:
+		return nil, s3err.Errorf(s3err.MethodNotAllowed, "the requested version is a delete marker")
+	}
+	if rec.Attributes == nil {
+		rec.Attributes = &pb.ObjectAttributes{}
+	}
+	rec.Attributes.Tags = c.Tags
+	v, err := marshalStored(rec)
+	if err != nil {
+		return nil, fmt.Errorf("fsm: encode object: %w", err)
+	}
+	if err := b.Set(dbKey, v, nil); err != nil {
+		return nil, fmt.Errorf("fsm: write tags: %w", err)
+	}
+	rec.Inline = nil
+	return &pb.ApplyResult{VersionId: rec.VersionId, Object: rec}, nil
+}
+
 // errMalformed reports a command that the proposer should never send.
 func errMalformed(what string) error {
 	return fmt.Errorf("fsm: malformed %s command", what)

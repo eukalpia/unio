@@ -54,6 +54,7 @@ func storeCases() []storeCase {
 	cases = append(cases, listCases()...)
 	cases = append(cases, uploadCases()...)
 	cases = append(cases, layoutCases()...)
+	cases = append(cases, tagsCases()...)
 	return cases
 }
 

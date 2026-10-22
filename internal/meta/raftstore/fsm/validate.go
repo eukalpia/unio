@@ -329,3 +329,22 @@ func validUpdateLayout(c *pb.UpdateLayout) error {
 	}
 	return validLayout(c.Layout)
 }
+
+// validUpdateTags checks an UpdateTags command. The tag set must be in its
+// stored form and must pass the tag rules that the S3 layer applies, so that
+// every replica accepts or rejects the same sets.
+func validUpdateTags(c *pb.UpdateTags) error {
+	if err := validBucketID(c.BucketId); err != nil {
+		return err
+	}
+	if err := validKey(c.Key); err != nil {
+		return err
+	}
+	if err := validVersionID(c.VersionId); err != nil {
+		return err
+	}
+	if _, err := object.DecodeTags(c.Tags); err != nil {
+		return errMalformed("tag set")
+	}
+	return nil
+}

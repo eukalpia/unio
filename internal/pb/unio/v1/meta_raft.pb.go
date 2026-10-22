@@ -42,6 +42,7 @@ type Command struct {
 	//	*Command_AbortUpload
 	//	*Command_FenceBucket
 	//	*Command_SetPartitionVersioning
+	//	*Command_UpdateTags
 	//	*Command_CreateBucket
 	//	*Command_MarkBucketDeleting
 	//	*Command_DeleteBucket
@@ -171,6 +172,15 @@ func (x *Command) GetSetPartitionVersioning() *SetPartitionVersioning {
 	return nil
 }
 
+func (x *Command) GetUpdateTags() *UpdateTags {
+	if x != nil {
+		if x, ok := x.Cmd.(*Command_UpdateTags); ok {
+			return x.UpdateTags
+		}
+	}
+	return nil
+}
+
 func (x *Command) GetCreateBucket() *CreateBucket {
 	if x != nil {
 		if x, ok := x.Cmd.(*Command_CreateBucket); ok {
@@ -265,6 +275,10 @@ type Command_SetPartitionVersioning struct {
 	SetPartitionVersioning *SetPartitionVersioning `protobuf:"bytes,9,opt,name=set_partition_versioning,json=setPartitionVersioning,proto3,oneof"`
 }
 
+type Command_UpdateTags struct {
+	UpdateTags *UpdateTags `protobuf:"bytes,10,opt,name=update_tags,json=updateTags,proto3,oneof"`
+}
+
 type Command_CreateBucket struct {
 	CreateBucket *CreateBucket `protobuf:"bytes,20,opt,name=create_bucket,json=createBucket,proto3,oneof"`
 }
@@ -306,6 +320,8 @@ func (*Command_AbortUpload) isCommand_Cmd() {}
 func (*Command_FenceBucket) isCommand_Cmd() {}
 
 func (*Command_SetPartitionVersioning) isCommand_Cmd() {}
+
+func (*Command_UpdateTags) isCommand_Cmd() {}
 
 func (*Command_CreateBucket) isCommand_Cmd() {}
 
@@ -621,6 +637,78 @@ func (x *UpdateLayout) GetLayout() *ErasureLayout {
 	return nil
 }
 
+// UpdateTags replaces the stored tag set of one version: the latest version
+// when version_id is empty. It changes nothing else and creates no version.
+type UpdateTags struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	BucketId  uint64                 `protobuf:"varint,1,opt,name=bucket_id,json=bucketId,proto3" json:"bucket_id,omitempty"`
+	Key       string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	VersionId string                 `protobuf:"bytes,3,opt,name=version_id,json=versionId,proto3" json:"version_id,omitempty"`
+	// The tag set in its stored form (object.EncodeTags). The state machine
+	// validates it, so a set that breaks the tag rules is rejected.
+	Tags          string `protobuf:"bytes,4,opt,name=tags,proto3" json:"tags,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateTags) Reset() {
+	*x = UpdateTags{}
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateTags) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateTags) ProtoMessage() {}
+
+func (x *UpdateTags) ProtoReflect() protoreflect.Message {
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateTags.ProtoReflect.Descriptor instead.
+func (*UpdateTags) Descriptor() ([]byte, []int) {
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *UpdateTags) GetBucketId() uint64 {
+	if x != nil {
+		return x.BucketId
+	}
+	return 0
+}
+
+func (x *UpdateTags) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *UpdateTags) GetVersionId() string {
+	if x != nil {
+		return x.VersionId
+	}
+	return ""
+}
+
+func (x *UpdateTags) GetTags() string {
+	if x != nil {
+		return x.Tags
+	}
+	return ""
+}
+
 // CreateUpload registers an in-progress multipart upload.
 type CreateUpload struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -632,7 +720,7 @@ type CreateUpload struct {
 
 func (x *CreateUpload) Reset() {
 	*x = CreateUpload{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[5]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -644,7 +732,7 @@ func (x *CreateUpload) String() string {
 func (*CreateUpload) ProtoMessage() {}
 
 func (x *CreateUpload) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[5]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -657,7 +745,7 @@ func (x *CreateUpload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateUpload.ProtoReflect.Descriptor instead.
 func (*CreateUpload) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{5}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *CreateUpload) GetBucketId() uint64 {
@@ -687,7 +775,7 @@ type PutPart struct {
 
 func (x *PutPart) Reset() {
 	*x = PutPart{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[6]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -699,7 +787,7 @@ func (x *PutPart) String() string {
 func (*PutPart) ProtoMessage() {}
 
 func (x *PutPart) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[6]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -712,7 +800,7 @@ func (x *PutPart) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutPart.ProtoReflect.Descriptor instead.
 func (*PutPart) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{6}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *PutPart) GetBucketId() uint64 {
@@ -759,7 +847,7 @@ type CompleteUpload struct {
 
 func (x *CompleteUpload) Reset() {
 	*x = CompleteUpload{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[7]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -771,7 +859,7 @@ func (x *CompleteUpload) String() string {
 func (*CompleteUpload) ProtoMessage() {}
 
 func (x *CompleteUpload) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[7]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -784,7 +872,7 @@ func (x *CompleteUpload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteUpload.ProtoReflect.Descriptor instead.
 func (*CompleteUpload) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{7}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *CompleteUpload) GetBucketId() uint64 {
@@ -834,7 +922,7 @@ type AbortUpload struct {
 
 func (x *AbortUpload) Reset() {
 	*x = AbortUpload{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[8]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -846,7 +934,7 @@ func (x *AbortUpload) String() string {
 func (*AbortUpload) ProtoMessage() {}
 
 func (x *AbortUpload) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[8]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -859,7 +947,7 @@ func (x *AbortUpload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AbortUpload.ProtoReflect.Descriptor instead.
 func (*AbortUpload) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{8}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *AbortUpload) GetBucketId() uint64 {
@@ -895,7 +983,7 @@ type FenceBucket struct {
 
 func (x *FenceBucket) Reset() {
 	*x = FenceBucket{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[9]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -907,7 +995,7 @@ func (x *FenceBucket) String() string {
 func (*FenceBucket) ProtoMessage() {}
 
 func (x *FenceBucket) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[9]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -920,7 +1008,7 @@ func (x *FenceBucket) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FenceBucket.ProtoReflect.Descriptor instead.
 func (*FenceBucket) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{9}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *FenceBucket) GetBucketId() uint64 {
@@ -949,7 +1037,7 @@ type SetPartitionVersioning struct {
 
 func (x *SetPartitionVersioning) Reset() {
 	*x = SetPartitionVersioning{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[10]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -961,7 +1049,7 @@ func (x *SetPartitionVersioning) String() string {
 func (*SetPartitionVersioning) ProtoMessage() {}
 
 func (x *SetPartitionVersioning) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[10]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -974,7 +1062,7 @@ func (x *SetPartitionVersioning) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetPartitionVersioning.ProtoReflect.Descriptor instead.
 func (*SetPartitionVersioning) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{10}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *SetPartitionVersioning) GetBucketId() uint64 {
@@ -1005,7 +1093,7 @@ type CreateBucket struct {
 
 func (x *CreateBucket) Reset() {
 	*x = CreateBucket{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[11]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1017,7 +1105,7 @@ func (x *CreateBucket) String() string {
 func (*CreateBucket) ProtoMessage() {}
 
 func (x *CreateBucket) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[11]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1030,7 +1118,7 @@ func (x *CreateBucket) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateBucket.ProtoReflect.Descriptor instead.
 func (*CreateBucket) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{11}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *CreateBucket) GetName() string {
@@ -1074,7 +1162,7 @@ type MarkBucketDeleting struct {
 
 func (x *MarkBucketDeleting) Reset() {
 	*x = MarkBucketDeleting{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[12]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1086,7 +1174,7 @@ func (x *MarkBucketDeleting) String() string {
 func (*MarkBucketDeleting) ProtoMessage() {}
 
 func (x *MarkBucketDeleting) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[12]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1099,7 +1187,7 @@ func (x *MarkBucketDeleting) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarkBucketDeleting.ProtoReflect.Descriptor instead.
 func (*MarkBucketDeleting) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{12}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *MarkBucketDeleting) GetName() string {
@@ -1134,7 +1222,7 @@ type DeleteBucket struct {
 
 func (x *DeleteBucket) Reset() {
 	*x = DeleteBucket{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[13]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1146,7 +1234,7 @@ func (x *DeleteBucket) String() string {
 func (*DeleteBucket) ProtoMessage() {}
 
 func (x *DeleteBucket) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[13]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1159,7 +1247,7 @@ func (x *DeleteBucket) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteBucket.ProtoReflect.Descriptor instead.
 func (*DeleteBucket) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{13}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *DeleteBucket) GetName() string {
@@ -1188,7 +1276,7 @@ type SetBucketVersioning struct {
 
 func (x *SetBucketVersioning) Reset() {
 	*x = SetBucketVersioning{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[14]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1200,7 +1288,7 @@ func (x *SetBucketVersioning) String() string {
 func (*SetBucketVersioning) ProtoMessage() {}
 
 func (x *SetBucketVersioning) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[14]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1213,7 +1301,7 @@ func (x *SetBucketVersioning) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetBucketVersioning.ProtoReflect.Descriptor instead.
 func (*SetBucketVersioning) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{14}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SetBucketVersioning) GetName() string {
@@ -1250,7 +1338,7 @@ type KVPut struct {
 
 func (x *KVPut) Reset() {
 	*x = KVPut{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[15]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1262,7 +1350,7 @@ func (x *KVPut) String() string {
 func (*KVPut) ProtoMessage() {}
 
 func (x *KVPut) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[15]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1275,7 +1363,7 @@ func (x *KVPut) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KVPut.ProtoReflect.Descriptor instead.
 func (*KVPut) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{15}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *KVPut) GetKey() string {
@@ -1310,7 +1398,7 @@ type KVDelete struct {
 
 func (x *KVDelete) Reset() {
 	*x = KVDelete{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[16]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1322,7 +1410,7 @@ func (x *KVDelete) String() string {
 func (*KVDelete) ProtoMessage() {}
 
 func (x *KVDelete) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[16]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1335,7 +1423,7 @@ func (x *KVDelete) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KVDelete.ProtoReflect.Descriptor instead.
 func (*KVDelete) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{16}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *KVDelete) GetKey() string {
@@ -1363,16 +1451,18 @@ type ApplyResult struct {
 	Garbage               []*ObjectRecord        `protobuf:"bytes,4,rep,name=garbage,proto3" json:"garbage,omitempty"`
 	UnusedParts           []*PartRecord          `protobuf:"bytes,5,rep,name=unused_parts,json=unusedParts,proto3" json:"unused_parts,omitempty"`
 	// Set by PutPart when a part with the same number was replaced.
-	ReplacedPart  *PartRecord   `protobuf:"bytes,6,opt,name=replaced_part,json=replacedPart,proto3" json:"replaced_part,omitempty"`
-	Bucket        *BucketRecord `protobuf:"bytes,7,opt,name=bucket,proto3" json:"bucket,omitempty"`
-	Revision      uint64        `protobuf:"varint,8,opt,name=revision,proto3" json:"revision,omitempty"`
+	ReplacedPart *PartRecord   `protobuf:"bytes,6,opt,name=replaced_part,json=replacedPart,proto3" json:"replaced_part,omitempty"`
+	Bucket       *BucketRecord `protobuf:"bytes,7,opt,name=bucket,proto3" json:"bucket,omitempty"`
+	Revision     uint64        `protobuf:"varint,8,opt,name=revision,proto3" json:"revision,omitempty"`
+	// Set by UpdateTags to the updated version. It carries no inline content.
+	Object        *ObjectRecord `protobuf:"bytes,9,opt,name=object,proto3" json:"object,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ApplyResult) Reset() {
 	*x = ApplyResult{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[17]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1384,7 +1474,7 @@ func (x *ApplyResult) String() string {
 func (*ApplyResult) ProtoMessage() {}
 
 func (x *ApplyResult) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[17]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1397,7 +1487,7 @@ func (x *ApplyResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplyResult.ProtoReflect.Descriptor instead.
 func (*ApplyResult) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{17}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ApplyResult) GetVersionId() string {
@@ -1456,6 +1546,13 @@ func (x *ApplyResult) GetRevision() uint64 {
 	return 0
 }
 
+func (x *ApplyResult) GetObject() *ObjectRecord {
+	if x != nil {
+		return x.Object
+	}
+	return nil
+}
+
 // GetObjectQuery reads one version (the latest when version_id is empty).
 type GetObjectQuery struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1469,7 +1566,7 @@ type GetObjectQuery struct {
 
 func (x *GetObjectQuery) Reset() {
 	*x = GetObjectQuery{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[18]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1481,7 +1578,7 @@ func (x *GetObjectQuery) String() string {
 func (*GetObjectQuery) ProtoMessage() {}
 
 func (x *GetObjectQuery) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[18]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1494,7 +1591,7 @@ func (x *GetObjectQuery) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetObjectQuery.ProtoReflect.Descriptor instead.
 func (*GetObjectQuery) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{18}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GetObjectQuery) GetBucketId() uint64 {
@@ -1537,7 +1634,7 @@ type GetUploadQuery struct {
 
 func (x *GetUploadQuery) Reset() {
 	*x = GetUploadQuery{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[19]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1549,7 +1646,7 @@ func (x *GetUploadQuery) String() string {
 func (*GetUploadQuery) ProtoMessage() {}
 
 func (x *GetUploadQuery) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[19]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1562,7 +1659,7 @@ func (x *GetUploadQuery) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUploadQuery.ProtoReflect.Descriptor instead.
 func (*GetUploadQuery) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{19}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GetUploadQuery) GetBucketId() uint64 {
@@ -1600,7 +1697,7 @@ type ListPartsQuery struct {
 
 func (x *ListPartsQuery) Reset() {
 	*x = ListPartsQuery{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[20]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1612,7 +1709,7 @@ func (x *ListPartsQuery) String() string {
 func (*ListPartsQuery) ProtoMessage() {}
 
 func (x *ListPartsQuery) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[20]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1625,7 +1722,7 @@ func (x *ListPartsQuery) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPartsQuery.ProtoReflect.Descriptor instead.
 func (*ListPartsQuery) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{20}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ListPartsQuery) GetBucketId() uint64 {
@@ -1679,7 +1776,7 @@ type ListObjectsQuery struct {
 
 func (x *ListObjectsQuery) Reset() {
 	*x = ListObjectsQuery{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[21]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1691,7 +1788,7 @@ func (x *ListObjectsQuery) String() string {
 func (*ListObjectsQuery) ProtoMessage() {}
 
 func (x *ListObjectsQuery) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[21]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1704,7 +1801,7 @@ func (x *ListObjectsQuery) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListObjectsQuery.ProtoReflect.Descriptor instead.
 func (*ListObjectsQuery) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{21}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ListObjectsQuery) GetBucketId() uint64 {
@@ -1758,7 +1855,7 @@ type ListUploadsQuery struct {
 
 func (x *ListUploadsQuery) Reset() {
 	*x = ListUploadsQuery{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[22]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1770,7 +1867,7 @@ func (x *ListUploadsQuery) String() string {
 func (*ListUploadsQuery) ProtoMessage() {}
 
 func (x *ListUploadsQuery) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[22]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1783,7 +1880,7 @@ func (x *ListUploadsQuery) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListUploadsQuery.ProtoReflect.Descriptor instead.
 func (*ListUploadsQuery) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{22}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ListUploadsQuery) GetBucketId() uint64 {
@@ -1839,7 +1936,7 @@ type BucketHasDataQuery struct {
 
 func (x *BucketHasDataQuery) Reset() {
 	*x = BucketHasDataQuery{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[23]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1851,7 +1948,7 @@ func (x *BucketHasDataQuery) String() string {
 func (*BucketHasDataQuery) ProtoMessage() {}
 
 func (x *BucketHasDataQuery) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[23]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1864,7 +1961,7 @@ func (x *BucketHasDataQuery) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BucketHasDataQuery.ProtoReflect.Descriptor instead.
 func (*BucketHasDataQuery) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{23}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *BucketHasDataQuery) GetBucketId() uint64 {
@@ -1887,7 +1984,7 @@ type GetBucketQuery struct {
 
 func (x *GetBucketQuery) Reset() {
 	*x = GetBucketQuery{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[24]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1899,7 +1996,7 @@ func (x *GetBucketQuery) String() string {
 func (*GetBucketQuery) ProtoMessage() {}
 
 func (x *GetBucketQuery) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[24]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1912,7 +2009,7 @@ func (x *GetBucketQuery) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBucketQuery.ProtoReflect.Descriptor instead.
 func (*GetBucketQuery) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{24}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *GetBucketQuery) GetName() string {
@@ -1939,7 +2036,7 @@ type KVGetQuery struct {
 
 func (x *KVGetQuery) Reset() {
 	*x = KVGetQuery{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[25]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1951,7 +2048,7 @@ func (x *KVGetQuery) String() string {
 func (*KVGetQuery) ProtoMessage() {}
 
 func (x *KVGetQuery) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[25]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1964,7 +2061,7 @@ func (x *KVGetQuery) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KVGetQuery.ProtoReflect.Descriptor instead.
 func (*KVGetQuery) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{25}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *KVGetQuery) GetKey() string {
@@ -1984,7 +2081,7 @@ type KVListQuery struct {
 
 func (x *KVListQuery) Reset() {
 	*x = KVListQuery{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[26]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1996,7 +2093,7 @@ func (x *KVListQuery) String() string {
 func (*KVListQuery) ProtoMessage() {}
 
 func (x *KVListQuery) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[26]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2009,7 +2106,7 @@ func (x *KVListQuery) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KVListQuery.ProtoReflect.Descriptor instead.
 func (*KVListQuery) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{26}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *KVListQuery) GetPrefix() string {
@@ -2041,7 +2138,7 @@ type ReadQuery struct {
 
 func (x *ReadQuery) Reset() {
 	*x = ReadQuery{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[27]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2053,7 +2150,7 @@ func (x *ReadQuery) String() string {
 func (*ReadQuery) ProtoMessage() {}
 
 func (x *ReadQuery) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[27]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2066,7 +2163,7 @@ func (x *ReadQuery) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadQuery.ProtoReflect.Descriptor instead.
 func (*ReadQuery) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{27}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ReadQuery) GetQuery() isReadQuery_Query {
@@ -2240,7 +2337,7 @@ type ListBucketsQuery struct {
 
 func (x *ListBucketsQuery) Reset() {
 	*x = ListBucketsQuery{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[28]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2252,7 +2349,7 @@ func (x *ListBucketsQuery) String() string {
 func (*ListBucketsQuery) ProtoMessage() {}
 
 func (x *ListBucketsQuery) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[28]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2265,7 +2362,7 @@ func (x *ListBucketsQuery) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBucketsQuery.ProtoReflect.Descriptor instead.
 func (*ListBucketsQuery) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{28}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{29}
 }
 
 // ObjectResult is the answer to GetObjectQuery.
@@ -2278,7 +2375,7 @@ type ObjectResult struct {
 
 func (x *ObjectResult) Reset() {
 	*x = ObjectResult{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[29]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2290,7 +2387,7 @@ func (x *ObjectResult) String() string {
 func (*ObjectResult) ProtoMessage() {}
 
 func (x *ObjectResult) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[29]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2303,7 +2400,7 @@ func (x *ObjectResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ObjectResult.ProtoReflect.Descriptor instead.
 func (*ObjectResult) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{29}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ObjectResult) GetRecord() *ObjectRecord {
@@ -2323,7 +2420,7 @@ type UploadResult struct {
 
 func (x *UploadResult) Reset() {
 	*x = UploadResult{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[30]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2335,7 +2432,7 @@ func (x *UploadResult) String() string {
 func (*UploadResult) ProtoMessage() {}
 
 func (x *UploadResult) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[30]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2348,7 +2445,7 @@ func (x *UploadResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadResult.ProtoReflect.Descriptor instead.
 func (*UploadResult) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{30}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *UploadResult) GetUpload() *UploadRecord {
@@ -2372,7 +2469,7 @@ type PartsResult struct {
 
 func (x *PartsResult) Reset() {
 	*x = PartsResult{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[31]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2384,7 +2481,7 @@ func (x *PartsResult) String() string {
 func (*PartsResult) ProtoMessage() {}
 
 func (x *PartsResult) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[31]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2397,7 +2494,7 @@ func (x *PartsResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PartsResult.ProtoReflect.Descriptor instead.
 func (*PartsResult) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{31}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *PartsResult) GetParts() []*PartRecord {
@@ -2435,7 +2532,7 @@ type ListItem struct {
 
 func (x *ListItem) Reset() {
 	*x = ListItem{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[32]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2447,7 +2544,7 @@ func (x *ListItem) String() string {
 func (*ListItem) ProtoMessage() {}
 
 func (x *ListItem) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[32]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2460,7 +2557,7 @@ func (x *ListItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListItem.ProtoReflect.Descriptor instead.
 func (*ListItem) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{32}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *ListItem) GetItem() isListItem_Item {
@@ -2516,7 +2613,7 @@ type ListObjectsResult struct {
 
 func (x *ListObjectsResult) Reset() {
 	*x = ListObjectsResult{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[33]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2528,7 +2625,7 @@ func (x *ListObjectsResult) String() string {
 func (*ListObjectsResult) ProtoMessage() {}
 
 func (x *ListObjectsResult) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[33]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2541,7 +2638,7 @@ func (x *ListObjectsResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListObjectsResult.ProtoReflect.Descriptor instead.
 func (*ListObjectsResult) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{33}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ListObjectsResult) GetItems() []*ListItem {
@@ -2572,7 +2669,7 @@ type UploadListItem struct {
 
 func (x *UploadListItem) Reset() {
 	*x = UploadListItem{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[34]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2584,7 +2681,7 @@ func (x *UploadListItem) String() string {
 func (*UploadListItem) ProtoMessage() {}
 
 func (x *UploadListItem) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[34]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2597,7 +2694,7 @@ func (x *UploadListItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadListItem.ProtoReflect.Descriptor instead.
 func (*UploadListItem) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{34}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *UploadListItem) GetItem() isUploadListItem_Item {
@@ -2652,7 +2749,7 @@ type ListUploadsResult struct {
 
 func (x *ListUploadsResult) Reset() {
 	*x = ListUploadsResult{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[35]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2664,7 +2761,7 @@ func (x *ListUploadsResult) String() string {
 func (*ListUploadsResult) ProtoMessage() {}
 
 func (x *ListUploadsResult) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[35]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2677,7 +2774,7 @@ func (x *ListUploadsResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListUploadsResult.ProtoReflect.Descriptor instead.
 func (*ListUploadsResult) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{35}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ListUploadsResult) GetItems() []*UploadListItem {
@@ -2704,7 +2801,7 @@ type BucketHasDataResult struct {
 
 func (x *BucketHasDataResult) Reset() {
 	*x = BucketHasDataResult{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[36]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2716,7 +2813,7 @@ func (x *BucketHasDataResult) String() string {
 func (*BucketHasDataResult) ProtoMessage() {}
 
 func (x *BucketHasDataResult) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[36]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2729,7 +2826,7 @@ func (x *BucketHasDataResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BucketHasDataResult.ProtoReflect.Descriptor instead.
 func (*BucketHasDataResult) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{36}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *BucketHasDataResult) GetHasData() bool {
@@ -2749,7 +2846,7 @@ type BucketResult struct {
 
 func (x *BucketResult) Reset() {
 	*x = BucketResult{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[37]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2761,7 +2858,7 @@ func (x *BucketResult) String() string {
 func (*BucketResult) ProtoMessage() {}
 
 func (x *BucketResult) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[37]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2774,7 +2871,7 @@ func (x *BucketResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BucketResult.ProtoReflect.Descriptor instead.
 func (*BucketResult) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{37}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *BucketResult) GetBucket() *BucketRecord {
@@ -2794,7 +2891,7 @@ type BucketsResult struct {
 
 func (x *BucketsResult) Reset() {
 	*x = BucketsResult{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[38]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2806,7 +2903,7 @@ func (x *BucketsResult) String() string {
 func (*BucketsResult) ProtoMessage() {}
 
 func (x *BucketsResult) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[38]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2819,7 +2916,7 @@ func (x *BucketsResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BucketsResult.ProtoReflect.Descriptor instead.
 func (*BucketsResult) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{38}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *BucketsResult) GetBuckets() []*BucketRecord {
@@ -2839,7 +2936,7 @@ type KVResult struct {
 
 func (x *KVResult) Reset() {
 	*x = KVResult{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[39]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2851,7 +2948,7 @@ func (x *KVResult) String() string {
 func (*KVResult) ProtoMessage() {}
 
 func (x *KVResult) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[39]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2864,7 +2961,7 @@ func (x *KVResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KVResult.ProtoReflect.Descriptor instead.
 func (*KVResult) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{39}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *KVResult) GetEntries() []*KVEntry {
@@ -2886,7 +2983,7 @@ type KVEntry struct {
 
 func (x *KVEntry) Reset() {
 	*x = KVEntry{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[40]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2898,7 +2995,7 @@ func (x *KVEntry) String() string {
 func (*KVEntry) ProtoMessage() {}
 
 func (x *KVEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[40]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2911,7 +3008,7 @@ func (x *KVEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KVEntry.ProtoReflect.Descriptor instead.
 func (*KVEntry) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{40}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *KVEntry) GetKey() string {
@@ -2956,7 +3053,7 @@ type ReadResult struct {
 
 func (x *ReadResult) Reset() {
 	*x = ReadResult{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[41]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2968,7 +3065,7 @@ func (x *ReadResult) String() string {
 func (*ReadResult) ProtoMessage() {}
 
 func (x *ReadResult) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[41]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2981,7 +3078,7 @@ func (x *ReadResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadResult.ProtoReflect.Descriptor instead.
 func (*ReadResult) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{41}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ReadResult) GetResult() isReadResult_Result {
@@ -3142,7 +3239,7 @@ type ApplyRequest struct {
 
 func (x *ApplyRequest) Reset() {
 	*x = ApplyRequest{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[42]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3154,7 +3251,7 @@ func (x *ApplyRequest) String() string {
 func (*ApplyRequest) ProtoMessage() {}
 
 func (x *ApplyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[42]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3167,7 +3264,7 @@ func (x *ApplyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplyRequest.ProtoReflect.Descriptor instead.
 func (*ApplyRequest) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{42}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ApplyRequest) GetPartition() uint32 {
@@ -3199,7 +3296,7 @@ type ApplyReply struct {
 
 func (x *ApplyReply) Reset() {
 	*x = ApplyReply{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[43]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3211,7 +3308,7 @@ func (x *ApplyReply) String() string {
 func (*ApplyReply) ProtoMessage() {}
 
 func (x *ApplyReply) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[43]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3224,7 +3321,7 @@ func (x *ApplyReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplyReply.ProtoReflect.Descriptor instead.
 func (*ApplyReply) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{43}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *ApplyReply) GetNotLeader() bool {
@@ -3259,7 +3356,7 @@ type ReadRequest struct {
 
 func (x *ReadRequest) Reset() {
 	*x = ReadRequest{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[44]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3271,7 +3368,7 @@ func (x *ReadRequest) String() string {
 func (*ReadRequest) ProtoMessage() {}
 
 func (x *ReadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[44]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3284,7 +3381,7 @@ func (x *ReadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadRequest.ProtoReflect.Descriptor instead.
 func (*ReadRequest) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{44}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *ReadRequest) GetPartition() uint32 {
@@ -3315,7 +3412,7 @@ type ReadReply struct {
 
 func (x *ReadReply) Reset() {
 	*x = ReadReply{}
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[45]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3327,7 +3424,7 @@ func (x *ReadReply) String() string {
 func (*ReadReply) ProtoMessage() {}
 
 func (x *ReadReply) ProtoReflect() protoreflect.Message {
-	mi := &file_unio_v1_meta_raft_proto_msgTypes[45]
+	mi := &file_unio_v1_meta_raft_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3340,7 +3437,7 @@ func (x *ReadReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadReply.ProtoReflect.Descriptor instead.
 func (*ReadReply) Descriptor() ([]byte, []int) {
-	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{45}
+	return file_unio_v1_meta_raft_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *ReadReply) GetNotLeader() bool {
@@ -3368,7 +3465,7 @@ var File_unio_v1_meta_raft_proto protoreflect.FileDescriptor
 
 const file_unio_v1_meta_raft_proto_rawDesc = "" +
 	"\n" +
-	"\x17unio/v1/meta_raft.proto\x12\aunio.v1\x1a\x15unio/v1/records.proto\"\xc1\a\n" +
+	"\x17unio/v1/meta_raft.proto\x12\aunio.v1\x1a\x15unio/v1/records.proto\"\xf9\a\n" +
 	"\aCommand\x123\n" +
 	"\n" +
 	"put_object\x18\x01 \x01(\v2\x12.unio.v1.PutObjectH\x00R\tputObject\x12<\n" +
@@ -3379,7 +3476,10 @@ const file_unio_v1_meta_raft_proto_rawDesc = "" +
 	"\x0fcomplete_upload\x18\x06 \x01(\v2\x17.unio.v1.CompleteUploadH\x00R\x0ecompleteUpload\x129\n" +
 	"\fabort_upload\x18\a \x01(\v2\x14.unio.v1.AbortUploadH\x00R\vabortUpload\x129\n" +
 	"\ffence_bucket\x18\b \x01(\v2\x14.unio.v1.FenceBucketH\x00R\vfenceBucket\x12[\n" +
-	"\x18set_partition_versioning\x18\t \x01(\v2\x1f.unio.v1.SetPartitionVersioningH\x00R\x16setPartitionVersioning\x12<\n" +
+	"\x18set_partition_versioning\x18\t \x01(\v2\x1f.unio.v1.SetPartitionVersioningH\x00R\x16setPartitionVersioning\x126\n" +
+	"\vupdate_tags\x18\n" +
+	" \x01(\v2\x13.unio.v1.UpdateTagsH\x00R\n" +
+	"updateTags\x12<\n" +
 	"\rcreate_bucket\x18\x14 \x01(\v2\x15.unio.v1.CreateBucketH\x00R\fcreateBucket\x12O\n" +
 	"\x14mark_bucket_deleting\x18\x15 \x01(\v2\x1b.unio.v1.MarkBucketDeletingH\x00R\x12markBucketDeleting\x12<\n" +
 	"\rdelete_bucket\x18\x16 \x01(\v2\x15.unio.v1.DeleteBucketH\x00R\fdeleteBucket\x12R\n" +
@@ -3415,7 +3515,14 @@ const file_unio_v1_meta_raft_proto_rawDesc = "" +
 	"\vpart_number\x18\x04 \x01(\rR\n" +
 	"partNumber\x12\x12\n" +
 	"\x04data\x18\x05 \x01(\fR\x04data\x12.\n" +
-	"\x06layout\x18\x06 \x01(\v2\x16.unio.v1.ErasureLayoutR\x06layout\"Z\n" +
+	"\x06layout\x18\x06 \x01(\v2\x16.unio.v1.ErasureLayoutR\x06layout\"n\n" +
+	"\n" +
+	"UpdateTags\x12\x1b\n" +
+	"\tbucket_id\x18\x01 \x01(\x04R\bbucketId\x12\x10\n" +
+	"\x03key\x18\x02 \x01(\tR\x03key\x12\x1d\n" +
+	"\n" +
+	"version_id\x18\x03 \x01(\tR\tversionId\x12\x12\n" +
+	"\x04tags\x18\x04 \x01(\tR\x04tags\"Z\n" +
 	"\fCreateUpload\x12\x1b\n" +
 	"\tbucket_id\x18\x01 \x01(\x04R\bbucketId\x12-\n" +
 	"\x06upload\x18\x02 \x01(\v2\x15.unio.v1.UploadRecordR\x06upload\"~\n" +
@@ -3470,7 +3577,7 @@ const file_unio_v1_meta_raft_proto_rawDesc = "" +
 	"\x0fexpect_revision\x18\x03 \x01(\x04R\x0eexpectRevision\"E\n" +
 	"\bKVDelete\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12'\n" +
-	"\x0fexpect_revision\x18\x02 \x01(\x04R\x0eexpectRevision\"\xf8\x02\n" +
+	"\x0fexpect_revision\x18\x02 \x01(\x04R\x0eexpectRevision\"\xa7\x03\n" +
 	"\vApplyResult\x12\x1d\n" +
 	"\n" +
 	"version_id\x18\x01 \x01(\tR\tversionId\x12#\n" +
@@ -3480,7 +3587,8 @@ const file_unio_v1_meta_raft_proto_rawDesc = "" +
 	"\funused_parts\x18\x05 \x03(\v2\x13.unio.v1.PartRecordR\vunusedParts\x128\n" +
 	"\rreplaced_part\x18\x06 \x01(\v2\x13.unio.v1.PartRecordR\freplacedPart\x12-\n" +
 	"\x06bucket\x18\a \x01(\v2\x15.unio.v1.BucketRecordR\x06bucket\x12\x1a\n" +
-	"\brevision\x18\b \x01(\x04R\brevision\"v\n" +
+	"\brevision\x18\b \x01(\x04R\brevision\x12-\n" +
+	"\x06object\x18\t \x01(\v2\x15.unio.v1.ObjectRecordR\x06object\"v\n" +
 	"\x0eGetObjectQuery\x12\x1b\n" +
 	"\tbucket_id\x18\x01 \x01(\x04R\bbucketId\x12\x16\n" +
 	"\x06bucket\x18\x02 \x01(\tR\x06bucket\x12\x10\n" +
@@ -3618,129 +3726,132 @@ func file_unio_v1_meta_raft_proto_rawDescGZIP() []byte {
 	return file_unio_v1_meta_raft_proto_rawDescData
 }
 
-var file_unio_v1_meta_raft_proto_msgTypes = make([]protoimpl.MessageInfo, 46)
+var file_unio_v1_meta_raft_proto_msgTypes = make([]protoimpl.MessageInfo, 47)
 var file_unio_v1_meta_raft_proto_goTypes = []any{
 	(*Command)(nil),                // 0: unio.v1.Command
 	(*WriteConditions)(nil),        // 1: unio.v1.WriteConditions
 	(*PutObject)(nil),              // 2: unio.v1.PutObject
 	(*DeleteObject)(nil),           // 3: unio.v1.DeleteObject
 	(*UpdateLayout)(nil),           // 4: unio.v1.UpdateLayout
-	(*CreateUpload)(nil),           // 5: unio.v1.CreateUpload
-	(*PutPart)(nil),                // 6: unio.v1.PutPart
-	(*CompleteUpload)(nil),         // 7: unio.v1.CompleteUpload
-	(*AbortUpload)(nil),            // 8: unio.v1.AbortUpload
-	(*FenceBucket)(nil),            // 9: unio.v1.FenceBucket
-	(*SetPartitionVersioning)(nil), // 10: unio.v1.SetPartitionVersioning
-	(*CreateBucket)(nil),           // 11: unio.v1.CreateBucket
-	(*MarkBucketDeleting)(nil),     // 12: unio.v1.MarkBucketDeleting
-	(*DeleteBucket)(nil),           // 13: unio.v1.DeleteBucket
-	(*SetBucketVersioning)(nil),    // 14: unio.v1.SetBucketVersioning
-	(*KVPut)(nil),                  // 15: unio.v1.KVPut
-	(*KVDelete)(nil),               // 16: unio.v1.KVDelete
-	(*ApplyResult)(nil),            // 17: unio.v1.ApplyResult
-	(*GetObjectQuery)(nil),         // 18: unio.v1.GetObjectQuery
-	(*GetUploadQuery)(nil),         // 19: unio.v1.GetUploadQuery
-	(*ListPartsQuery)(nil),         // 20: unio.v1.ListPartsQuery
-	(*ListObjectsQuery)(nil),       // 21: unio.v1.ListObjectsQuery
-	(*ListUploadsQuery)(nil),       // 22: unio.v1.ListUploadsQuery
-	(*BucketHasDataQuery)(nil),     // 23: unio.v1.BucketHasDataQuery
-	(*GetBucketQuery)(nil),         // 24: unio.v1.GetBucketQuery
-	(*KVGetQuery)(nil),             // 25: unio.v1.KVGetQuery
-	(*KVListQuery)(nil),            // 26: unio.v1.KVListQuery
-	(*ReadQuery)(nil),              // 27: unio.v1.ReadQuery
-	(*ListBucketsQuery)(nil),       // 28: unio.v1.ListBucketsQuery
-	(*ObjectResult)(nil),           // 29: unio.v1.ObjectResult
-	(*UploadResult)(nil),           // 30: unio.v1.UploadResult
-	(*PartsResult)(nil),            // 31: unio.v1.PartsResult
-	(*ListItem)(nil),               // 32: unio.v1.ListItem
-	(*ListObjectsResult)(nil),      // 33: unio.v1.ListObjectsResult
-	(*UploadListItem)(nil),         // 34: unio.v1.UploadListItem
-	(*ListUploadsResult)(nil),      // 35: unio.v1.ListUploadsResult
-	(*BucketHasDataResult)(nil),    // 36: unio.v1.BucketHasDataResult
-	(*BucketResult)(nil),           // 37: unio.v1.BucketResult
-	(*BucketsResult)(nil),          // 38: unio.v1.BucketsResult
-	(*KVResult)(nil),               // 39: unio.v1.KVResult
-	(*KVEntry)(nil),                // 40: unio.v1.KVEntry
-	(*ReadResult)(nil),             // 41: unio.v1.ReadResult
-	(*ApplyRequest)(nil),           // 42: unio.v1.ApplyRequest
-	(*ApplyReply)(nil),             // 43: unio.v1.ApplyReply
-	(*ReadRequest)(nil),            // 44: unio.v1.ReadRequest
-	(*ReadReply)(nil),              // 45: unio.v1.ReadReply
-	(*ObjectRecord)(nil),           // 46: unio.v1.ObjectRecord
-	(*ErasureLayout)(nil),          // 47: unio.v1.ErasureLayout
-	(*UploadRecord)(nil),           // 48: unio.v1.UploadRecord
-	(*PartRecord)(nil),             // 49: unio.v1.PartRecord
-	(VersioningState)(0),           // 50: unio.v1.VersioningState
-	(*BucketRecord)(nil),           // 51: unio.v1.BucketRecord
-	(ChecksumAlgorithm)(0),         // 52: unio.v1.ChecksumAlgorithm
+	(*UpdateTags)(nil),             // 5: unio.v1.UpdateTags
+	(*CreateUpload)(nil),           // 6: unio.v1.CreateUpload
+	(*PutPart)(nil),                // 7: unio.v1.PutPart
+	(*CompleteUpload)(nil),         // 8: unio.v1.CompleteUpload
+	(*AbortUpload)(nil),            // 9: unio.v1.AbortUpload
+	(*FenceBucket)(nil),            // 10: unio.v1.FenceBucket
+	(*SetPartitionVersioning)(nil), // 11: unio.v1.SetPartitionVersioning
+	(*CreateBucket)(nil),           // 12: unio.v1.CreateBucket
+	(*MarkBucketDeleting)(nil),     // 13: unio.v1.MarkBucketDeleting
+	(*DeleteBucket)(nil),           // 14: unio.v1.DeleteBucket
+	(*SetBucketVersioning)(nil),    // 15: unio.v1.SetBucketVersioning
+	(*KVPut)(nil),                  // 16: unio.v1.KVPut
+	(*KVDelete)(nil),               // 17: unio.v1.KVDelete
+	(*ApplyResult)(nil),            // 18: unio.v1.ApplyResult
+	(*GetObjectQuery)(nil),         // 19: unio.v1.GetObjectQuery
+	(*GetUploadQuery)(nil),         // 20: unio.v1.GetUploadQuery
+	(*ListPartsQuery)(nil),         // 21: unio.v1.ListPartsQuery
+	(*ListObjectsQuery)(nil),       // 22: unio.v1.ListObjectsQuery
+	(*ListUploadsQuery)(nil),       // 23: unio.v1.ListUploadsQuery
+	(*BucketHasDataQuery)(nil),     // 24: unio.v1.BucketHasDataQuery
+	(*GetBucketQuery)(nil),         // 25: unio.v1.GetBucketQuery
+	(*KVGetQuery)(nil),             // 26: unio.v1.KVGetQuery
+	(*KVListQuery)(nil),            // 27: unio.v1.KVListQuery
+	(*ReadQuery)(nil),              // 28: unio.v1.ReadQuery
+	(*ListBucketsQuery)(nil),       // 29: unio.v1.ListBucketsQuery
+	(*ObjectResult)(nil),           // 30: unio.v1.ObjectResult
+	(*UploadResult)(nil),           // 31: unio.v1.UploadResult
+	(*PartsResult)(nil),            // 32: unio.v1.PartsResult
+	(*ListItem)(nil),               // 33: unio.v1.ListItem
+	(*ListObjectsResult)(nil),      // 34: unio.v1.ListObjectsResult
+	(*UploadListItem)(nil),         // 35: unio.v1.UploadListItem
+	(*ListUploadsResult)(nil),      // 36: unio.v1.ListUploadsResult
+	(*BucketHasDataResult)(nil),    // 37: unio.v1.BucketHasDataResult
+	(*BucketResult)(nil),           // 38: unio.v1.BucketResult
+	(*BucketsResult)(nil),          // 39: unio.v1.BucketsResult
+	(*KVResult)(nil),               // 40: unio.v1.KVResult
+	(*KVEntry)(nil),                // 41: unio.v1.KVEntry
+	(*ReadResult)(nil),             // 42: unio.v1.ReadResult
+	(*ApplyRequest)(nil),           // 43: unio.v1.ApplyRequest
+	(*ApplyReply)(nil),             // 44: unio.v1.ApplyReply
+	(*ReadRequest)(nil),            // 45: unio.v1.ReadRequest
+	(*ReadReply)(nil),              // 46: unio.v1.ReadReply
+	(*ObjectRecord)(nil),           // 47: unio.v1.ObjectRecord
+	(*ErasureLayout)(nil),          // 48: unio.v1.ErasureLayout
+	(*UploadRecord)(nil),           // 49: unio.v1.UploadRecord
+	(*PartRecord)(nil),             // 50: unio.v1.PartRecord
+	(VersioningState)(0),           // 51: unio.v1.VersioningState
+	(*BucketRecord)(nil),           // 52: unio.v1.BucketRecord
+	(ChecksumAlgorithm)(0),         // 53: unio.v1.ChecksumAlgorithm
 }
 var file_unio_v1_meta_raft_proto_depIdxs = []int32{
 	2,  // 0: unio.v1.Command.put_object:type_name -> unio.v1.PutObject
 	3,  // 1: unio.v1.Command.delete_object:type_name -> unio.v1.DeleteObject
 	4,  // 2: unio.v1.Command.update_layout:type_name -> unio.v1.UpdateLayout
-	5,  // 3: unio.v1.Command.create_upload:type_name -> unio.v1.CreateUpload
-	6,  // 4: unio.v1.Command.put_part:type_name -> unio.v1.PutPart
-	7,  // 5: unio.v1.Command.complete_upload:type_name -> unio.v1.CompleteUpload
-	8,  // 6: unio.v1.Command.abort_upload:type_name -> unio.v1.AbortUpload
-	9,  // 7: unio.v1.Command.fence_bucket:type_name -> unio.v1.FenceBucket
-	10, // 8: unio.v1.Command.set_partition_versioning:type_name -> unio.v1.SetPartitionVersioning
-	11, // 9: unio.v1.Command.create_bucket:type_name -> unio.v1.CreateBucket
-	12, // 10: unio.v1.Command.mark_bucket_deleting:type_name -> unio.v1.MarkBucketDeleting
-	13, // 11: unio.v1.Command.delete_bucket:type_name -> unio.v1.DeleteBucket
-	14, // 12: unio.v1.Command.set_bucket_versioning:type_name -> unio.v1.SetBucketVersioning
-	15, // 13: unio.v1.Command.kv_put:type_name -> unio.v1.KVPut
-	16, // 14: unio.v1.Command.kv_delete:type_name -> unio.v1.KVDelete
-	46, // 15: unio.v1.PutObject.record:type_name -> unio.v1.ObjectRecord
-	1,  // 16: unio.v1.PutObject.conditions:type_name -> unio.v1.WriteConditions
-	1,  // 17: unio.v1.DeleteObject.conditions:type_name -> unio.v1.WriteConditions
-	47, // 18: unio.v1.UpdateLayout.layout:type_name -> unio.v1.ErasureLayout
-	48, // 19: unio.v1.CreateUpload.upload:type_name -> unio.v1.UploadRecord
-	49, // 20: unio.v1.PutPart.part:type_name -> unio.v1.PartRecord
-	46, // 21: unio.v1.CompleteUpload.record:type_name -> unio.v1.ObjectRecord
-	1,  // 22: unio.v1.CompleteUpload.conditions:type_name -> unio.v1.WriteConditions
-	50, // 23: unio.v1.SetPartitionVersioning.versioning:type_name -> unio.v1.VersioningState
-	50, // 24: unio.v1.CreateBucket.versioning:type_name -> unio.v1.VersioningState
-	50, // 25: unio.v1.SetBucketVersioning.versioning:type_name -> unio.v1.VersioningState
-	46, // 26: unio.v1.ApplyResult.garbage:type_name -> unio.v1.ObjectRecord
-	49, // 27: unio.v1.ApplyResult.unused_parts:type_name -> unio.v1.PartRecord
-	49, // 28: unio.v1.ApplyResult.replaced_part:type_name -> unio.v1.PartRecord
-	51, // 29: unio.v1.ApplyResult.bucket:type_name -> unio.v1.BucketRecord
-	18, // 30: unio.v1.ReadQuery.get_object:type_name -> unio.v1.GetObjectQuery
-	19, // 31: unio.v1.ReadQuery.get_upload:type_name -> unio.v1.GetUploadQuery
-	20, // 32: unio.v1.ReadQuery.list_parts:type_name -> unio.v1.ListPartsQuery
-	21, // 33: unio.v1.ReadQuery.list_objects:type_name -> unio.v1.ListObjectsQuery
-	22, // 34: unio.v1.ReadQuery.list_uploads:type_name -> unio.v1.ListUploadsQuery
-	23, // 35: unio.v1.ReadQuery.bucket_has_data:type_name -> unio.v1.BucketHasDataQuery
-	24, // 36: unio.v1.ReadQuery.get_bucket:type_name -> unio.v1.GetBucketQuery
-	25, // 37: unio.v1.ReadQuery.kv_get:type_name -> unio.v1.KVGetQuery
-	26, // 38: unio.v1.ReadQuery.kv_list:type_name -> unio.v1.KVListQuery
-	28, // 39: unio.v1.ReadQuery.list_buckets:type_name -> unio.v1.ListBucketsQuery
-	46, // 40: unio.v1.ObjectResult.record:type_name -> unio.v1.ObjectRecord
-	48, // 41: unio.v1.UploadResult.upload:type_name -> unio.v1.UploadRecord
-	49, // 42: unio.v1.PartsResult.parts:type_name -> unio.v1.PartRecord
-	52, // 43: unio.v1.PartsResult.checksum_algorithm:type_name -> unio.v1.ChecksumAlgorithm
-	46, // 44: unio.v1.ListItem.object:type_name -> unio.v1.ObjectRecord
-	32, // 45: unio.v1.ListObjectsResult.items:type_name -> unio.v1.ListItem
-	48, // 46: unio.v1.UploadListItem.upload:type_name -> unio.v1.UploadRecord
-	34, // 47: unio.v1.ListUploadsResult.items:type_name -> unio.v1.UploadListItem
-	51, // 48: unio.v1.BucketResult.bucket:type_name -> unio.v1.BucketRecord
-	51, // 49: unio.v1.BucketsResult.buckets:type_name -> unio.v1.BucketRecord
-	40, // 50: unio.v1.KVResult.entries:type_name -> unio.v1.KVEntry
-	29, // 51: unio.v1.ReadResult.object:type_name -> unio.v1.ObjectResult
-	30, // 52: unio.v1.ReadResult.upload:type_name -> unio.v1.UploadResult
-	31, // 53: unio.v1.ReadResult.parts:type_name -> unio.v1.PartsResult
-	33, // 54: unio.v1.ReadResult.list_objects:type_name -> unio.v1.ListObjectsResult
-	35, // 55: unio.v1.ReadResult.list_uploads:type_name -> unio.v1.ListUploadsResult
-	36, // 56: unio.v1.ReadResult.bucket_has_data:type_name -> unio.v1.BucketHasDataResult
-	37, // 57: unio.v1.ReadResult.bucket:type_name -> unio.v1.BucketResult
-	38, // 58: unio.v1.ReadResult.buckets:type_name -> unio.v1.BucketsResult
-	39, // 59: unio.v1.ReadResult.kv:type_name -> unio.v1.KVResult
-	27, // 60: unio.v1.ReadRequest.query:type_name -> unio.v1.ReadQuery
-	61, // [61:61] is the sub-list for method output_type
-	61, // [61:61] is the sub-list for method input_type
-	61, // [61:61] is the sub-list for extension type_name
-	61, // [61:61] is the sub-list for extension extendee
-	0,  // [0:61] is the sub-list for field type_name
+	6,  // 3: unio.v1.Command.create_upload:type_name -> unio.v1.CreateUpload
+	7,  // 4: unio.v1.Command.put_part:type_name -> unio.v1.PutPart
+	8,  // 5: unio.v1.Command.complete_upload:type_name -> unio.v1.CompleteUpload
+	9,  // 6: unio.v1.Command.abort_upload:type_name -> unio.v1.AbortUpload
+	10, // 7: unio.v1.Command.fence_bucket:type_name -> unio.v1.FenceBucket
+	11, // 8: unio.v1.Command.set_partition_versioning:type_name -> unio.v1.SetPartitionVersioning
+	5,  // 9: unio.v1.Command.update_tags:type_name -> unio.v1.UpdateTags
+	12, // 10: unio.v1.Command.create_bucket:type_name -> unio.v1.CreateBucket
+	13, // 11: unio.v1.Command.mark_bucket_deleting:type_name -> unio.v1.MarkBucketDeleting
+	14, // 12: unio.v1.Command.delete_bucket:type_name -> unio.v1.DeleteBucket
+	15, // 13: unio.v1.Command.set_bucket_versioning:type_name -> unio.v1.SetBucketVersioning
+	16, // 14: unio.v1.Command.kv_put:type_name -> unio.v1.KVPut
+	17, // 15: unio.v1.Command.kv_delete:type_name -> unio.v1.KVDelete
+	47, // 16: unio.v1.PutObject.record:type_name -> unio.v1.ObjectRecord
+	1,  // 17: unio.v1.PutObject.conditions:type_name -> unio.v1.WriteConditions
+	1,  // 18: unio.v1.DeleteObject.conditions:type_name -> unio.v1.WriteConditions
+	48, // 19: unio.v1.UpdateLayout.layout:type_name -> unio.v1.ErasureLayout
+	49, // 20: unio.v1.CreateUpload.upload:type_name -> unio.v1.UploadRecord
+	50, // 21: unio.v1.PutPart.part:type_name -> unio.v1.PartRecord
+	47, // 22: unio.v1.CompleteUpload.record:type_name -> unio.v1.ObjectRecord
+	1,  // 23: unio.v1.CompleteUpload.conditions:type_name -> unio.v1.WriteConditions
+	51, // 24: unio.v1.SetPartitionVersioning.versioning:type_name -> unio.v1.VersioningState
+	51, // 25: unio.v1.CreateBucket.versioning:type_name -> unio.v1.VersioningState
+	51, // 26: unio.v1.SetBucketVersioning.versioning:type_name -> unio.v1.VersioningState
+	47, // 27: unio.v1.ApplyResult.garbage:type_name -> unio.v1.ObjectRecord
+	50, // 28: unio.v1.ApplyResult.unused_parts:type_name -> unio.v1.PartRecord
+	50, // 29: unio.v1.ApplyResult.replaced_part:type_name -> unio.v1.PartRecord
+	52, // 30: unio.v1.ApplyResult.bucket:type_name -> unio.v1.BucketRecord
+	47, // 31: unio.v1.ApplyResult.object:type_name -> unio.v1.ObjectRecord
+	19, // 32: unio.v1.ReadQuery.get_object:type_name -> unio.v1.GetObjectQuery
+	20, // 33: unio.v1.ReadQuery.get_upload:type_name -> unio.v1.GetUploadQuery
+	21, // 34: unio.v1.ReadQuery.list_parts:type_name -> unio.v1.ListPartsQuery
+	22, // 35: unio.v1.ReadQuery.list_objects:type_name -> unio.v1.ListObjectsQuery
+	23, // 36: unio.v1.ReadQuery.list_uploads:type_name -> unio.v1.ListUploadsQuery
+	24, // 37: unio.v1.ReadQuery.bucket_has_data:type_name -> unio.v1.BucketHasDataQuery
+	25, // 38: unio.v1.ReadQuery.get_bucket:type_name -> unio.v1.GetBucketQuery
+	26, // 39: unio.v1.ReadQuery.kv_get:type_name -> unio.v1.KVGetQuery
+	27, // 40: unio.v1.ReadQuery.kv_list:type_name -> unio.v1.KVListQuery
+	29, // 41: unio.v1.ReadQuery.list_buckets:type_name -> unio.v1.ListBucketsQuery
+	47, // 42: unio.v1.ObjectResult.record:type_name -> unio.v1.ObjectRecord
+	49, // 43: unio.v1.UploadResult.upload:type_name -> unio.v1.UploadRecord
+	50, // 44: unio.v1.PartsResult.parts:type_name -> unio.v1.PartRecord
+	53, // 45: unio.v1.PartsResult.checksum_algorithm:type_name -> unio.v1.ChecksumAlgorithm
+	47, // 46: unio.v1.ListItem.object:type_name -> unio.v1.ObjectRecord
+	33, // 47: unio.v1.ListObjectsResult.items:type_name -> unio.v1.ListItem
+	49, // 48: unio.v1.UploadListItem.upload:type_name -> unio.v1.UploadRecord
+	35, // 49: unio.v1.ListUploadsResult.items:type_name -> unio.v1.UploadListItem
+	52, // 50: unio.v1.BucketResult.bucket:type_name -> unio.v1.BucketRecord
+	52, // 51: unio.v1.BucketsResult.buckets:type_name -> unio.v1.BucketRecord
+	41, // 52: unio.v1.KVResult.entries:type_name -> unio.v1.KVEntry
+	30, // 53: unio.v1.ReadResult.object:type_name -> unio.v1.ObjectResult
+	31, // 54: unio.v1.ReadResult.upload:type_name -> unio.v1.UploadResult
+	32, // 55: unio.v1.ReadResult.parts:type_name -> unio.v1.PartsResult
+	34, // 56: unio.v1.ReadResult.list_objects:type_name -> unio.v1.ListObjectsResult
+	36, // 57: unio.v1.ReadResult.list_uploads:type_name -> unio.v1.ListUploadsResult
+	37, // 58: unio.v1.ReadResult.bucket_has_data:type_name -> unio.v1.BucketHasDataResult
+	38, // 59: unio.v1.ReadResult.bucket:type_name -> unio.v1.BucketResult
+	39, // 60: unio.v1.ReadResult.buckets:type_name -> unio.v1.BucketsResult
+	40, // 61: unio.v1.ReadResult.kv:type_name -> unio.v1.KVResult
+	28, // 62: unio.v1.ReadRequest.query:type_name -> unio.v1.ReadQuery
+	63, // [63:63] is the sub-list for method output_type
+	63, // [63:63] is the sub-list for method input_type
+	63, // [63:63] is the sub-list for extension type_name
+	63, // [63:63] is the sub-list for extension extendee
+	0,  // [0:63] is the sub-list for field type_name
 }
 
 func init() { file_unio_v1_meta_raft_proto_init() }
@@ -3759,6 +3870,7 @@ func file_unio_v1_meta_raft_proto_init() {
 		(*Command_AbortUpload)(nil),
 		(*Command_FenceBucket)(nil),
 		(*Command_SetPartitionVersioning)(nil),
+		(*Command_UpdateTags)(nil),
 		(*Command_CreateBucket)(nil),
 		(*Command_MarkBucketDeleting)(nil),
 		(*Command_DeleteBucket)(nil),
@@ -3766,7 +3878,7 @@ func file_unio_v1_meta_raft_proto_init() {
 		(*Command_KvPut)(nil),
 		(*Command_KvDelete)(nil),
 	}
-	file_unio_v1_meta_raft_proto_msgTypes[27].OneofWrappers = []any{
+	file_unio_v1_meta_raft_proto_msgTypes[28].OneofWrappers = []any{
 		(*ReadQuery_GetObject)(nil),
 		(*ReadQuery_GetUpload)(nil),
 		(*ReadQuery_ListParts)(nil),
@@ -3778,15 +3890,15 @@ func file_unio_v1_meta_raft_proto_init() {
 		(*ReadQuery_KvList)(nil),
 		(*ReadQuery_ListBuckets)(nil),
 	}
-	file_unio_v1_meta_raft_proto_msgTypes[32].OneofWrappers = []any{
+	file_unio_v1_meta_raft_proto_msgTypes[33].OneofWrappers = []any{
 		(*ListItem_Object)(nil),
 		(*ListItem_CommonPrefix)(nil),
 	}
-	file_unio_v1_meta_raft_proto_msgTypes[34].OneofWrappers = []any{
+	file_unio_v1_meta_raft_proto_msgTypes[35].OneofWrappers = []any{
 		(*UploadListItem_Upload)(nil),
 		(*UploadListItem_CommonPrefix)(nil),
 	}
-	file_unio_v1_meta_raft_proto_msgTypes[41].OneofWrappers = []any{
+	file_unio_v1_meta_raft_proto_msgTypes[42].OneofWrappers = []any{
 		(*ReadResult_Object)(nil),
 		(*ReadResult_Upload)(nil),
 		(*ReadResult_Parts)(nil),
@@ -3803,7 +3915,7 @@ func file_unio_v1_meta_raft_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_unio_v1_meta_raft_proto_rawDesc), len(file_unio_v1_meta_raft_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   46,
+			NumMessages:   47,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

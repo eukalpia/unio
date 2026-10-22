@@ -188,6 +188,8 @@ func (f *FSM) dispatch(b *pebble.Batch, cmd *pb.Command, index uint64) (*pb.Appl
 		return f.withKind(KindData, func() (*pb.ApplyResult, error) { return f.deleteObject(b, c.DeleteObject) })
 	case *pb.Command_UpdateLayout:
 		return f.withKind(KindData, func() (*pb.ApplyResult, error) { return f.updateLayout(b, c.UpdateLayout) })
+	case *pb.Command_UpdateTags:
+		return f.withKind(KindData, func() (*pb.ApplyResult, error) { return f.updateTags(b, c.UpdateTags) })
 	case *pb.Command_CreateUpload:
 		return f.withKind(KindData, func() (*pb.ApplyResult, error) { return f.createUpload(b, c.CreateUpload) })
 	case *pb.Command_PutPart:

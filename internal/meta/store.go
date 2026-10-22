@@ -62,6 +62,17 @@ type Store interface {
 	// ErrRevisionMismatch if the version no longer references data.
 	UpdateLayout(ctx context.Context, bucket, key, versionID string, partNumber int, data ids.DataID, layout erasure.Layout) error
 
+	// UpdateTags replaces the stored tag set of one version: the latest when
+	// versionID is "". tags is the stored form of the set (object.EncodeTags),
+	// and the store checks it with object.DecodeTags. Nothing else changes: no
+	// version is created, and the data, ETag and modification time stay as
+	// they were. The result is the updated record without its inline content.
+	// Fails with NoSuchKey when the key has no versions, or when versionID is
+	// "" and the latest version is a delete marker; NoSuchVersion when versionID
+	// is unknown; MethodNotAllowed when versionID names a delete marker. The
+	// check and the write are one atomic step.
+	UpdateTags(ctx context.Context, bucket, key, versionID, tags string) (ObjectRecord, error)
+
 	CreateUpload(ctx context.Context, up UploadRecord) error
 	// GetUpload fails with NoSuchUpload.
 	GetUpload(ctx context.Context, bucket, key, uploadID string) (UploadRecord, error)
