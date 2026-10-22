@@ -11,7 +11,7 @@ import (
 // Query parameters of a presigned request.
 const (
 	paramAlgorithm     = "X-Amz-Algorithm"
-	paramCredential    = "X-Amz-Credential"
+	paramCredential    = "X-Amz-Credential" // #nosec G101 -- public query parameter name, not a secret
 	paramDate          = "X-Amz-Date"
 	paramExpires       = "X-Amz-Expires"
 	paramSignedHeaders = "X-Amz-SignedHeaders"
