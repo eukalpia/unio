@@ -3,6 +3,8 @@ package logstore
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -33,10 +35,9 @@ func assertSameLog(t *testing.T, got, want raft.Log) {
 // including the nil versus empty distinction of Data and Extensions.
 func TestEncodeDecodeRoundTrip(t *testing.T) {
 	utc := time.Date(2026, 10, 22, 12, 0, 0, 987654321, time.UTC)
-	preEpoch := time.Date(1931, 3, 4, 5, 6, 7, 1, time.UTC)
 	local := time.Date(2026, 1, 2, 3, 4, 5, 6, time.Local)
 	slices := map[string][]byte{"nil": nil, "empty": {}, "bytes": []byte("payload")}
-	times := map[string]time.Time{"zero": {}, "utc": utc, "pre-epoch": preEpoch, "local": local}
+	times := map[string]time.Time{"zero": {}, "utc": utc, "epoch": time.Unix(0, 0), "local": local}
 
 	for dataName, data := range slices {
 		for extName, ext := range slices {
@@ -86,6 +87,7 @@ func TestDecodedLogDoesNotAliasInput(t *testing.T) {
 func TestDecodeRejectsCorruptInput(t *testing.T) {
 	const (
 		offFlags   = 18
+		offSec     = 19
 		offNsec    = 27
 		offDataLen = 31
 	)
@@ -97,6 +99,11 @@ func TestDecodeRejectsCorruptInput(t *testing.T) {
 		t.Fatalf("encoding is %d bytes, layout expects %d", len(valid), offDataLen+4+3+4+2)
 	}
 
+	// timed has a non-zero append time, so its timestamp bytes are decoded.
+	timed, err := encodeLog(&raft.Log{Index: 9, Term: 3, AppendedAt: time.Unix(1_700_000_000, 0)})
+	if err != nil {
+		t.Fatalf("encodeLog: %v", err)
+	}
 	mutate := func(f func(b []byte) []byte) []byte {
 		b := bytes.Clone(valid)
 		return f(b)
@@ -122,19 +129,24 @@ func TestDecodeRejectsCorruptInput(t *testing.T) {
 			return b
 		})},
 		{"nil flag with data bytes", mutate(func(b []byte) []byte { b[offFlags] |= flagDataNil; return b })},
+		{"timestamp with the sign bit set", signBitOf(timed, offSec)},
+		{"data length 2^31", mutate(func(b []byte) []byte {
+			binary.BigEndian.PutUint32(b[offDataLen:], 1<<31)
+			return b
+		})},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := decodeLog(tc.in); err == nil {
-				t.Fatal("decodeLog accepted corrupt input")
+			if _, err := decodeLog(tc.in); !errors.Is(err, ErrCorrupt) {
+				t.Fatalf("decodeLog of corrupt input: error %v, want ErrCorrupt", err)
 			}
 		})
 	}
 
 	t.Run("every proper prefix", func(t *testing.T) {
 		for n := range valid {
-			if _, err := decodeLog(valid[:n]); err == nil {
-				t.Fatalf("decodeLog accepted a %d byte prefix of a %d byte encoding", n, len(valid))
+			if _, err := decodeLog(valid[:n]); !errors.Is(err, ErrCorrupt) {
+				t.Fatalf("decodeLog of a %d byte prefix of a %d byte encoding: error %v, want ErrCorrupt", n, len(valid), err)
 			}
 		}
 	})
@@ -150,4 +162,48 @@ func TestDecodeRejectsCorruptInput(t *testing.T) {
 			}
 		}
 	})
+}
+
+// FuzzDecodeLog feeds arbitrary bytes to the entry decoder. The decoder must
+// never panic, every rejection must wrap ErrCorrupt, and every input it accepts
+// must re-encode to an entry that decodes to the same log.
+func FuzzDecodeLog(f *testing.F) {
+	seeds := []raft.Log{
+		{Index: 1, Term: 1},
+		{Index: 2, Term: 3, Type: raft.LogCommand, Data: []byte("payload"), Extensions: []byte("e")},
+		{Index: 3, Term: 4, Data: []byte{}, Extensions: []byte{}, AppendedAt: time.Unix(1_700_000_000, 999)},
+		{Index: math.MaxUint64, Term: math.MaxUint64, Type: raft.LogBarrier, AppendedAt: time.Unix(0, 0)},
+	}
+	for i := range seeds {
+		enc, err := encodeLog(&seeds[i])
+		if err != nil {
+			f.Fatalf("encode seed %d: %v", i, err)
+		}
+		f.Add(enc)
+	}
+	f.Fuzz(func(t *testing.T, b []byte) {
+		l, err := decodeLog(b)
+		if err != nil {
+			if !errors.Is(err, ErrCorrupt) {
+				t.Fatalf("decode error does not wrap ErrCorrupt: %v", err)
+			}
+			return
+		}
+		enc, err := encodeLog(&l)
+		if err != nil {
+			t.Fatalf("re-encode of an accepted entry: %v", err)
+		}
+		again, err := decodeLog(enc)
+		if err != nil {
+			t.Fatalf("decode of a re-encoded entry: %v", err)
+		}
+		assertSameLog(t, again, l)
+	})
+}
+
+// signBitOf returns a copy of b with the sign bit of the byte at off set.
+func signBitOf(b []byte, off int) []byte {
+	c := bytes.Clone(b)
+	c[off] |= 0x80
+	return c
 }

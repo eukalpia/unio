@@ -108,7 +108,6 @@ func TestRaftLogRoundTrip(t *testing.T) {
 		{"every field set", raft.Log{Index: 1, Term: 7, Type: raft.LogConfiguration, Data: []byte{0, 1, 2}, Extensions: []byte("ext"), AppendedAt: at}},
 		{"noop", raft.Log{Index: 1, Term: 3, Type: raft.LogNoop}},
 		{"barrier", raft.Log{Index: 1, Term: 3, Type: raft.LogBarrier}},
-		{"pre-epoch append time", raft.Log{Index: 1, Term: 1, AppendedAt: time.Date(1931, 3, 4, 5, 6, 7, 1, time.UTC)}},
 		{"large data", raft.Log{Index: 1, Term: 1, Data: bytes.Repeat([]byte("x"), 1<<20)}},
 		{"maximum index", raft.Log{Index: math.MaxUint64, Term: math.MaxUint64, Data: []byte("end")}},
 	}

@@ -259,7 +259,7 @@ func (g *GroupStore) GetUint64(key []byte) (uint64, error) {
 		return 0, nil
 	}
 	if len(value) != 8 {
-		return 0, fmt.Errorf("logstore: get uint64 of group %d: value has %d bytes, want 8", g.id, len(value))
+		return 0, fmt.Errorf("%w: logstore: get uint64 of group %d: value has %d bytes, want 8", ErrCorrupt, g.id, len(value))
 	}
 	return binary.BigEndian.Uint64(value), nil
 }
