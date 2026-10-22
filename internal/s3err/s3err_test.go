@@ -47,6 +47,9 @@ func TestHTTPStatus(t *testing.T) {
 	if NoSuchKey.HTTPStatus() != http.StatusNotFound || Code("Unknown").HTTPStatus() != 500 {
 		t.Fatal("bad status mapping")
 	}
+	if DeleteConflict.HTTPStatus() != http.StatusConflict {
+		t.Fatal("DeleteConflict must map to 409")
+	}
 }
 
 func TestWrapHidesCause(t *testing.T) {
