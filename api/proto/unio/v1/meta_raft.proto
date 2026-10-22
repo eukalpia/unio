@@ -1,0 +1,392 @@
+// Raft commands, apply results, read queries and internode RPC messages of
+// the metadata plane. Commands are replicated log entries: their encoding is
+// part of the Raft log format and changes require an ADR (see
+// docs/adr/0006-protobuf-encoding.md). Field numbers are never reused.
+syntax = "proto3";
+
+package unio.v1;
+
+import "unio/v1/records.proto";
+
+// Command is one replicated log entry. Data partitions accept the object,
+// upload and bucket-control commands; the system group accepts the bucket
+// and key-value commands. A command sent to the wrong group fails in Apply.
+message Command {
+  oneof cmd {
+    PutObject put_object = 1;
+    DeleteObject delete_object = 2;
+    UpdateLayout update_layout = 3;
+    CreateUpload create_upload = 4;
+    PutPart put_part = 5;
+    CompleteUpload complete_upload = 6;
+    AbortUpload abort_upload = 7;
+    FenceBucket fence_bucket = 8;
+    SetPartitionVersioning set_partition_versioning = 9;
+
+    CreateBucket create_bucket = 20;
+    MarkBucketDeleting mark_bucket_deleting = 21;
+    DeleteBucket delete_bucket = 22;
+    SetBucketVersioning set_bucket_versioning = 23;
+    KVPut kv_put = 24;
+    KVDelete kv_delete = 25;
+  }
+}
+
+// WriteConditions carries the If-Match and If-None-Match preconditions of a
+// conditional write. The write path (Conditions.EvaluateWrite) ignores the
+// time-based preconditions, so they are not replicated.
+message WriteConditions {
+  string if_match = 1;
+  string if_none_match = 2;
+}
+
+// PutObject commits a new version. In a versioned bucket the record's
+// version_id is required and must be unused for the key. In an unversioned
+// or suspended bucket it must be empty, and the write replaces the null
+// version. The state machine orders versions by its own commit counter, so
+// the latest version never depends on clocks.
+message PutObject {
+  uint64 bucket_id = 1;
+  ObjectRecord record = 2;
+  WriteConditions conditions = 3;
+}
+
+// DeleteObject removes a version, or adds a delete marker when version_id is
+// empty in a versioned or suspended bucket. A delete marker in a versioned
+// bucket gets marker_version_id, chosen by the proposer.
+message DeleteObject {
+  uint64 bucket_id = 1;
+  string bucket = 2;
+  string key = 3;
+  string version_id = 4;
+  WriteConditions conditions = 5;
+  int64 mod_time_unix_nano = 6;
+  string marker_version_id = 7;
+}
+
+// UpdateLayout replaces the layout of one part of a version that still
+// references data (used by repair).
+message UpdateLayout {
+  uint64 bucket_id = 1;
+  string key = 2;
+  string version_id = 3;
+  uint32 part_number = 4;
+  // 16-byte DataID the caller expects the part to reference.
+  bytes data = 5;
+  ErasureLayout layout = 6;
+}
+
+// CreateUpload registers an in-progress multipart upload.
+message CreateUpload {
+  uint64 bucket_id = 1;
+  UploadRecord upload = 2;
+}
+
+// PutPart stores a part, replacing a part with the same number.
+message PutPart {
+  uint64 bucket_id = 1;
+  string key = 2;
+  string upload_id = 3;
+  PartRecord part = 4;
+}
+
+// CompleteUpload turns the parts referenced by record into the newest
+// version and removes the upload. The version id rules are those of
+// PutObject.
+message CompleteUpload {
+  uint64 bucket_id = 1;
+  string key = 2;
+  string upload_id = 3;
+  ObjectRecord record = 4;
+  WriteConditions conditions = 5;
+}
+
+// AbortUpload removes an upload and returns its parts.
+message AbortUpload {
+  uint64 bucket_id = 1;
+  string key = 2;
+  string upload_id = 3;
+}
+
+// FenceBucket marks a bucket as deleting in one data partition (fenced) or
+// lifts the mark (not fenced). Fenced buckets reject new data.
+message FenceBucket {
+  uint64 bucket_id = 1;
+  bool fenced = 2;
+}
+
+// SetPartitionVersioning copies the versioning state of a bucket into one
+// data partition, so that writes see it in the same log as the data.
+message SetPartitionVersioning {
+  uint64 bucket_id = 1;
+  VersioningState versioning = 2;
+}
+
+// CreateBucket adds a bucket in the system group. The state machine assigns
+// the BucketID.
+message CreateBucket {
+  string name = 1;
+  string owner = 2;
+  VersioningState versioning = 3;
+  int64 created_unix_nano = 4;
+}
+
+// MarkBucketDeleting sets or clears the deleting flag of a bucket. The bucket
+// id guards against acting on a bucket re-created under the same name.
+message MarkBucketDeleting {
+  string name = 1;
+  uint64 bucket_id = 2;
+  bool deleting = 3;
+}
+
+// DeleteBucket removes a bucket record that is marked deleting.
+message DeleteBucket {
+  string name = 1;
+  uint64 bucket_id = 2;
+}
+
+// SetBucketVersioning changes the versioning state of a bucket.
+message SetBucketVersioning {
+  string name = 1;
+  uint64 bucket_id = 2;
+  VersioningState versioning = 3;
+}
+
+// KVPut writes a system key-value entry if its revision matches
+// expect_revision (0 means absent, max uint64 means unconditional).
+message KVPut {
+  string key = 1;
+  bytes value = 2;
+  uint64 expect_revision = 3;
+}
+
+// KVDelete removes a system key-value entry under the same revision rules.
+message KVDelete {
+  string key = 1;
+  uint64 expect_revision = 2;
+}
+
+// ApplyResult is the outcome of a successfully applied command, as seen by
+// the proposer. Garbage records are returned so that the caller can delete
+// their data after the commit (invariant I5).
+message ApplyResult {
+  string version_id = 1;
+  bool delete_marker = 2;
+  string delete_marker_version_id = 3;
+  repeated ObjectRecord garbage = 4;
+  repeated PartRecord unused_parts = 5;
+  // Set by PutPart when a part with the same number was replaced.
+  PartRecord replaced_part = 6;
+  BucketRecord bucket = 7;
+  uint64 revision = 8;
+}
+
+// GetObjectQuery reads one version (the latest when version_id is empty).
+message GetObjectQuery {
+  uint64 bucket_id = 1;
+  string bucket = 2;
+  string key = 3;
+  string version_id = 4;
+}
+
+// GetUploadQuery reads one in-progress upload.
+message GetUploadQuery {
+  uint64 bucket_id = 1;
+  string key = 2;
+  string upload_id = 3;
+}
+
+// ListPartsQuery lists the parts of an upload after a part number.
+message ListPartsQuery {
+  uint64 bucket_id = 1;
+  string key = 2;
+  string upload_id = 3;
+  uint32 part_number_marker = 4;
+  uint32 limit = 5;
+}
+
+// ListObjectsQuery returns the next batch of listing items of one partition:
+// latest non-delete-marker versions and common prefixes, strictly after the
+// cursor, in key order.
+message ListObjectsQuery {
+  uint64 bucket_id = 1;
+  bytes prefix = 2;
+  bytes delimiter = 3;
+  bytes after = 4;
+  uint32 limit = 5;
+}
+
+// ListUploadsQuery returns the next batch of upload listing items of one
+// partition, strictly after the (key, upload id) cursor.
+message ListUploadsQuery {
+  uint64 bucket_id = 1;
+  bytes prefix = 2;
+  bytes delimiter = 3;
+  string key_marker = 4;
+  string upload_id_marker = 5;
+  uint32 limit = 6;
+}
+
+// BucketHasDataQuery reports whether a partition holds any object version,
+// upload or part of a bucket.
+message BucketHasDataQuery {
+  uint64 bucket_id = 1;
+}
+
+// GetBucketQuery reads a bucket record by name (system group).
+message GetBucketQuery {
+  string name = 1;
+  // Also return buckets marked deleting. Only the deletion protocol needs
+  // this; client reads see such buckets as absent.
+  bool include_deleting = 2;
+}
+
+// KVGetQuery reads one system key-value entry.
+message KVGetQuery {
+  string key = 1;
+}
+
+// KVListQuery lists system key-value entries with a prefix.
+message KVListQuery {
+  string prefix = 1;
+}
+
+// ReadQuery is a linearizable read served by the leader of a group.
+message ReadQuery {
+  oneof query {
+    GetObjectQuery get_object = 1;
+    GetUploadQuery get_upload = 2;
+    ListPartsQuery list_parts = 3;
+    ListObjectsQuery list_objects = 4;
+    ListUploadsQuery list_uploads = 5;
+    BucketHasDataQuery bucket_has_data = 6;
+    GetBucketQuery get_bucket = 7;
+    KVGetQuery kv_get = 8;
+    KVListQuery kv_list = 9;
+    // Lists every bucket record (system group).
+    ListBucketsQuery list_buckets = 10;
+  }
+}
+
+// ListBucketsQuery has no parameters.
+message ListBucketsQuery {}
+
+// ObjectResult is the answer to GetObjectQuery.
+message ObjectResult {
+  ObjectRecord record = 1;
+}
+
+// UploadResult is the answer to GetUploadQuery.
+message UploadResult {
+  UploadRecord upload = 1;
+}
+
+// PartsResult is the answer to ListPartsQuery.
+message PartsResult {
+  repeated PartRecord parts = 1;
+  // True when more parts follow the last returned part.
+  bool more = 2;
+}
+
+// ListItem is one entry of an object listing batch.
+message ListItem {
+  oneof item {
+    ObjectRecord object = 1;
+    string common_prefix = 2;
+  }
+}
+
+// ListObjectsResult is one batch of a partition's listing.
+message ListObjectsResult {
+  repeated ListItem items = 1;
+  // True when the partition has no further items after the batch.
+  bool exhausted = 2;
+}
+
+// UploadListItem is one entry of an upload listing batch.
+message UploadListItem {
+  oneof item {
+    UploadRecord upload = 1;
+    string common_prefix = 2;
+  }
+}
+
+// ListUploadsResult is one batch of a partition's upload listing.
+message ListUploadsResult {
+  repeated UploadListItem items = 1;
+  bool exhausted = 2;
+}
+
+// BucketHasDataResult reports whether a partition holds data of a bucket.
+message BucketHasDataResult {
+  bool has_data = 1;
+}
+
+// BucketResult is the answer to GetBucketQuery.
+message BucketResult {
+  BucketRecord bucket = 1;
+}
+
+// BucketsResult is the answer to ListBucketsQuery.
+message BucketsResult {
+  repeated BucketRecord buckets = 1;
+}
+
+// KVResult is the answer to KVGetQuery and KVListQuery.
+message KVResult {
+  repeated KVEntry entries = 1;
+}
+
+// KVEntry is one system key-value entry.
+message KVEntry {
+  string key = 1;
+  bytes value = 2;
+  uint64 revision = 3;
+}
+
+// ReadResult is the answer to a ReadQuery. The variant matches the query.
+message ReadResult {
+  oneof result {
+    ObjectResult object = 1;
+    UploadResult upload = 2;
+    PartsResult parts = 3;
+    ListObjectsResult list_objects = 4;
+    ListUploadsResult list_uploads = 5;
+    BucketHasDataResult bucket_has_data = 6;
+    BucketResult bucket = 7;
+    BucketsResult buckets = 8;
+    KVResult kv = 9;
+  }
+}
+
+// ApplyRequest carries a command to the leader of a partition.
+message ApplyRequest {
+  uint32 partition = 1;
+  // Encoded Command.
+  bytes command = 2;
+}
+
+// ApplyReply is the answer to ApplyRequest. When not_leader is set, the
+// command was not proposed and the sender may retry at leader_hint (if set).
+// Application errors are returned as RPC errors, not in this message.
+message ApplyReply {
+  bool not_leader = 1;
+  string leader_hint = 2;
+  // Encoded ApplyResult.
+  bytes result = 3;
+}
+
+// ReadRequest carries a read query to the leader of a partition.
+message ReadRequest {
+  uint32 partition = 1;
+  ReadQuery query = 2;
+}
+
+// ReadReply is the answer to ReadRequest. Like ApplyReply, not_leader means
+// the query was not served and leader_hint names the node to try.
+message ReadReply {
+  bool not_leader = 1;
+  string leader_hint = 2;
+  // Encoded ReadResult.
+  bytes result = 3;
+}
