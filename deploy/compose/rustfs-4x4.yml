@@ -1,0 +1,104 @@
+# Comparison cluster: RustFS distributed mode, 4 nodes x 4 drives, same topology
+# and host ports as cluster-4x4.yml. It is the S3 comparison target used by
+# bench/compare.md, because the MinIO images could not be pulled.
+#
+# The base image is pinned by digest in deploy/docker/rustfs.Dockerfile. It was
+# resolved as rustfs/rustfs:latest on
+# 2026-10-22. Re-pin deliberately when you upgrade, so that the comparison
+# stays reproducible.
+#
+# Usage, from the repository root:
+#   docker compose -f deploy/compose/rustfs-4x4.yml up -d
+#
+# Do not run this together with cluster-4x4.yml: both publish host ports
+# 9001 to 9004 on 127.0.0.1. Stop one stack before starting the other.
+
+name: rustfs-4x4
+
+x-rustfs-node: &rustfs-node
+  # Built once by rustfs1 from deploy/docker/rustfs.Dockerfile. The other nodes
+  # reuse the tag, so compose never builds the same tag twice in parallel.
+  image: unio-rustfs-4x4:local
+  pull_policy: never
+  stop_grace_period: 30s
+  environment: &rustfs-env
+    RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?set RUSTFS_ACCESS_KEY in deploy/compose/.env}
+    RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?set RUSTFS_SECRET_KEY in deploy/compose/.env}
+    # Every drive of every node, in MinIO-style ellipsis form.
+    RUSTFS_VOLUMES: "http://rustfs{1...4}:9000/data{1...4}"
+    # LOCAL DOCKER ONLY. RustFS refuses erasure drives that share a physical
+    # device. Docker Desktop puts every named volume on one disk, so the check
+    # is bypassed here. On real hardware, remove this line and give each drive
+    # its own disk. The results are not comparable to a cluster on separate disks.
+    RUSTFS_UNSAFE_BYPASS_DISK_CHECK: "true"
+  networks: &rustfs-networks
+    - internal
+    - public
+
+services:
+  rustfs1:
+    build:
+      context: ../docker
+      dockerfile: rustfs.Dockerfile
+    <<: *rustfs-node
+    ports:
+      - "127.0.0.1:9001:9000"
+    volumes:
+      - rustfs1-data1:/data1
+      - rustfs1-data2:/data2
+      - rustfs1-data3:/data3
+      - rustfs1-data4:/data4
+
+  rustfs2:
+    <<: *rustfs-node
+    ports:
+      - "127.0.0.1:9002:9000"
+    volumes:
+      - rustfs2-data1:/data1
+      - rustfs2-data2:/data2
+      - rustfs2-data3:/data3
+      - rustfs2-data4:/data4
+
+  rustfs3:
+    <<: *rustfs-node
+    ports:
+      - "127.0.0.1:9003:9000"
+    volumes:
+      - rustfs3-data1:/data1
+      - rustfs3-data2:/data2
+      - rustfs3-data3:/data3
+      - rustfs3-data4:/data4
+
+  rustfs4:
+    <<: *rustfs-node
+    ports:
+      - "127.0.0.1:9004:9000"
+    volumes:
+      - rustfs4-data1:/data1
+      - rustfs4-data2:/data2
+      - rustfs4-data3:/data3
+      - rustfs4-data4:/data4
+
+networks:
+  internal:
+    internal: true
+  public:
+    driver: bridge
+
+volumes:
+  rustfs1-data1:
+  rustfs1-data2:
+  rustfs1-data3:
+  rustfs1-data4:
+  rustfs2-data1:
+  rustfs2-data2:
+  rustfs2-data3:
+  rustfs2-data4:
+  rustfs3-data1:
+  rustfs3-data2:
+  rustfs3-data3:
+  rustfs3-data4:
+  rustfs4-data1:
+  rustfs4-data2:
+  rustfs4-data3:
+  rustfs4-data4:
