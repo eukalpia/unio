@@ -3,6 +3,7 @@ package raftstore
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/eukalpia/unio/internal/ids"
 	"github.com/eukalpia/unio/internal/meta"
@@ -24,12 +25,16 @@ func (s *Store) ListObjects(ctx context.Context, bucket string, opts object.List
 		if cursor == "" {
 			after = opts.After
 		}
+		pageSize, err := uint32Limit(limit)
+		if err != nil {
+			return listing.Batch{}, err
+		}
 		q := &pb.ReadQuery{Query: &pb.ReadQuery_ListObjects{ListObjects: &pb.ListObjectsQuery{
 			BucketId:  uint64(info.ID),
 			Prefix:    []byte(opts.Prefix),
 			Delimiter: []byte(opts.Delimiter),
 			After:     []byte(after),
-			Limit:     uint32(limit),
+			Limit:     pageSize,
 		}}}
 		res, err := s.router.Read(ctx, p, q)
 		if err != nil {
@@ -65,13 +70,17 @@ func (s *Store) ListUploads(ctx context.Context, bucket string, opts object.List
 		if cursor != "" {
 			keyMarker, uploadIDMarker = listing.SplitUploadCursor(cursor)
 		}
+		pageSize, err := uint32Limit(limit)
+		if err != nil {
+			return listing.Batch{}, err
+		}
 		q := &pb.ReadQuery{Query: &pb.ReadQuery_ListUploads{ListUploads: &pb.ListUploadsQuery{
 			BucketId:       uint64(info.ID),
 			Prefix:         []byte(opts.Prefix),
 			Delimiter:      []byte(opts.Delimiter),
 			KeyMarker:      keyMarker,
 			UploadIdMarker: uploadIDMarker,
-			Limit:          uint32(limit),
+			Limit:          pageSize,
 		}}}
 		res, err := s.router.Read(ctx, p, q)
 		if err != nil {
@@ -93,4 +102,15 @@ func (s *Store) ListUploads(ctx context.Context, bucket string, opts object.List
 		return batch, nil
 	}
 	return listing.ListUploads(ctx, s.dataParts, fetch, opts)
+}
+
+// uint32Limit converts a page size to the 4-byte limit field of a query. It
+// fails when the size is negative or does not fit, so the conversion never
+// wraps. The listing already bounds page sizes; this check guards the
+// conversion itself.
+func uint32Limit(n int) (uint32, error) {
+	if n < 0 || int64(n) > math.MaxUint32 {
+		return 0, fmt.Errorf("raftstore: page size %d does not fit a query limit", n)
+	}
+	return uint32(n), nil
 }

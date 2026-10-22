@@ -37,13 +37,18 @@ func (f *FSM) control(bucket ids.BucketID) (bucketControl, error) {
 	return bucketControl{fenced: v[0] == 1, versioning: pb.VersioningState(v[1])}, nil
 }
 
-// setControl stores the control record of a bucket in batch b.
+// setControl stores the control record of a bucket in batch b. A versioning
+// state outside the defined range is an error.
 func setControl(b *pebble.Batch, bucket ids.BucketID, c bucketControl) error {
 	var fenced byte
 	if c.fenced {
 		fenced = 1
 	}
-	if err := b.Set(keys.Control(bucket), []byte{fenced, byte(c.versioning)}, nil); err != nil {
+	versioning, err := versioningByte(c.versioning)
+	if err != nil {
+		return err
+	}
+	if err := b.Set(keys.Control(bucket), []byte{fenced, versioning}, nil); err != nil {
 		return fmt.Errorf("fsm: write control: %w", err)
 	}
 	return nil
@@ -266,4 +271,13 @@ func errMalformed(what string) error {
 // machine, is at fault.
 func errInvalid(msg string) error {
 	return s3err.Errorf(s3err.InvalidArgument, "%s", msg)
+}
+
+// versioningByte converts a versioning state to the byte the control record
+// stores. A state outside the defined range is rejected, never truncated.
+func versioningByte(v pb.VersioningState) (byte, error) {
+	if v < 0 || v > pb.VersioningState_VERSIONING_STATE_SUSPENDED {
+		return 0, fmt.Errorf("fsm: unknown versioning state %d", v)
+	}
+	return byte(v), nil
 }

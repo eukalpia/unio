@@ -121,9 +121,13 @@ func (s *Store) ListParts(ctx context.Context, bucket, key, uploadID string, opt
 	if err != nil {
 		return nil, object.ListPartsResult{}, err
 	}
+	checksum, err := checksumAlgorithmOf(res.GetParts().GetChecksumAlgorithm())
+	if err != nil {
+		return nil, object.ListPartsResult{}, err
+	}
 	out := object.ListPartsResult{
 		IsTruncated:       res.GetParts().GetMore(),
-		ChecksumAlgorithm: object.ChecksumAlgorithm(res.GetParts().GetChecksumAlgorithm()),
+		ChecksumAlgorithm: checksum,
 	}
 	if n := len(parts); n > 0 {
 		out.NextPartNumberMarker = parts[n-1].Number
@@ -184,4 +188,13 @@ func (s *Store) AbortUpload(ctx context.Context, bucket, key, uploadID string) (
 		return nil, err
 	}
 	return decodeParts(res.GetUnusedParts())
+}
+
+// checksumAlgorithmOf converts a stored checksum algorithm to the domain type.
+// A value outside the defined range is an error, never a truncated value.
+func checksumAlgorithmOf(v pb.ChecksumAlgorithm) (object.ChecksumAlgorithm, error) {
+	if v < 0 || v > pb.ChecksumAlgorithm_CHECKSUM_ALGORITHM_SHA256 {
+		return 0, fmt.Errorf("raftstore: unknown checksum algorithm %d", v)
+	}
+	return object.ChecksumAlgorithm(v), nil
 }
