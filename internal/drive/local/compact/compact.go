@@ -114,7 +114,7 @@ func Pass(ctx context.Context, t Target, cfg Config) (int, error) {
 			return retired, err
 		}
 		switch err := t.Retire(ctx, seg.ID); {
-		case errors.Is(err, ErrLive):
+		case errors.Is(err, ErrLive), errors.Is(err, ErrGone):
 			continue
 		case err != nil:
 			return retired, err
