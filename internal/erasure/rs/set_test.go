@@ -5,6 +5,7 @@ import (
 
 	"github.com/eukalpia/unio/internal/bufpool"
 	"github.com/eukalpia/unio/internal/drive"
+	"github.com/eukalpia/unio/internal/erasure"
 	"github.com/eukalpia/unio/internal/erasure/erasuretest"
 	"github.com/eukalpia/unio/internal/ids"
 )
@@ -46,6 +47,7 @@ func TestNewReportsShape(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	var _ erasure.Set = s
 	if s.ID() != ids.SetID(7) {
 		t.Fatalf("ID = %d", s.ID())
 	}
