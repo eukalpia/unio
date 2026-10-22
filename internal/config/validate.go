@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -255,10 +256,13 @@ func checkErasure(c *Config, drives []Endpoint, r *report) {
 	}
 }
 
-// checkMetadata validates the metadata partition count.
+// checkMetadata validates the metadata partition count and the metadata directory.
 func checkMetadata(c *Config, r *report) {
 	if p := c.Metadata.Partitions; p < 1 || p > maxMetadataPartitions {
 		r.errorf("metadata.partitions %d must be between 1 and %d (UNIO_METADATA_PARTITIONS)", p, maxMetadataPartitions)
+	}
+	if dir := c.Metadata.Dir; dir != "" && !filepath.IsAbs(dir) {
+		r.errorf("metadata.dir %q must be an absolute path, for example /var/lib/unio/meta (UNIO_METADATA_DIR)", dir)
 	}
 }
 

@@ -75,6 +75,8 @@ func settings() []setting {
 			func(c *Config) *int { return &c.Erasure.Parity }),
 		intSetting("metadata-partitions", "UNIO_METADATA_PARTITIONS", "number of metadata partitions (fixed at cluster creation)",
 			func(c *Config) *int { return &c.Metadata.Partitions }),
+		strSetting("metadata-dir", "UNIO_METADATA_DIR", "absolute directory of the metadata store (default: .unio/meta under the first local drive)",
+			func(c *Config) *string { return &c.Metadata.Dir }),
 		sizeSetting("inline-threshold", "UNIO_INLINE_THRESHOLD", "largest object stored inline in metadata, e.g. 4KiB",
 			func(c *Config) *Size { return &c.Storage.InlineThreshold }),
 		sizeSetting("memory-budget", "UNIO_MEMORY_BUDGET", "memory budget for I/O buffers, e.g. 1GiB",

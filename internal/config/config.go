@@ -12,6 +12,9 @@
 package config
 
 import (
+	"errors"
+	"fmt"
+	"path"
 	"time"
 
 	"github.com/eukalpia/unio/internal/ids"
@@ -93,6 +96,9 @@ type MetadataConfig struct {
 	// Partitions is the number of metadata partitions. It is fixed at
 	// cluster creation. The default is 16.
 	Partitions int `yaml:"partitions"`
+	// Dir is the absolute directory of the metadata store on this node. When it
+	// is empty, the store lives in .unio/meta under the first drive of the node.
+	Dir string `yaml:"dir"`
 }
 
 // StorageConfig controls the data tiers and memory use.
@@ -184,6 +190,46 @@ func (c *Config) NodeID() ids.NodeID {
 		return ""
 	}
 	return id
+}
+
+// MetadataDir returns the directory of the metadata store: Metadata.Dir when it
+// is set, and otherwise .unio/meta under the first drive of this node. It
+// returns "" before Load has resolved the drives.
+func (c *Config) MetadataDir() string {
+	if c.Metadata.Dir != "" {
+		return c.Metadata.Dir
+	}
+	local := c.LocalDrives()
+	if len(local) == 0 {
+		return ""
+	}
+	return path.Join(local[0].Path, ".unio", "meta")
+}
+
+// ErasureLayout resolves the automatic values of erasure.set_drive_count and
+// erasure.parity. It returns the number of drives in each erasure set and the
+// number of parity shards per set. A zero set size is chosen by
+// AutoSetDriveCount, and a zero parity by DefaultParity. It needs the drives
+// that Load resolves, and it fails when they cannot form erasure sets.
+func (c *Config) ErasureLayout() (setDrives, parity int, err error) {
+	total := len(c.Cluster.Drives)
+	if total == 0 {
+		return 0, 0, errors.New("config: erasure layout: no drives are resolved; call Load first")
+	}
+	setDrives = c.Erasure.SetDriveCount
+	if setDrives == 0 {
+		if setDrives, err = AutoSetDriveCount(total); err != nil {
+			return 0, 0, fmt.Errorf("config: erasure layout: %w", err)
+		}
+	}
+	if total%setDrives != 0 {
+		return 0, 0, fmt.Errorf("config: erasure layout: %d drives do not divide into erasure sets of %d", total, setDrives)
+	}
+	parity = c.Erasure.Parity
+	if parity == 0 {
+		parity = DefaultParity(setDrives)
+	}
+	return setDrives, parity, nil
 }
 
 // TLSEnabled reports whether the S3 endpoint is configured to serve HTTPS.
