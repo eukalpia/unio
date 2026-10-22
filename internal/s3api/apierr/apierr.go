@@ -26,8 +26,10 @@ func Write(c *app.RequestContext, logger *slog.Logger, err error, resource strin
 	info := reqinfo.Get(c)
 	if code == s3err.InternalError {
 		logger.Error("request failed", "request_id", info.RequestID, "error", err.Error())
-	} else if cause := errors.Unwrap(err); cause != nil {
-		logger.Warn("request rejected", "request_id", info.RequestID, "code", string(code), "cause", cause.Error())
+	} else if errors.Unwrap(err) != nil {
+		// The whole chain is logged: the wrapping context names the drive,
+		// peer or step at fault, which the innermost error alone does not.
+		logger.Warn("request rejected", "request_id", info.RequestID, "code", string(code), "error", err.Error())
 	}
 
 	status := code.HTTPStatus()
@@ -55,11 +57,13 @@ func setCommonHeaders(c *app.RequestContext, info reqinfo.Info) {
 }
 
 // clientMessage returns a message that is safe to show to clients. An
-// explicit client message is used when the error carries one; otherwise a
-// generic message for the code. Internal text is never used.
+// explicit client message is used when the error carries one for the same
+// code that is reported; otherwise a generic message for the code, so that a
+// response never pairs one code with another code's message. Internal text
+// is never used.
 func clientMessage(err error, code s3err.Code) string {
 	var se *s3err.Error
-	if errors.As(err, &se) && se.Message != "" {
+	if errors.As(err, &se) && se.Message != "" && se.Code == code {
 		return se.Message
 	}
 	if msg, ok := genericMessages[code]; ok {
