@@ -192,7 +192,7 @@ func (l *Layer) CompleteMultipartUpload(_ context.Context, bucketName, key, uplo
 	info.ETag = fmt.Sprintf("%x-%d", digest.SumMD5(md5s), len(parts))
 	info.Parts = len(parts)
 	info.Size = int64(len(data))
-	info.Checksum, err = compositeChecksum(u.opts.ChecksumAlgorithm, stored)
+	info.Checksum, err = multipartChecksum(u.opts.ChecksumAlgorithm, data, stored)
 	if err != nil {
 		return object.Info{}, err
 	}
@@ -346,11 +346,18 @@ func matchParts(u *upload, parts []object.CompletePart) ([]*uploadPart, int64, e
 	return stored, total, nil
 }
 
-// compositeChecksum returns the composite checksum over the part checksums,
+// multipartChecksum returns the additional checksum of a completed multipart
+// object: the full-object checksum for CRC-64/NVME, else the composite over the
+// part checksums,
 // or a zero checksum when alg is none.
-func compositeChecksum(alg object.ChecksumAlgorithm, parts []*uploadPart) (object.Checksum, error) {
+func multipartChecksum(alg object.ChecksumAlgorithm, data []byte, parts []*uploadPart) (object.Checksum, error) {
 	if alg == object.ChecksumNone {
 		return object.Checksum{}, nil
+	}
+	if alg == object.ChecksumCRC64NVME {
+		// S3 defines CRC-64/NVME over the whole object. The fake computes it
+		// directly over the data, independently of the engine's combination.
+		return fullChecksum(alg, data)
 	}
 	h, err := digest.New(alg)
 	if err != nil {

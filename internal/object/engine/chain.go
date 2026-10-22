@@ -33,6 +33,7 @@ type chainReader struct {
 	cur       io.ReadCloser // reader of the current segment, nil if none
 	curLeft   int64         // bytes left in the current segment
 	remaining int64         // bytes left in the window
+	idle      int           // consecutive reads of the current segment that returned nothing
 	err       error
 	closed    bool
 }
@@ -69,6 +70,17 @@ func (c *chainReader) Read(p []byte) (int, error) {
 	case n == 0 && errors.Is(err, io.EOF):
 		c.err = fmt.Errorf("engine: part ended early: %w", io.ErrUnexpectedEOF)
 		return 0, c.err
+	case n == 0:
+		// The part reader made no progress and reported no error. Bound the
+		// number of such reads, as the body guard does, so a stalled reader
+		// cannot hold the caller forever.
+		c.idle++
+		if c.idle >= maxEmptyReads {
+			c.err = fmt.Errorf("engine: reading part: %w", io.ErrNoProgress)
+			return 0, c.err
+		}
+	default:
+		c.idle = 0
 	}
 	if c.curLeft == 0 {
 		if err := c.closeCur(); err != nil {
@@ -95,6 +107,7 @@ func (c *chainReader) advance() error {
 	}
 	c.cur = rc
 	c.curLeft = seg.length
+	c.idle = 0
 	return nil
 }
 

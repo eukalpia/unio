@@ -95,6 +95,15 @@ func checkPartNumberOpt(n int) error {
 	return validatePartNumber(n)
 }
 
+// checkBody rejects a missing request body. A nil body is a caller error, and
+// the engine must not panic on it.
+func checkBody(body object.Body) error {
+	if body == nil {
+		return s3err.Errorf(s3err.InvalidArgument, "missing request body")
+	}
+	return nil
+}
+
 // wrapCause adds context to an error without hiding its S3 code.
 func wrapCause(what string, err error) error {
 	return fmt.Errorf("engine: %s: %w", what, err)

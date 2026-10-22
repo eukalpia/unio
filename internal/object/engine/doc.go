@@ -15,7 +15,9 @@
 //     write quorum and the metadata store committed. Data durability is the
 //     erasure set's job; the engine never acknowledges a write before both steps.
 //   - I2 (integrity): reads go through erasure.Set.Read, which verifies every
-//     block. Inline payloads are checked when they were stored.
+//     block. A reader never returns data after an error, and it fails rather
+//     than spin when a part reader stops making progress (chain.go). Inline
+//     payloads are checked when they were stored.
 //   - I3 (linearizable metadata): all visibility decisions are made by
 //     meta.Store, which is linearizable. The engine holds no cache of metadata.
 //   - I4 (atomicity): see bodyGuard in body.go and writePart in put.go. A body
@@ -24,6 +26,16 @@
 //   - I5 (safe overwrite): every commit returns the versions and parts that it
 //     made garbage, and the engine queues their data only after the commit
 //     succeeded.
+//
+// Failed commits. A commit error does not always mean that the commit was not
+// applied: a consensus store can apply a proposal and then time out. Data of a
+// failed commit is queued for deletion only when the error is one of the
+// store's definitive refusals (PreconditionFailed, NoSuchKey, NoSuchBucket,
+// NoSuchUpload, InvalidPart; see definitelyNotCommitted). For any other error
+// the data is kept and logged, and the scrubber decides whether it is garbage
+// by checking the metadata. A rejected write whose bucket changed versioning
+// state meanwhile is reported as ConditionalRequestConflict, which is
+// retryable.
 //
 // Semantics the contract leaves open, and the choices made here:
 //
@@ -40,20 +52,30 @@
 //     even for If-None-Match, as in S3. A copy whose source is larger than
 //     MaxPutSize is InvalidRequest. CopyObject rejects a range; only
 //     CopyObjectPart accepts one.
-//   - Version ids. The engine asks the store for the bucket's versioning state
-//     before each write. Enabled buckets get a fresh random version id, all
-//     others use the null version.
+//   - Version ids. The engine reads the bucket's versioning state before each
+//     write. Enabled buckets get a fresh random version id, all others use the
+//     null version. The store does not assign version ids itself.
 //   - Checksums. An upload with a checksum algorithm needs every part to carry
-//     that algorithm, or the completion fails with InvalidPart.
+//     that algorithm, or the completion fails with InvalidPart. Multipart
+//     objects always get a composite checksum, for every algorithm.
+//   - Forced bucket deletion. Only unversioned buckets are emptied. A versioned
+//     or suspended bucket with current objects or uploads is refused with
+//     BucketNotEmpty before anything changes (bucket.go).
+//   - Bodies. A nil body is InvalidArgument. A body that ends early is
+//     IncompleteBody, whatever error the erasure set wrapped around it.
 //
 // Concurrency and resources. Each erasure-coded write holds a slot from
-// Options.MaxConcurrentWrites. DeleteObjects runs at most
-// Options.DeleteConcurrency deletions per call. Pooled buffers for inline
-// payloads come from a bufpool budget. The deletion queue has a fixed backlog
-// and a fixed worker count. No goroutine is started per request.
+// Options.MaxConcurrentWrites, and the slot is held while the body is read.
+// DeleteObjects runs at most Options.DeleteConcurrency deletions per call.
+// Pooled buffers for inline payloads come from a bufpool budget. The deletion
+// queue has a fixed backlog and a fixed worker count. No goroutine is started
+// per request.
 //
 // Known gaps. A read that is in progress when an overwrite commits can fail
-// once the old shards are deleted; the engine has no reader leases. Force bucket
-// deletion does not remove old versions or delete markers of versioned buckets,
-// because the store does not list them.
+// once the old shards are deleted; the engine has no reader leases. Deletions
+// that are dropped or fail are reclaimed only by the scrubber, which this
+// package does not provide. Force bucket deletion does not remove old versions
+// or delete markers of versioned buckets, because the store does not list them.
+// A slow client holds an erasure write slot while it sends its body; the front
+// end's body timeouts bound that.
 package engine

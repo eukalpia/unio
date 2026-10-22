@@ -31,27 +31,61 @@ func (e *Engine) ListBuckets(ctx context.Context) ([]object.BucketInfo, error) {
 	return e.store.ListBuckets(ctx)
 }
 
-// DeleteBucket implements object.Layer. With Force, the bucket's in-progress
-// uploads are aborted and its objects are deleted first. Callers must be
-// authorised to force deletion.
+// DeleteBucket implements object.Layer.
 //
-// Force removes the current version of every key. Old versions and delete
-// markers of a versioned bucket are not listed by the store, so such a bucket
-// still fails with BucketNotEmpty.
+// With Force, the bucket's in-progress uploads are aborted and its current
+// objects are deleted before the bucket is removed. Callers must be authorised
+// to force deletion. Forced deletion works only for unversioned buckets. The
+// store lists current versions only, and a delete in a versioned or suspended
+// bucket adds a delete marker instead of removing anything. So for those
+// buckets, Force refuses with BucketNotEmpty, without changing anything, while
+// current objects or uploads remain. Old versions and delete markers are not
+// listed, so such a bucket also fails with BucketNotEmpty.
+//
+// For an unversioned bucket, a failure part way through leaves some objects
+// deleted. The bucket still exists and the call can be repeated.
 func (e *Engine) DeleteBucket(ctx context.Context, bucket string, opts object.DeleteBucketOptions) error {
 	if err := object.ValidateBucketName(bucket); err != nil {
 		return err
 	}
 	if opts.Force {
-		if err := e.emptyBucket(ctx, bucket); err != nil {
+		info, err := e.store.GetBucket(ctx, bucket)
+		if err != nil {
+			return err
+		}
+		if info.Versioning == object.VersioningUnversioned {
+			if err := e.emptyBucket(ctx, bucket); err != nil {
+				return err
+			}
+		} else if err := e.checkEmptyVersioned(ctx, bucket); err != nil {
 			return err
 		}
 	}
 	return e.store.DeleteBucket(ctx, bucket)
 }
 
+// checkEmptyVersioned reports BucketNotEmpty when a versioned bucket still has
+// current objects or uploads. It changes nothing.
+func (e *Engine) checkEmptyVersioned(ctx context.Context, bucket string) error {
+	objs, err := e.store.ListObjects(ctx, bucket, object.ListOptions{MaxKeys: 1})
+	if err != nil {
+		return err
+	}
+	if len(objs.Objects) > 0 || len(objs.CommonPrefixes) > 0 {
+		return s3err.Errorf(s3err.BucketNotEmpty, "a versioned bucket must be empty to be force-deleted")
+	}
+	ups, err := e.store.ListUploads(ctx, bucket, object.ListUploadsOptions{MaxUploads: 1})
+	if err != nil {
+		return err
+	}
+	if len(ups.Uploads) > 0 || len(ups.CommonPrefixes) > 0 {
+		return s3err.Errorf(s3err.BucketNotEmpty, "a versioned bucket must be empty to be force-deleted")
+	}
+	return nil
+}
+
 // emptyBucket aborts every upload of bucket and deletes every current object,
-// one page at a time.
+// one page at a time. It is used only for unversioned buckets.
 func (e *Engine) emptyBucket(ctx context.Context, bucket string) error {
 	if _, err := e.store.GetBucket(ctx, bucket); err != nil {
 		return err

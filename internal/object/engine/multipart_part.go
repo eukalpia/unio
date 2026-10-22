@@ -22,6 +22,9 @@ func (e *Engine) PutObjectPart(ctx context.Context, bucket, key, uploadID string
 	if err := validateUploadID(uploadID); err != nil {
 		return object.PartInfo{}, err
 	}
+	if err := checkBody(body); err != nil {
+		return object.PartInfo{}, err
+	}
 	if err := validateSize(body.Size(), object.MaxPartSize, s3err.EntityTooLarge); err != nil {
 		return object.PartInfo{}, err
 	}
@@ -91,13 +94,13 @@ func (e *Engine) CopyObjectPart(ctx context.Context, src object.Ref, bucket, key
 	return e.storePart(ctx, bucket, key, uploadID, part)
 }
 
-// storePart records a written part in the upload. If the upload vanished
-// meanwhile, the data is queued for deletion. The part it replaces is queued
-// too.
+// storePart records a written part in the upload. If the store did not apply
+// the part, its data is abandoned (see abandon). The part it replaces is
+// queued for deletion after the store accepted the new one.
 func (e *Engine) storePart(ctx context.Context, bucket, key, uploadID string, part meta.PartRecord) (object.PartInfo, error) {
 	garbage, err := e.store.PutPart(ctx, bucket, key, uploadID, part)
 	if err != nil {
-		e.reclaimParts([]meta.PartRecord{part})
+		e.abandon([]meta.PartRecord{part}, err)
 		return object.PartInfo{}, err
 	}
 	if garbage != nil {

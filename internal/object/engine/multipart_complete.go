@@ -44,25 +44,27 @@ func (e *Engine) CompleteMultipartUpload(ctx context.Context, bucket, key, uploa
 	if err != nil {
 		return object.Info{}, err
 	}
-	versionID, err := e.versionFor(ctx, bucket)
+	plan, err := e.planVersion(ctx, bucket)
 	if err != nil {
 		return object.Info{}, err
 	}
 	put := up.Options
 	put.Conditions = opts.Conditions
-	rec := newVersion(bucket, key, versionID, e.now(), put)
+	rec := newVersion(bucket, key, plan.id, e.now(), put)
 	rec.Multipart = true
 	rec.Parts = chosen
 	rec.Size = total
 	if rec.ETag, err = multipartETag(chosen); err != nil {
 		return object.Info{}, err
 	}
-	if rec.Checksum, err = compositeChecksum(up.Options.ChecksumAlgorithm, chosen); err != nil {
+	if rec.Checksum, err = multipartChecksum(up.Options.ChecksumAlgorithm, chosen); err != nil {
 		return object.Info{}, err
 	}
 	garbage, unused, err := e.store.CompleteUpload(ctx, uploadID, rec, opts.Conditions)
 	if err != nil {
-		return object.Info{}, err
+		// The parts belong to the upload unless the commit went through, so
+		// none of them is abandoned here.
+		return object.Info{}, e.commitFailed(ctx, bucket, plan, err, nil)
 	}
 	e.reclaim(garbage)
 	e.reclaimParts(unused)
@@ -133,7 +135,10 @@ func matchParts(parts []object.CompletePart, stored []meta.PartRecord, alg objec
 			if sp.Checksum.Algorithm != alg {
 				return nil, 0, s3err.Errorf(s3err.InvalidPart, "part %d has no %s checksum", req.PartNumber, alg)
 			}
-			if req.Checksum.Algorithm != object.ChecksumNone && !bytes.Equal(req.Checksum.Value, sp.Checksum.Value) {
+			// A checksum the request carries must name the upload's algorithm
+			// and match the stored value.
+			if req.Checksum.Algorithm != object.ChecksumNone &&
+				(req.Checksum.Algorithm != alg || !bytes.Equal(req.Checksum.Value, sp.Checksum.Value)) {
 				return nil, 0, s3err.Errorf(s3err.InvalidPart, "the checksum of part %d does not match", req.PartNumber)
 			}
 		}

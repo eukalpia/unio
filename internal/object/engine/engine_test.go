@@ -6,6 +6,7 @@ import (
 
 	"go.uber.org/goleak"
 
+	"github.com/eukalpia/unio/internal/erasure"
 	"github.com/eukalpia/unio/internal/meta"
 	"github.com/eukalpia/unio/internal/object"
 	"github.com/eukalpia/unio/internal/object/engine"
@@ -23,7 +24,7 @@ func TestMain(m *testing.M) {
 type harness struct {
 	*engine.Engine
 	reg   *testbackend.Registry
-	store *testbackend.Store
+	store meta.Store
 }
 
 // SetWriteQuorumFailure implements objecttest.QuorumFaults.
@@ -39,8 +40,15 @@ func (h *harness) StoredDataCount() int {
 func newHarness(t testing.TB, opts engine.Options) *harness {
 	t.Helper()
 	reg := testbackend.NewRegistry(2, 2, 1)
-	store := testbackend.NewStore()
-	e, err := engine.New(store, reg, opts)
+	return newHarnessWith(t, testbackend.NewStore(), reg, reg, opts)
+}
+
+// newHarnessWith wires an engine to store and sets. reg is the registry whose
+// drives hold the data; the harness uses it for fault injection and leak
+// checks. sets may wrap reg to change the behaviour of the erasure sets.
+func newHarnessWith(t testing.TB, store meta.Store, reg *testbackend.Registry, sets erasure.Registry, opts engine.Options) *harness {
+	t.Helper()
+	e, err := engine.New(store, sets, opts)
 	if err != nil {
 		t.Fatal(err)
 	}

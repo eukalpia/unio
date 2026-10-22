@@ -48,11 +48,11 @@ func (e *Engine) CopyObject(ctx context.Context, src object.Ref, dstBucket, dstK
 			"the copy source is larger than the maximum copy size of %d bytes", int64(object.MaxPutSize))
 	}
 	put := copyPutOptions(srcRec, opts)
-	versionID, err := e.versionFor(ctx, dstBucket)
+	plan, err := e.planVersion(ctx, dstBucket)
 	if err != nil {
 		return object.Info{}, err
 	}
-	rec := newVersion(dstBucket, dstKey, versionID, e.now(), put)
+	rec := newVersion(dstBucket, dstKey, plan.id, e.now(), put)
 	dg, err := newDigests(put.ChecksumAlgorithm)
 	if err != nil {
 		return object.Info{}, wrapCause("checksum", err)
@@ -79,8 +79,7 @@ func (e *Engine) CopyObject(ctx context.Context, src object.Ref, dstBucket, dstK
 	rec.Checksum = dg.checksum()
 	garbage, err := e.store.PutObject(ctx, rec, opts.Put.Conditions)
 	if err != nil {
-		e.reclaimParts(rec.Parts)
-		return object.Info{}, err
+		return object.Info{}, e.commitFailed(ctx, dstBucket, plan, err, rec.Parts)
 	}
 	e.reclaim(garbage)
 	return infoOf(rec, true), nil

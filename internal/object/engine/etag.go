@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 
@@ -31,13 +32,20 @@ func multipartETag(parts []meta.PartRecord) (string, error) {
 	return fmt.Sprintf("%s-%d", hex.EncodeToString(sum[:]), len(parts)), nil
 }
 
-// compositeChecksum returns the composite checksum of a multipart object for
-// alg: the checksum of the concatenated part checksums, with the part count.
-// Every part must carry a checksum of alg; the caller checks that. A zero
-// checksum is returned when alg is none.
-func compositeChecksum(alg object.ChecksumAlgorithm, parts []meta.PartRecord) (object.Checksum, error) {
-	if alg == object.ChecksumNone {
+// multipartChecksum returns the additional checksum of a multipart object. The
+// parts must be in order, and each must carry a checksum of alg; the caller
+// checks that. A zero checksum is returned when alg is none.
+//
+// CRC-64/NVME is a full-object checksum: S3 defines it over the whole object,
+// and it is computed here by combining the part checksums. Every other
+// algorithm is a composite: the checksum of the concatenated part checksums,
+// with the part count.
+func multipartChecksum(alg object.ChecksumAlgorithm, parts []meta.PartRecord) (object.Checksum, error) {
+	switch alg {
+	case object.ChecksumNone:
 		return object.Checksum{}, nil
+	case object.ChecksumCRC64NVME:
+		return fullCRC64NVME(parts)
 	}
 	h, err := digest.New(alg)
 	if err != nil {
@@ -51,6 +59,33 @@ func compositeChecksum(alg object.ChecksumAlgorithm, parts []meta.PartRecord) (o
 		Type:      object.ChecksumComposite,
 		Value:     h.Sum(nil),
 		Parts:     len(parts),
+	}, nil
+}
+
+// fullCRC64NVME combines the CRC-64/NVME checksums of the parts, in order, into
+// the full-object checksum.
+func fullCRC64NVME(parts []meta.PartRecord) (object.Checksum, error) {
+	if len(parts) == 0 {
+		return object.Checksum{}, fmt.Errorf("engine: no parts to checksum")
+	}
+	var crc uint64
+	for i, p := range parts {
+		if len(p.Checksum.Value) != 8 {
+			return object.Checksum{}, fmt.Errorf("engine: part %d has a malformed CRC-64/NVME", p.Number)
+		}
+		v := binary.BigEndian.Uint64(p.Checksum.Value)
+		if i == 0 {
+			crc = v
+			continue
+		}
+		crc = digest.CombineCRC64NVME(crc, v, p.Size)
+	}
+	value := make([]byte, 8)
+	binary.BigEndian.PutUint64(value, crc)
+	return object.Checksum{
+		Algorithm: object.ChecksumCRC64NVME,
+		Type:      object.ChecksumFullObject,
+		Value:     value,
 	}, nil
 }
 

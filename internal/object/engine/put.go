@@ -27,6 +27,9 @@ func (e *Engine) PutObject(ctx context.Context, bucket, key string, body object.
 	if err := validatePutOptions(opts); err != nil {
 		return object.Info{}, err
 	}
+	if err := checkBody(body); err != nil {
+		return object.Info{}, err
+	}
 	size := body.Size()
 	if err := validateSize(size, object.MaxPutSize, s3err.EntityTooLarge); err != nil {
 		return object.Info{}, err
@@ -34,15 +37,15 @@ func (e *Engine) PutObject(ctx context.Context, bucket, key string, body object.
 	if err := checkCtx(ctx); err != nil {
 		return object.Info{}, err
 	}
-	versionID, err := e.versionFor(ctx, bucket)
+	plan, err := e.planVersion(ctx, bucket)
 	if err != nil {
 		return object.Info{}, err
 	}
-	rec := newVersion(bucket, key, versionID, e.now(), opts)
+	rec := newVersion(bucket, key, plan.id, e.now(), opts)
 	if size <= e.inline {
-		return e.putInline(ctx, body, rec, opts.Conditions)
+		return e.putInline(ctx, body, rec, plan, opts.Conditions)
 	}
-	return e.putErasure(ctx, body, rec, opts.Conditions)
+	return e.putErasure(ctx, body, rec, plan, opts.Conditions)
 }
 
 // newVersion returns a record with the client-visible attributes of opts.
@@ -67,7 +70,7 @@ func newVersion(bucket, key, versionID string, now time.Time, opts object.PutOpt
 // putInline stores a small payload in the metadata record. The buffer comes
 // from the engine's pool, so concurrent inline writes stay within the buffer
 // budget, and the record gets its own copy.
-func (e *Engine) putInline(ctx context.Context, body object.Body, rec meta.ObjectRecord, cond object.Conditions) (object.Info, error) {
+func (e *Engine) putInline(ctx context.Context, body object.Body, rec meta.ObjectRecord, plan versionPlan, cond object.Conditions) (object.Info, error) {
 	size := body.Size()
 	buf, err := e.inlinePool.Get(ctx)
 	if err != nil {
@@ -89,14 +92,14 @@ func (e *Engine) putInline(ctx context.Context, body object.Body, rec meta.Objec
 	rec.Checksum = body.Checksum()
 	garbage, err := e.store.PutObject(ctx, rec, cond)
 	if err != nil {
-		return object.Info{}, err
+		return object.Info{}, e.commitFailed(ctx, rec.Bucket, plan, err, nil)
 	}
 	e.reclaim(garbage)
 	return infoOf(rec, true), nil
 }
 
 // putErasure stores a payload as the single part of an erasure-coded object.
-func (e *Engine) putErasure(ctx context.Context, body object.Body, rec meta.ObjectRecord, cond object.Conditions) (object.Info, error) {
+func (e *Engine) putErasure(ctx context.Context, body object.Body, rec meta.ObjectRecord, plan versionPlan, cond object.Conditions) (object.Info, error) {
 	set, err := e.sets.Place(ctx, rec.Bucket, rec.Key, body.Size())
 	if err != nil {
 		return object.Info{}, wrapCause("placing data", err)
@@ -111,8 +114,7 @@ func (e *Engine) putErasure(ctx context.Context, body object.Body, rec meta.Obje
 	rec.Parts = []meta.PartRecord{part}
 	garbage, err := e.store.PutObject(ctx, rec, cond)
 	if err != nil {
-		e.reclaimParts(rec.Parts)
-		return object.Info{}, err
+		return object.Info{}, e.commitFailed(ctx, rec.Bucket, plan, err, rec.Parts)
 	}
 	e.reclaim(garbage)
 	return infoOf(rec, true), nil
@@ -135,11 +137,14 @@ func (e *Engine) writePart(ctx context.Context, set erasure.Set, body object.Bod
 	guard := newBodyGuard(body)
 	layout, err := set.Write(ctx, id, guard, size)
 	if err != nil {
-		if guard.err != nil {
+		// The body's own failure is reported as such. A body that ended early
+		// is the client's fault, whatever error the set wrapped around it.
+		switch {
+		case guard.err != nil:
 			return meta.PartRecord{}, bodyError(guard.err)
-		}
-		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-			return meta.PartRecord{}, bodyError(err)
+		case guard.eof && guard.n < size:
+			return meta.PartRecord{}, s3err.Errorf(s3err.IncompleteBody,
+				"request body ended after %d of %d bytes", guard.n, size)
 		}
 		return meta.PartRecord{}, wrapCause("writing data", err)
 	}

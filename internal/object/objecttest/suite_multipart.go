@@ -458,6 +458,44 @@ func suiteMultipart(t *testing.T, newLayer func(*testing.T) object.Layer) {
 		}
 	})
 
+	t.Run("full object checksum for CRC64NVME", func(t *testing.T) {
+		l := newLayer(t)
+		ctx := t.Context()
+		mustBucket(t, l)
+		p1, p2 := payload(5*mib, 19), []byte("tail bytes")
+		id, err := l.NewMultipartUpload(ctx, testBucket, "k", object.PutOptions{ChecksumAlgorithm: object.ChecksumCRC64NVME})
+		if err != nil {
+			t.Fatal(err)
+		}
+		i1, err := l.PutObjectPart(ctx, testBucket, "k", id, 1, NewBody(p1, WithChecksum(object.ChecksumCRC64NVME)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		i2, err := l.PutObjectPart(ctx, testBucket, "k", id, 2, NewBody(p2, WithChecksum(object.ChecksumCRC64NVME)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		info, err := l.CompleteMultipartUpload(ctx, testBucket, "k", id, []object.CompletePart{
+			{PartNumber: 1, ETag: i1.ETag}, {PartNumber: 2, ETag: i2.ETag},
+		}, object.PutOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// S3 supports only the full-object type for CRC-64/NVME in multipart
+		// uploads, and defines it over the whole object.
+		h, err := digest.New(object.ChecksumCRC64NVME)
+		if err != nil {
+			t.Fatal(err)
+		}
+		h.Write(p1)
+		h.Write(p2)
+		want := h.Sum(nil)
+		if info.Checksum.Type != object.ChecksumFullObject || info.Checksum.Algorithm != object.ChecksumCRC64NVME ||
+			info.Checksum.Parts != 0 || !bytes.Equal(info.Checksum.Value, want) {
+			t.Fatalf("checksum = %+v, want full-object CRC64NVME %x", info.Checksum, want)
+		}
+	})
+
 	t.Run("part without the upload checksum", func(t *testing.T) {
 		l := newLayer(t)
 		ctx := t.Context()
