@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Unio">
+  <rect width="120" height="120" rx="28" fill="#0E1116"/>
+  <g transform="translate(21.6 21.6) scale(0.64)">
+    <path d="M90.6 35.3A40 40 0 1 1 29.4 35.3" fill="none" stroke="#FFFFFF" stroke-width="18" stroke-linecap="round"/>
+    <circle cx="60" cy="22" r="9" fill="#5B8CFF"/>
+  </g>
+</svg>

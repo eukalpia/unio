@@ -8,6 +8,42 @@
 
 ARG GO_IMAGE=golang:1.27.3-bookworm
 
+# The web console is optional. By default no Node stage runs, and the image embeds
+# the placeholder page. Build the console into the image with:
+#   docker build -f deploy/docker/Dockerfile --build-arg CONSOLE_STAGE=console-build -t unio:local .
+# That needs NODE_IMAGE to be available. Node is not in the base image, and it
+# is not cached on every build machine.
+ARG NODE_IMAGE=node:22-bookworm-slim
+ARG CONSOLE_STAGE=console-skip
+
+# ---------------------------------------------------------------------------
+# Console build (only when CONSOLE_STAGE=console-build)
+# ---------------------------------------------------------------------------
+FROM ${NODE_IMAGE} AS console-build
+
+WORKDIR /src
+
+# Only the sources are copied. A host node_modules may hold binaries for another platform.
+COPY web/console/package.json web/console/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY web/console/index.html web/console/vite.config.ts web/console/tsconfig.json web/console/tsconfig.node.json web/console/eslint.config.js ./
+COPY web/console/public ./public
+COPY web/console/scripts ./scripts
+COPY web/console/src ./src
+RUN npm run build && mkdir -p /console && mv dist /console/dist
+
+# ---------------------------------------------------------------------------
+# Console placeholder (the default). It leaves /console/dist empty, so the
+# builder keeps the committed placeholder page.
+# ---------------------------------------------------------------------------
+FROM ${GO_IMAGE} AS console-skip
+RUN mkdir -p /console/dist
+
+# ---------------------------------------------------------------------------
+# The stage the builder copies from. It is one of the two stages above.
+# ---------------------------------------------------------------------------
+FROM ${CONSOLE_STAGE} AS console
+
 # ---------------------------------------------------------------------------
 # Builder
 # ---------------------------------------------------------------------------
@@ -25,6 +61,10 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     GOTOOLCHAIN=local go mod download
 
 COPY . .
+
+# Embed the built console. With the default CONSOLE_STAGE this copies nothing,
+# and internal/console keeps its committed placeholder page.
+COPY --from=console /console/dist/ /src/internal/console/assets/
 
 # Drive mount points for the volumes in deploy/compose/cluster-4x4.yml and
 # deploy/compose/single.yml.
