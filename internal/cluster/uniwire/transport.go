@@ -44,8 +44,13 @@ type Transport struct {
 	lim    Limits
 	log    *slog.Logger
 
-	buffers *bufpool.Pool
-	inbound *semaphore.Weighted
+	// clientBuffers serves the request bodies this node sends (copyBody).
+	// serveBuffers serves the reply bodies this node writes (writeSuccess).
+	// They draw from different budgets, so that a node whose outbound buffers
+	// are all held by its own calls can still serve its peers.
+	clientBuffers *bufpool.Pool
+	serveBuffers  *bufpool.Pool
+	inbound       *semaphore.Weighted
 
 	// mu guards the lifecycle state below.
 	mu     sync.Mutex
@@ -73,9 +78,13 @@ func New(cfg Config) (*Transport, error) {
 	if log == nil {
 		log = slog.Default()
 	}
-	budget := lim.StreamBudget
-	if budget == nil {
-		budget = bufpool.NewBudget(lim.StreamBufferBudget)
+	clientBudget := lim.StreamBudget
+	if clientBudget == nil {
+		clientBudget = bufpool.NewBudget(lim.StreamBufferBudget)
+	}
+	serveBudget := lim.ServeBudget
+	if serveBudget == nil {
+		serveBudget = bufpool.NewBudget(lim.ServeBufferBudget)
 	}
 	t := &Transport{
 		client:         cfg.Client,
@@ -83,7 +92,8 @@ func New(cfg Config) (*Transport, error) {
 		resolv:         cfg.Resolve,
 		lim:            lim,
 		log:            log,
-		buffers:        bufpool.NewPool(lim.StreamBufferSize, budget),
+		clientBuffers:  bufpool.NewPool(lim.StreamBufferSize, clientBudget),
+		serveBuffers:   bufpool.NewPool(lim.StreamBufferSize, serveBudget),
 		inbound:        semaphore.NewWeighted(int64(lim.MaxInboundConns)),
 		conns:          map[net.Conn]struct{}{},
 		peers:          map[ids.NodeID]*peer{},
