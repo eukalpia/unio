@@ -61,6 +61,12 @@ type Transport struct {
 	wg     sync.WaitGroup
 	done   chan struct{}
 
+	// serveCtx is the parent of every handler context. Close cancels it, so
+	// handlers stop waiting on budgets, drives or peers, and Close does not
+	// wait out their stream timeouts.
+	serveCtx    context.Context
+	cancelServe context.CancelFunc
+
 	// hmu guards the handler tables, which are written at startup.
 	hmu            sync.RWMutex
 	rpcHandlers    map[string]cluster.Handler
@@ -101,6 +107,7 @@ func New(cfg Config) (*Transport, error) {
 		rpcHandlers:    map[string]cluster.Handler{},
 		streamHandlers: map[string]StreamHandler{},
 	}
+	t.serveCtx, t.cancelServe = context.WithCancel(context.Background())
 	t.goTracked(t.janitor)
 	return t, nil
 }
@@ -145,6 +152,7 @@ func (t *Transport) Close() error {
 	}
 	t.closed = true
 	close(t.done)
+	t.cancelServe()
 	ln := t.ln
 	conns := make([]net.Conn, 0, len(t.conns))
 	for c := range t.conns {
