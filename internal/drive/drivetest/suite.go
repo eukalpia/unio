@@ -60,10 +60,20 @@ func pattern(n int64, seed uint64) []byte {
 	return b
 }
 
-// testID returns a deterministic shard id. Distinct n give distinct ids.
+// unsigned converts a test index or seed to uint64. Test indexes are never
+// negative, so a negative value maps to zero.
+func unsigned(n int) uint64 {
+	if n < 0 {
+		return 0
+	}
+	return uint64(n)
+}
+
+// testID returns a deterministic shard id. Distinct non-negative n give distinct
+// ids.
 func testID(n int) ids.ShardID {
 	var s ids.ShardID
-	binary.BigEndian.PutUint64(s.Data[8:], uint64(n))
+	binary.BigEndian.PutUint64(s.Data[8:], unsigned(n))
 	s.Data[0] = 0x5a
 	return s
 }
@@ -97,7 +107,9 @@ func assertNotFound(t *testing.T, d drive.Drive, id ids.ShardID) {
 	}
 	if rc, err := d.ReadShard(ctx, id, 0, -1); !errors.Is(err, drive.ErrShardNotFound) {
 		if err == nil {
-			rc.Close()
+			if cerr := rc.Close(); cerr != nil {
+				t.Errorf("close of unexpected reader: %v", cerr)
+			}
 		}
 		t.Fatalf("read %s: err = %v, want ErrShardNotFound", id, err)
 	}
@@ -173,7 +185,9 @@ func caseRangeReads(t *testing.T, d drive.Drive) {
 		t.Run(tc.name, func(t *testing.T) {
 			rc, err := d.ReadShard(context.Background(), id, tc.off, tc.length)
 			if err == nil {
-				rc.Close()
+				if cerr := rc.Close(); cerr != nil {
+					t.Errorf("close of unexpected reader: %v", cerr)
+				}
 				t.Fatalf("read [%d,+%d): expected error", tc.off, tc.length)
 			}
 		})
@@ -354,7 +368,7 @@ func caseConcurrentSameID(t *testing.T, d drive.Drive) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			data := pattern(int64(1000+i*37), uint64(i))
+			data := pattern(int64(1000+i*37), unsigned(i))
 			err := d.WriteShard(ctx, id, bytes.NewReader(data), int64(len(data)))
 			mu.Lock()
 			defer mu.Unlock()
@@ -393,7 +407,7 @@ func caseConcurrentDistinct(t *testing.T, d drive.Drive) {
 			if i%10 == 0 {
 				size = 1<<20 + int64(i) // some blobs in the mix
 			}
-			errs <- d.WriteShard(ctx, testID(1000+i), bytes.NewReader(pattern(size, uint64(i))), size)
+			errs <- d.WriteShard(ctx, testID(1000+i), bytes.NewReader(pattern(size, unsigned(i))), size)
 		}(i)
 	}
 	wg.Wait()
