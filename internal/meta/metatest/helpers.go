@@ -1,7 +1,7 @@
 package metatest
 
 import (
-	"crypto/md5"
+	"crypto/md5" // #nosec G501 -- MD5 is the S3 ETag algorithm; test data only, never used for security
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -39,6 +39,7 @@ func newVersionID() string { return versionid.New() }
 
 // etagOf returns the ETag of body: its hex MD5, without quotes.
 func etagOf(body string) string {
+	// #nosec G401 -- MD5 is the S3 ETag algorithm, not a security primitive; test data only.
 	sum := md5.Sum([]byte(body))
 	return hex.EncodeToString(sum[:])
 }
