@@ -27,6 +27,25 @@ const (
 	copyBufferSize = 64 << 10
 )
 
+// Observer receives one call for every request, once its response is complete.
+// Rejected requests are reported too. A streamed GET is complete after its last
+// body byte, so its duration covers the whole stream and bytesOut counts the
+// body bytes actually written; an aborted stream reports the bytes written
+// before the abort. Any other response is complete when its handler chain has
+// produced it, and the transport writes it right after the call.
+//
+// op is the S3 API name, such as "GetObject" or "ListObjectsV2". Both health
+// probes report "Health", /unio/metrics reports "Metrics", and a request
+// rejected before routing reports "Unknown". bytesIn counts the request body
+// bytes the server read from the connection; a body the server never reads is
+// not counted. bytesOut counts response body bytes, not headers.
+//
+// ObserveHTTPRequest runs on the request goroutine, so it must be fast and must
+// not block.
+type Observer interface {
+	ObserveHTTPRequest(op string, status int, d time.Duration, bytesIn, bytesOut int64)
+}
+
 // Config configures the S3 HTTP front end. Zero durations and limits take the
 // Default values above; Addr is required.
 type Config struct {
@@ -88,6 +107,9 @@ type Config struct {
 	// BufferBudget bounds the memory of GET copy buffers. Nil selects a budget
 	// of DefaultBufferBudget bytes owned by the server.
 	BufferBudget *bufpool.Budget
+	// Observer receives one call per request. Nil disables observation, and
+	// then no per-request record is made. See Observer for the arguments.
+	Observer Observer
 }
 
 // withDefaults returns a copy of c with zero fields replaced by defaults, and

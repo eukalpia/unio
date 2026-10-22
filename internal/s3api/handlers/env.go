@@ -17,6 +17,7 @@ import (
 	"github.com/eukalpia/unio/internal/bufpool"
 	"github.com/eukalpia/unio/internal/object"
 	"github.com/eukalpia/unio/internal/s3api/headers"
+	"github.com/eukalpia/unio/internal/s3api/reqstat"
 	"github.com/eukalpia/unio/internal/s3api/router"
 	"github.com/eukalpia/unio/internal/s3err"
 )
@@ -57,6 +58,9 @@ type Call struct {
 	Authorize func(action auth.Action, bucket, key string) error
 	// Resource names the bucket or object for error responses.
 	Resource string
+	// Stats records the streamed bytes of the response for the Observer. It
+	// may be nil.
+	Stats *reqstat.Stats
 }
 
 // Handle runs the handler for op.
