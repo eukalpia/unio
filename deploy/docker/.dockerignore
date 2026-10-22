@@ -1,0 +1,22 @@
+# Build context for deploy/docker/Dockerfile (context: repository root).
+# Only cmd/, internal/, api/, go.mod and go.sum are needed to compile the server;
+# everything else is excluded below.
+
+# Version control and local build output
+.git
+bin/
+dist/
+/unio
+/unio.exe
+
+# Keys, certificates and local environment files (any depth)
+**/*.pem
+**/*.key
+**/.env
+**/.env.*
+
+# Not needed to compile the server
+docs/
+test/
+bench/
+deploy/

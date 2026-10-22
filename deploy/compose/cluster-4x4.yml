@@ -1,0 +1,140 @@
+# Local Unio cluster: 4 nodes x 4 drives (16 erasure drives).
+#
+# Usage, from the repository root:
+#   cp deploy/compose/.env.example deploy/compose/.env   # then fill in the values
+#   chmod 600 deploy/compose/.env
+#   docker compose -f deploy/compose/cluster-4x4.yml up -d --build
+#
+# Ports: S3 is published on the host loopback interface only, node1 to node4 on
+# 127.0.0.1:9001 to 127.0.0.1:9004.
+#
+# TLS for S3 is OFF in this local cluster: UNIO_REQUIRE_TLS is not set, so the
+# S3 endpoint serves plain HTTP. Internode traffic on port 9100 is always mTLS,
+# is never published, and stays on the internal network.
+#
+# Secrets are mounted as files under /run/secrets/ and read through the *_FILE
+# variables. They are not passed as environment variables.
+#
+# Do not run this together with minio-4x4.yml: both publish host ports 9001 to 9004.
+
+name: unio-4x4
+
+# The image is built once, by node1. Compose cannot build the same tag from
+# several services in parallel ("image already exists"), so node2 to node4 only
+# reference the tag and never pull it from a registry.
+x-unio-node: &unio-node
+  image: unio:4x4-local
+  pull_policy: never
+  command: ["server"]
+  restart: unless-stopped
+  stop_grace_period: 30s
+  environment: &unio-env
+    # Every drive in the cluster: https://node1:9100/data1 ... https://node4:9100/data4
+    UNIO_ENDPOINTS: "https://node{1...4}:9100/data{1...4}"
+    UNIO_CLUSTER_SECRET_FILE: /run/secrets/unio_cluster_secret
+    UNIO_ROOT_USER_FILE: /run/secrets/unio_root_user
+    UNIO_ROOT_PASSWORD_FILE: /run/secrets/unio_root_password
+    UNIO_METRICS_TOKEN_FILE: /run/secrets/unio_metrics_token
+    UNIO_LOG_FORMAT: json
+  secrets: &unio-secrets
+    - unio_cluster_secret
+    - unio_root_user
+    - unio_root_password
+    - unio_metrics_token
+  networks: &unio-networks
+    - internal
+    - public
+
+services:
+  node1:
+    <<: *unio-node
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    environment:
+      <<: *unio-env
+      UNIO_NODE_ID: node1
+    ports:
+      - "127.0.0.1:9001:9000"
+    volumes:
+      - node1-data1:/data1
+      - node1-data2:/data2
+      - node1-data3:/data3
+      - node1-data4:/data4
+
+  node2:
+    <<: *unio-node
+    environment:
+      <<: *unio-env
+      UNIO_NODE_ID: node2
+    ports:
+      - "127.0.0.1:9002:9000"
+    volumes:
+      - node2-data1:/data1
+      - node2-data2:/data2
+      - node2-data3:/data3
+      - node2-data4:/data4
+
+  node3:
+    <<: *unio-node
+    environment:
+      <<: *unio-env
+      UNIO_NODE_ID: node3
+    ports:
+      - "127.0.0.1:9003:9000"
+    volumes:
+      - node3-data1:/data1
+      - node3-data2:/data2
+      - node3-data3:/data3
+      - node3-data4:/data4
+
+  node4:
+    <<: *unio-node
+    environment:
+      <<: *unio-env
+      UNIO_NODE_ID: node4
+    ports:
+      - "127.0.0.1:9004:9000"
+    volumes:
+      - node4-data1:/data1
+      - node4-data2:/data2
+      - node4-data3:/data3
+      - node4-data4:/data4
+
+# Secret values come from the environment of the compose process (populated
+# from deploy/compose/.env). Compose writes each one to /run/secrets/<name>.
+secrets:
+  unio_cluster_secret:
+    environment: UNIO_CLUSTER_SECRET
+  unio_root_user:
+    environment: UNIO_ROOT_USER
+  unio_root_password:
+    environment: UNIO_ROOT_PASSWORD
+  unio_metrics_token:
+    environment: UNIO_METRICS_TOKEN
+
+networks:
+  # Node-to-node traffic (UniWire on 9100). No external connectivity, nothing published.
+  internal:
+    internal: true
+  # Default bridge network, used only to publish the S3 ports.
+  public:
+    driver: bridge
+
+volumes:
+  node1-data1:
+  node1-data2:
+  node1-data3:
+  node1-data4:
+  node2-data1:
+  node2-data2:
+  node2-data3:
+  node2-data4:
+  node3-data1:
+  node3-data2:
+  node3-data3:
+  node3-data4:
+  node4-data1:
+  node4-data2:
+  node4-data3:
+  node4-data4:
