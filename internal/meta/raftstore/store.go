@@ -175,7 +175,9 @@ func Open(ctx context.Context, cfg Config) (*Store, error) {
 // openAll opens the databases and starts the local replicas. On error the
 // caller closes the store.
 func (s *Store) openAll(ctx context.Context) error {
-	if err := os.MkdirAll(s.cfg.DataDir, 0o755); err != nil {
+	// Metadata lists every bucket and key, so the directory is private to its
+	// owner. Subdirectories are created inside it and inherit that protection.
+	if err := os.MkdirAll(s.cfg.DataDir, 0o700); err != nil {
 		return fmt.Errorf("raftstore: create data dir: %w", err)
 	}
 	s.cache = pebble.NewCache(s.opts.CacheSize)
