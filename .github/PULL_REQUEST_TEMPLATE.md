@@ -19,6 +19,7 @@ Closes #
 - [ ] `go vet`, `staticcheck` and `go test -race ./...` pass locally
 - [ ] Invariants I1–I5 preserved; tests added if the write, read or delete path changed
 - [ ] Contract or architecture change has an ADR
+- [ ] Touches a trust boundary? The [security review checklist](docs/security/threat-model.md#5-security-review-checklist) is answered in the description
 - [ ] Performance claims include `benchstat` output
 - [ ] Documentation updated
 - [ ] All commits are signed off (`git commit -s`)

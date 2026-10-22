@@ -27,6 +27,11 @@ What to expect:
   details are made public, and reporters are credited unless they prefer
   otherwise.
 
+## Threat model
+
+What Unio protects and how is described in
+[docs/security/threat-model.md](docs/security/threat-model.md).
+
 ## Scope
 
 In scope:
