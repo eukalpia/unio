@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 # RustFS image for the comparison cluster (deploy/compose/rustfs-4x4.yml).
 #
 # The base image runs as the unprivileged rustfs user and owns /data. A named

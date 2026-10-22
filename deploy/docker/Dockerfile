@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 # Unio server image.
 #
 # Build from the repository root:
