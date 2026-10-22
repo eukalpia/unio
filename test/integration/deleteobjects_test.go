@@ -108,7 +108,9 @@ func TestDeleteObjectsThousandKeys(t *testing.T) {
 		t.Errorf("Deleted has %d entries, want %d", len(out.Deleted), maxDeleteKeys)
 	}
 	if len(out.Errors) != 0 {
-		t.Errorf("Errors has %d entries, want none", len(out.Errors))
+		first := out.Errors[0]
+		t.Errorf("Errors has %d entries, want none; first: key %q code %q: %s",
+			len(out.Errors), aws.ToString(first.Key), aws.ToString(first.Code), aws.ToString(first.Message))
 	}
 	left, err := cli.ListObjectsV2(ctx, &s3.ListObjectsV2Input{Bucket: aws.String(bucket)})
 	if err != nil {

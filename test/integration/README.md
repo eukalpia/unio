@@ -89,6 +89,12 @@ The skipped test, `TestChecksumDefaultTrailerStreamingUpload`, needs https:
 the SDK refuses an unseekable body with a trailing checksum over plain HTTP.
 Run the suite once against an https endpoint to cover it.
 
+Against the 4-node RustFS cluster in `deploy/compose/rustfs-4x4.yml`, the same
+suite gave 153 passed, 8 failed and 1 skipped. The extra failure is
+`TestDeleteObjectsThousandKeys`: all 1000 per-key deletes returned
+`ServiceUnavailable`, which is the cluster refusing bulk work, not a wrong
+expectation in the test. The test reports the first per-key error code.
+
 An earlier run against SeaweedFS (a stand-in, not a reference) gave 143
 passed, 18 failed and 1 skipped. Its failures were the same kinds of gap, plus
 bucket-deletion and missing-bucket errors.
