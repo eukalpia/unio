@@ -1,5 +1,6 @@
 // Package iam manages users, access keys and identity policies on top of
-// meta.SystemKV, and implements auth.IAM.
+// meta.SystemKV, and implements auth.IAM. The compile-time assertion in
+// store.go keeps *Store in step with that interface.
 //
 // Layout under the "iam/" prefix:
 //
@@ -16,7 +17,14 @@
 // earlier user of the same name therefore never applies to a new user, even
 // when a delete raced with a write.
 //
-// Writes use compare-and-swap with bounded retries. Reads are cached for a
-// short TTL, so a change made on another node takes effect within CacheTTL.
-// Changes made on this node are visible immediately.
+// Writes use compare-and-swap with bounded retries.
+//
+// Revocation window. Keys, users and policies are read through an in-memory
+// cache with a TTL. The default TTL is 5 seconds (Config.CacheTTL). A change
+// made on this node, such as deleting a key, disabling a user or replacing
+// a policy, takes effect at once because the local cache is cleared. A
+// change made on another node takes effect on this node within CacheTTL. So
+// a revoked key or a disabled user can still authenticate or be authorized
+// on a peer for up to that long. Lower CacheTTL to shorten the window, at the
+// cost of more storage reads.
 package iam
