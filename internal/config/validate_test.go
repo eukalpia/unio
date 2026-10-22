@@ -114,18 +114,20 @@ func TestValidate(t *testing.T) {
 			c.TLS.KeyFile = tlsKey
 		}},
 		{name: "root user missing", mutate: func(c *Config) { c.Auth.RootUser = Secret{} }, wantErr: "auth.root_user is not set"},
-		{name: "root user short", mutate: func(c *Config) { c.Auth.RootUser = NewSecret("short") }, wantErr: "auth.root_user must be at least 12"},
-		{name: "root user is a default", mutate: func(c *Config) { c.Auth.RootUser = NewSecret("administrator") }, wantErr: "well-known default"},
+		{name: "root user short", mutate: func(c *Config) { c.Auth.RootUser = NewSecret("short") }, wantErr: "root access key must be at least 12"},
+		{name: "root user with a hyphen", mutate: func(c *Config) { c.Auth.RootUser = NewSecret("unio-root-adm01") }, wantErr: "only letters and digits"},
+		{name: "root user of 128 letters and digits", mutate: func(c *Config) { c.Auth.RootUser = NewSecret(strings.Repeat("R", 128)) }},
+		{name: "root user longer than 128", mutate: func(c *Config) { c.Auth.RootUser = NewSecret(strings.Repeat("R", 129)) }, wantErr: "at most 128"},
 		{name: "root password missing", mutate: func(c *Config) { c.Auth.RootPassword = Secret{} }, wantErr: "auth.root_password is not set"},
-		{name: "root password short", mutate: func(c *Config) { c.Auth.RootPassword = NewSecret("Pw7Kd2Rx9Lm4") }, wantErr: "auth.root_password must be at least 32"},
-		{name: "root password equals user", mutate: func(c *Config) {
-			v := "Pw7Kd2Rx9Lm4Vq8Zt1Nb6Hc3Yf5Gs0JaAA"
-			c.Auth.RootUser = NewSecret(v)
-			c.Auth.RootPassword = NewSecret(v)
-		}, wantErr: "must differ from the root user name"},
-		{name: "root password is a template", mutate: func(c *Config) {
-			c.Auth.RootPassword = NewSecret("password-password-password-password-1234")
-		}, wantErr: "well-known default or template"},
+		{name: "root password short", mutate: func(c *Config) { c.Auth.RootPassword = NewSecret("Pw7Kd2Rx9Lm4") }, wantErr: "root secret key must be at least 32"},
+		{name: "root password longer than 256", mutate: func(c *Config) { c.Auth.RootPassword = NewSecret(strings.Repeat("Ab3", 90)) }, wantErr: "root secret key must be at most 256"},
+		{name: "root password with a space", mutate: func(c *Config) {
+			c.Auth.RootPassword = NewSecret("Pw7Kd2Rx9Lm4 Vq8Zt1Nb6Hc3Yf5Gs0Ja")
+		}, wantErr: "printable characters without spaces"},
+		{name: "root password with few distinct characters", mutate: func(c *Config) {
+			c.Auth.RootPassword = NewSecret(strings.Repeat("ab", 16))
+		}, wantErr: "at least 10 distinct characters"},
+		{name: "root password of 256 characters", mutate: func(c *Config) { c.Auth.RootPassword = NewSecret(strings.Repeat("Ab3Cd5Ef7Gh9Jk", 18) + "Ab3C") }},
 		{name: "metrics token missing", mutate: func(c *Config) { c.Metrics.Token = Secret{} }, wantErr: "metrics.token is not set"},
 		{name: "metrics token equals cluster secret", mutate: func(c *Config) { c.Metrics.Token = NewSecret(testSecret) }, wantErr: "must differ from cluster.secret"},
 		{name: "bad log level", mutate: func(c *Config) { c.Log.Level = "verbose" }, wantErr: "log.level"},

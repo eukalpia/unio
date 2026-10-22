@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/eukalpia/unio/internal/auth"
 )
 
 // Test fixtures. They are strong enough to pass validation and are used only in tests.
@@ -56,11 +58,8 @@ func TestFixturesAreStrong(t *testing.T) {
 	if err := CheckSecretValue(testMetricsToken); err != nil {
 		t.Fatalf("testMetricsToken: %v", err)
 	}
-	if err := CheckRootUser(testRootUser); err != nil {
-		t.Fatalf("testRootUser: %v", err)
-	}
-	if err := CheckRootPassword(testRootUser, testRootPassword); err != nil {
-		t.Fatalf("testRootPassword: %v", err)
+	if err := auth.ValidateRootCredentials(testRootUser, testRootPassword); err != nil {
+		t.Fatalf("root credentials: %v", err)
 	}
 	if testSecret == testMetricsToken {
 		t.Fatal("fixtures must differ")

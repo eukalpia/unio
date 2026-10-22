@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/eukalpia/unio/internal/auth"
 	"github.com/eukalpia/unio/internal/ids"
 )
 
@@ -331,19 +332,23 @@ func checkTLS(c *Config, r *report) {
 	}
 }
 
-// checkAuth validates the root credentials, which must be set and strong.
+// checkAuth requires the root credentials and checks them with
+// auth.ValidateRootCredentials, the rules the node applies at startup. The
+// two therefore accept exactly the same credentials. The error names the
+// setting that is wrong, and it never includes a value.
 func checkAuth(c *Config, r *report) {
 	user := c.Auth.RootUser.Expose()
 	password := c.Auth.RootPassword.Expose()
 	if user == "" {
 		r.errorf("auth.root_user is not set: set UNIO_ROOT_USER or UNIO_ROOT_USER_FILE (unio init generates one)")
-	} else if err := CheckRootUser(user); err != nil {
-		r.errorf("auth.root_user %v (UNIO_ROOT_USER)", err)
 	}
 	if password == "" {
 		r.errorf("auth.root_password is not set: set UNIO_ROOT_PASSWORD or UNIO_ROOT_PASSWORD_FILE (unio init generates one)")
-	} else if err := CheckRootPassword(user, password); err != nil {
-		r.errorf("auth.root_password %v (UNIO_ROOT_PASSWORD)", err)
+	}
+	if user != "" && password != "" {
+		if err := auth.ValidateRootCredentials(user, password); err != nil {
+			r.errorf("root credentials are refused: %v (UNIO_ROOT_USER, UNIO_ROOT_PASSWORD)", err)
+		}
 	}
 }
 

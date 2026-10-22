@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eukalpia/unio/internal/auth"
 	"github.com/eukalpia/unio/internal/config"
 )
 
@@ -59,11 +60,11 @@ func TestInitWritesValidCredentials(t *testing.T) {
 			t.Fatalf("generated file lacks %s", key)
 		}
 	}
-	if err := config.CheckRootUser(env["UNIO_ROOT_USER"]); err != nil {
-		t.Errorf("generated root user rejected: %v", err)
+	if err := auth.ValidateRootCredentials(env["UNIO_ROOT_USER"], env["UNIO_ROOT_PASSWORD"]); err != nil {
+		t.Errorf("generated root credentials rejected by auth.ValidateRootCredentials: %v", err)
 	}
-	if err := config.CheckRootPassword(env["UNIO_ROOT_USER"], env["UNIO_ROOT_PASSWORD"]); err != nil {
-		t.Errorf("generated root password rejected: %v", err)
+	if !auth.ValidAccessKeyID(env["UNIO_ROOT_USER"]) {
+		t.Errorf("generated root user %q is not letters and digits", env["UNIO_ROOT_USER"])
 	}
 	if err := config.CheckSecretValue(env["UNIO_CLUSTER_SECRET"]); err != nil {
 		t.Errorf("generated cluster secret rejected: %v", err)
@@ -161,8 +162,25 @@ func TestGenerateCredentials(t *testing.T) {
 		if err != nil {
 			t.Fatalf("generateCredentials: %v", err)
 		}
-		if len(creds.clusterSecret) < config.MinSecretLength || len(creds.rootPassword) < config.MinRootPasswordLength {
-			t.Fatalf("generated values are too short")
+		if len(creds.clusterSecret) < config.MinSecretLength {
+			t.Fatalf("generated cluster secret is too short")
+		}
+		if err := auth.ValidateRootCredentials(creds.rootUser, creds.rootPassword); err != nil {
+			t.Fatalf("generated root credentials: %v", err)
+		}
+	})
+	t.Run("generated root user is letters and digits only", func(t *testing.T) {
+		for range 500 {
+			creds, err := generateCredentials(rand.Reader)
+			if err != nil {
+				t.Fatalf("generateCredentials: %v", err)
+			}
+			if !auth.ValidAccessKeyID(creds.rootUser) {
+				t.Fatalf("root user %q is not letters and digits", creds.rootUser)
+			}
+			if err := auth.ValidateRootCredentials(creds.rootUser, creds.rootPassword); err != nil {
+				t.Fatalf("generated pair refused by the node's rules: %v", err)
+			}
 		}
 	})
 	t.Run("constant bytes never pass the strength rules", func(t *testing.T) {
