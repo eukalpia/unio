@@ -61,10 +61,10 @@ func TestInitWritesValidCredentials(t *testing.T) {
 		}
 	}
 	if err := auth.ValidateRootCredentials(env["UNIO_ROOT_USER"], env["UNIO_ROOT_PASSWORD"]); err != nil {
-		t.Errorf("generated root credentials rejected by auth.ValidateRootCredentials: %v", err)
+		t.Errorf("root credentials from unio init rejected by auth.ValidateRootCredentials: %v", err)
 	}
 	if !auth.ValidAccessKeyID(env["UNIO_ROOT_USER"]) {
-		t.Errorf("generated root user %q is not letters and digits", env["UNIO_ROOT_USER"])
+		t.Errorf("root user from unio init %q is not letters and digits", env["UNIO_ROOT_USER"])
 	}
 	if err := config.CheckSecretValue(env["UNIO_CLUSTER_SECRET"]); err != nil {
 		t.Errorf("generated cluster secret rejected: %v", err)
@@ -163,13 +163,13 @@ func TestGenerateCredentials(t *testing.T) {
 			t.Fatalf("generateCredentials: %v", err)
 		}
 		if len(creds.clusterSecret) < config.MinSecretLength {
-			t.Fatalf("generated cluster secret is too short")
+			t.Fatalf("cluster secret from unio init is too short")
 		}
 		if err := auth.ValidateRootCredentials(creds.rootUser, creds.rootPassword); err != nil {
-			t.Fatalf("generated root credentials: %v", err)
+			t.Fatalf("root credentials from unio init: %v", err)
 		}
 	})
-	t.Run("generated root user is letters and digits only", func(t *testing.T) {
+	t.Run("root user from unio init is letters and digits only", func(t *testing.T) {
 		for range 500 {
 			creds, err := generateCredentials(rand.Reader)
 			if err != nil {
@@ -179,7 +179,7 @@ func TestGenerateCredentials(t *testing.T) {
 				t.Fatalf("root user %q is not letters and digits", creds.rootUser)
 			}
 			if err := auth.ValidateRootCredentials(creds.rootUser, creds.rootPassword); err != nil {
-				t.Fatalf("generated pair refused by the node's rules: %v", err)
+				t.Fatalf("pair refused by the node's rules: %v", err)
 			}
 		}
 	})
