@@ -111,6 +111,12 @@ func (e *Env) Handle(op router.Op, c *Call) error {
 		return e.AbortMultipartUpload(c)
 	case router.OpListParts:
 		return e.ListParts(c)
+	case router.OpPutObjectTagging:
+		return e.PutObjectTagging(c)
+	case router.OpGetObjectTagging:
+		return e.GetObjectTagging(c)
+	case router.OpDeleteObjectTagging:
+		return e.DeleteObjectTagging(c)
 	}
 	return s3err.Errorf(s3err.NotImplemented, "this operation is not supported")
 }

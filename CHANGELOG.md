@@ -9,6 +9,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Architecture design and architecture decision records.
+- Object tagging: PutObjectTagging, GetObjectTagging and DeleteObjectTagging,
+  with `versionId`. Tag sets are checked by the same rules for the
+  `x-amz-tagging` header and for the Tagging document.
 - Project governance, contribution guidelines and security policy.
 - Configuration keys `node.region` (`UNIO_REGION`), `node.domains`
   (`UNIO_DOMAINS`), `metadata.dir` (`UNIO_METADATA_DIR`),

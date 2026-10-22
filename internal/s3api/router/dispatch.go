@@ -21,6 +21,10 @@ var unsupportedSubresources = [...]string{
 // dispatch picks the operation from the method, the target and the query.
 func dispatch(method, bucket, key string, q url.Values, copySource bool) (Op, error) {
 	for _, sub := range unsupportedSubresources {
+		if sub == "tagging" && key != "" {
+			// Object tagging is supported; bucket tagging is not.
+			continue
+		}
 		if _, ok := q[sub]; ok {
 			return OpUnknown, s3err.Errorf(s3err.NotImplemented, "this operation is not supported")
 		}
@@ -73,6 +77,9 @@ func dispatchBucket(method string, q url.Values) (Op, error) {
 }
 
 func dispatchObject(method string, q url.Values, copySource bool) (Op, error) {
+	if has(q, "tagging") {
+		return dispatchObjectTagging(method, q)
+	}
 	switch method {
 	case "GET":
 		if has(q, "uploadId") {
@@ -96,6 +103,23 @@ func dispatchObject(method string, q url.Values, copySource bool) (Op, error) {
 			return OpAbortMultipartUpload, nil
 		}
 		return OpDeleteObject, nil
+	}
+	return OpUnknown, methodNotAllowed()
+}
+
+// dispatchObjectTagging picks the tagging operation of an object. The tagging
+// subresource cannot be combined with the multipart subresources.
+func dispatchObjectTagging(method string, q url.Values) (Op, error) {
+	if has(q, "uploads", "uploadId", "partNumber") {
+		return OpUnknown, s3err.Errorf(s3err.InvalidRequest, "tagging cannot be combined with a multipart subresource")
+	}
+	switch method {
+	case "GET":
+		return OpGetObjectTagging, nil
+	case "PUT":
+		return OpPutObjectTagging, nil
+	case "DELETE":
+		return OpDeleteObjectTagging, nil
 	}
 	return OpUnknown, methodNotAllowed()
 }

@@ -20,6 +20,7 @@ const (
 	ActionListMultipartUploadParts   Action = "s3:ListMultipartUploadParts"
 	ActionGetObjectTagging           Action = "s3:GetObjectTagging"
 	ActionPutObjectTagging           Action = "s3:PutObjectTagging"
+	ActionDeleteObjectTagging        Action = "s3:DeleteObjectTagging"
 	ActionAdmin                      Action = "unio:Admin"
 )
 

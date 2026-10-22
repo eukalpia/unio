@@ -38,6 +38,12 @@ func primaryAction(op router.Op) auth.Action {
 		return auth.ActionAbortMultipartUpload
 	case router.OpListParts:
 		return auth.ActionListMultipartUploadParts
+	case router.OpGetObjectTagging:
+		return auth.ActionGetObjectTagging
+	case router.OpPutObjectTagging:
+		return auth.ActionPutObjectTagging
+	case router.OpDeleteObjectTagging:
+		return auth.ActionDeleteObjectTagging
 	default:
 		return auth.ActionPutObject
 	}

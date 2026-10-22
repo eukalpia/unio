@@ -27,6 +27,9 @@ const (
 	OpCompleteMultipartUpload
 	OpAbortMultipartUpload
 	OpListParts
+	OpPutObjectTagging
+	OpGetObjectTagging
+	OpDeleteObjectTagging
 
 	// Service endpoints of the reserved /unio/ namespace. They are not S3
 	// operations and never name a bucket.
@@ -57,6 +60,9 @@ var opNames = [...]string{
 	OpCompleteMultipartUpload: "CompleteMultipartUpload",
 	OpAbortMultipartUpload:    "AbortMultipartUpload",
 	OpListParts:               "ListParts",
+	OpPutObjectTagging:        "PutObjectTagging",
+	OpGetObjectTagging:        "GetObjectTagging",
+	OpDeleteObjectTagging:     "DeleteObjectTagging",
 	OpHealthLive:              "HealthLive",
 	OpHealthReady:             "HealthReady",
 	OpMetrics:                 "Metrics",

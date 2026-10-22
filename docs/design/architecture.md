@@ -254,7 +254,8 @@ compaction updates only the local index and never writes to Raft. See
   - PutObject, GetObject (Range and conditional headers), HeadObject;
   - DeleteObject, DeleteObjects (up to 1000 keys);
   - CopyObject;
-  - ListObjectsV2 and ListObjects (V1).
+  - ListObjectsV2 and ListObjects (V1);
+  - PutObjectTagging, GetObjectTagging, DeleteObjectTagging, with `versionId`.
 - **Multipart:** Create, UploadPart, UploadPartCopy, Complete, Abort,
   ListParts, ListMultipartUploads.
 - **Authentication:**
