@@ -45,6 +45,7 @@ const (
 	MissingContentLength               Code = "MissingContentLength"
 	MissingSecurityHeader              Code = "MissingSecurityHeader"
 	NoSuchBucket                       Code = "NoSuchBucket"
+	NoSuchBucketPolicy                 Code = "NoSuchBucketPolicy"
 	NoSuchEntity                       Code = "NoSuchEntity"
 	NoSuchKey                          Code = "NoSuchKey"
 	NoSuchUpload                       Code = "NoSuchUpload"

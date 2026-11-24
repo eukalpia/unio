@@ -54,6 +54,11 @@ func (m *BucketRecord) CloneVT() *BucketRecord {
 	r.Owner = m.Owner
 	r.Versioning = m.Versioning
 	r.Deleting = m.Deleting
+	if rhs := m.Policy; rhs != nil {
+		tmpBytes := make([]byte, len(rhs))
+		copy(tmpBytes, rhs)
+		r.Policy = tmpBytes
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -429,6 +434,9 @@ func (this *BucketRecord) EqualVT(that *BucketRecord) bool {
 		return false
 	}
 	if this.Deleting != that.Deleting {
+		return false
+	}
+	if string(this.Policy) != string(that.Policy) {
 		return false
 	}
 	return string(this.unknownFields) == string(that.unknownFields)
@@ -990,6 +998,13 @@ func (m *BucketRecord) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.Policy) > 0 {
+		i -= len(m.Policy)
+		copy(dAtA[i:], m.Policy)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Policy)))
+		i--
+		dAtA[i] = 0x3a
 	}
 	if m.Deleting {
 		i--
@@ -1909,6 +1924,10 @@ func (m *BucketRecord) SizeVT() (n int) {
 	if m.Deleting {
 		n += 2
 	}
+	l = len(m.Policy)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -2585,6 +2604,40 @@ func (m *BucketRecord) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.Deleting = bool(v != 0)
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Policy", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Policy = append(m.Policy[:0], dAtA[iNdEx:postIndex]...)
+			if m.Policy == nil {
+				m.Policy = []byte{}
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

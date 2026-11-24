@@ -21,6 +21,9 @@ const (
 	maxSystemKeyLength = 4096
 	// maxBucketOwnerLength bounds the owner recorded for a bucket.
 	maxBucketOwnerLength = 256
+	// maxBucketPolicySize bounds a stored bucket policy. It equals
+	// object.MaxBucketPolicySize, which the store checks before proposing.
+	maxBucketPolicySize = 20 << 10
 	// maxChecksumLength bounds the digest of an additional checksum.
 	maxChecksumLength = 64
 	// maxShards bounds the total number of shards of one erasure layout.

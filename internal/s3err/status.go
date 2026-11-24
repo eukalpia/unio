@@ -43,6 +43,7 @@ var httpStatus = map[Code]int{
 	MissingContentLength:               http.StatusLengthRequired,
 	MissingSecurityHeader:              http.StatusBadRequest,
 	NoSuchBucket:                       http.StatusNotFound,
+	NoSuchBucketPolicy:                 http.StatusNotFound,
 	NoSuchEntity:                       http.StatusNotFound,
 	NoSuchKey:                          http.StatusNotFound,
 	NoSuchUpload:                       http.StatusNotFound,

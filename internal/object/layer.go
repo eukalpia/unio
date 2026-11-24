@@ -10,6 +10,10 @@ import "context"
 type Layer interface {
 	MakeBucket(ctx context.Context, bucket string, opts MakeBucketOptions) (BucketInfo, error)
 	GetBucketInfo(ctx context.Context, bucket string) (BucketInfo, error)
+	// SetBucketPolicy stores the bucket policy document, or removes it when
+	// policy is empty. The caller has already validated the document with
+	// policy.ParseBucket; the layer checks only the name and the size.
+	SetBucketPolicy(ctx context.Context, bucket string, policy []byte) error
 	ListBuckets(ctx context.Context) ([]BucketInfo, error)
 	DeleteBucket(ctx context.Context, bucket string, opts DeleteBucketOptions) error
 

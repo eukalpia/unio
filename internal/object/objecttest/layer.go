@@ -193,6 +193,27 @@ func (l *Layer) GetBucketInfo(_ context.Context, name string) (object.BucketInfo
 	return b.info, nil
 }
 
+// SetBucketPolicy implements object.Layer.
+func (l *Layer) SetBucketPolicy(_ context.Context, name string, policy []byte) error {
+	if err := object.ValidateBucketName(name); err != nil {
+		return err
+	}
+	if len(policy) > object.MaxBucketPolicySize {
+		return s3err.Errorf(s3err.InvalidArgument, "bucket policy exceeds %d bytes", object.MaxBucketPolicySize)
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	b, err := l.bucketLocked(name)
+	if err != nil {
+		return err
+	}
+	b.info.Policy = nil
+	if len(policy) > 0 {
+		b.info.Policy = bytes.Clone(policy)
+	}
+	return nil
+}
+
 // ListBuckets implements object.Layer.
 func (l *Layer) ListBuckets(context.Context) ([]object.BucketInfo, error) {
 	l.mu.Lock()

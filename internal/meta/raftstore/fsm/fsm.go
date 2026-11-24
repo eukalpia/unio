@@ -208,6 +208,8 @@ func (f *FSM) dispatch(b *pebble.Batch, cmd *pb.Command, index uint64) (*pb.Appl
 		return f.withKind(KindSystem, func() (*pb.ApplyResult, error) { return f.markBucketDeleting(b, c.MarkBucketDeleting) })
 	case *pb.Command_DeleteBucket:
 		return f.withKind(KindSystem, func() (*pb.ApplyResult, error) { return f.deleteBucket(b, c.DeleteBucket) })
+	case *pb.Command_SetBucketPolicy:
+		return f.withKind(KindSystem, func() (*pb.ApplyResult, error) { return f.setBucketPolicy(b, c.SetBucketPolicy) })
 	case *pb.Command_SetBucketVersioning:
 		return f.withKind(KindSystem, func() (*pb.ApplyResult, error) { return f.setBucketVersioning(b, c.SetBucketVersioning) })
 	case *pb.Command_KvPut:

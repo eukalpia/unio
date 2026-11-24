@@ -31,6 +31,9 @@ const (
 	OpGetObjectTagging
 	OpDeleteObjectTagging
 	OpListObjectVersions
+	OpGetBucketPolicy
+	OpPutBucketPolicy
+	OpDeleteBucketPolicy
 
 	// Service endpoints of the reserved /unio/ namespace. They are not S3
 	// operations and never name a bucket.
@@ -70,6 +73,9 @@ var opNames = [...]string{
 	OpGetObjectTagging:        "GetObjectTagging",
 	OpDeleteObjectTagging:     "DeleteObjectTagging",
 	OpListObjectVersions:      "ListObjectVersions",
+	OpGetBucketPolicy:         "GetBucketPolicy",
+	OpPutBucketPolicy:         "PutBucketPolicy",
+	OpDeleteBucketPolicy:      "DeleteBucketPolicy",
 	OpHealthLive:              "HealthLive",
 	OpHealthReady:             "HealthReady",
 	OpMetrics:                 "Metrics",

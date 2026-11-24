@@ -45,6 +45,7 @@ var genericMessages = map[s3err.Code]string{
 	s3err.MissingContentLength:               "You must provide the Content-Length HTTP header.",
 	s3err.MissingSecurityHeader:              "Your request is missing a required header.",
 	s3err.NoSuchBucket:                       "The specified bucket does not exist.",
+	s3err.NoSuchBucketPolicy:                 "The bucket policy does not exist.",
 	s3err.NoSuchEntity:                       "The specified entity does not exist.",
 	s3err.NoSuchKey:                          "The specified key does not exist.",
 	s3err.NoSuchUpload:                       "The specified upload does not exist.",

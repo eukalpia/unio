@@ -27,6 +27,17 @@ func (e *Engine) GetBucketInfo(ctx context.Context, bucket string) (object.Bucke
 	return e.store.GetBucket(ctx, bucket)
 }
 
+// SetBucketPolicy implements object.Layer.
+func (e *Engine) SetBucketPolicy(ctx context.Context, bucket string, policy []byte) error {
+	if err := object.ValidateBucketName(bucket); err != nil {
+		return err
+	}
+	if len(policy) > object.MaxBucketPolicySize {
+		return s3err.Errorf(s3err.InvalidArgument, "bucket policy exceeds %d bytes", object.MaxBucketPolicySize)
+	}
+	return e.store.SetBucketPolicy(ctx, bucket, policy)
+}
+
 // ListBuckets implements object.Layer.
 func (e *Engine) ListBuckets(ctx context.Context) ([]object.BucketInfo, error) {
 	buckets, err := e.store.ListBuckets(ctx)

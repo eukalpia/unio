@@ -33,6 +33,12 @@ func primaryAction(op router.Op) (auth.Action, bool) {
 		return auth.ActionDeleteBucket, true
 	case router.OpGetBucketLocation:
 		return auth.ActionGetBucketLocation, true
+	case router.OpGetBucketPolicy:
+		return auth.ActionGetBucketPolicy, true
+	case router.OpPutBucketPolicy:
+		return auth.ActionPutBucketPolicy, true
+	case router.OpDeleteBucketPolicy:
+		return auth.ActionDeleteBucketPolicy, true
 	case router.OpListMultipartUploads:
 		return auth.ActionListBucketMultipartUploads, true
 	case router.OpDeleteObjects, router.OpDeleteObject:

@@ -19,3 +19,4 @@ To propose a decision:
 | [0005](0005-size-tiered-layout.md) | Size-tiered data layout with logical shard ids | Accepted |
 | [0006](0006-protobuf-encoding.md) | Protobuf and vtprotobuf for metadata and RPC | Accepted |
 | [0007](0007-domain-package-layout.md) | Domain package layout | Accepted |
+| [0008](0008-bucket-policies.md) | Bucket policies | Accepted |

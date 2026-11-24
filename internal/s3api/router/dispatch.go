@@ -29,6 +29,10 @@ func dispatch(method, bucket, key string, q url.Values, copySource bool) (Op, er
 			// ListObjectVersions is supported; nothing else takes ?versions.
 			continue
 		}
+		if sub == "policy" && key == "" && bucket != "" {
+			// Bucket policies are supported; object policies do not exist.
+			continue
+		}
 		if _, ok := q[sub]; ok {
 			return OpUnknown, s3err.Errorf(s3err.NotImplemented, "this operation is not supported")
 		}
@@ -47,6 +51,17 @@ func dispatch(method, bucket, key string, q url.Values, copySource bool) (Op, er
 }
 
 func dispatchBucket(method string, q url.Values) (Op, error) {
+	if has(q, "policy") {
+		switch method {
+		case "GET":
+			return OpGetBucketPolicy, nil
+		case "PUT":
+			return OpPutBucketPolicy, nil
+		case "DELETE":
+			return OpDeleteBucketPolicy, nil
+		}
+		return OpUnknown, methodNotAllowed()
+	}
 	switch method {
 	case "PUT":
 		if has(q, "uploadId", "partNumber", "uploads", "delete") {

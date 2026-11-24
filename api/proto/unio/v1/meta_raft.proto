@@ -30,6 +30,7 @@ message Command {
     SetBucketVersioning set_bucket_versioning = 23;
     KVPut kv_put = 24;
     KVDelete kv_delete = 25;
+    SetBucketPolicy set_bucket_policy = 26;
   }
 }
 
@@ -162,6 +163,13 @@ message SetBucketVersioning {
   string name = 1;
   uint64 bucket_id = 2;
   VersioningState versioning = 3;
+}
+
+// SetBucketPolicy replaces the policy of a bucket. An empty policy removes it.
+message SetBucketPolicy {
+  string name = 1;
+  uint64 bucket_id = 2;
+  bytes policy = 3;
 }
 
 // KVPut writes a system key-value entry if its revision matches

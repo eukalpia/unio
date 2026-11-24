@@ -2,6 +2,7 @@ package metatest
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/eukalpia/unio/internal/object"
@@ -73,6 +74,24 @@ func (f *Fake) DeleteBucket(_ context.Context, name string) error {
 		return s3err.Errorf(s3err.BucketNotEmpty, "bucket %q is not empty", name)
 	}
 	delete(f.buckets, name)
+	return nil
+}
+
+// SetBucketPolicy implements meta.Store.
+func (f *Fake) SetBucketPolicy(_ context.Context, name string, policy []byte) error {
+	if len(policy) > object.MaxBucketPolicySize {
+		return s3err.Errorf(s3err.InvalidArgument, "bucket policy exceeds %d bytes", object.MaxBucketPolicySize)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	b, err := f.bucketLocked(name)
+	if err != nil {
+		return err
+	}
+	b.info.Policy = nil
+	if len(policy) > 0 {
+		b.info.Policy = slices.Clone(policy)
+	}
 	return nil
 }
 

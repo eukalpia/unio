@@ -254,7 +254,10 @@ type BucketRecord struct {
 	Owner           string                 `protobuf:"bytes,4,opt,name=owner,proto3" json:"owner,omitempty"`
 	Versioning      VersioningState        `protobuf:"varint,5,opt,name=versioning,proto3,enum=unio.v1.VersioningState" json:"versioning,omitempty"`
 	// True while the bucket is being deleted; writes are rejected.
-	Deleting      bool `protobuf:"varint,6,opt,name=deleting,proto3" json:"deleting,omitempty"`
+	Deleting bool `protobuf:"varint,6,opt,name=deleting,proto3" json:"deleting,omitempty"`
+	// The bucket policy as the client sent it: a JSON document that
+	// policy.ParseBucket accepted, or empty when the bucket has none.
+	Policy        []byte `protobuf:"bytes,7,opt,name=policy,proto3" json:"policy,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -329,6 +332,13 @@ func (x *BucketRecord) GetDeleting() bool {
 		return x.Deleting
 	}
 	return false
+}
+
+func (x *BucketRecord) GetPolicy() []byte {
+	if x != nil {
+		return x.Policy
+	}
+	return nil
 }
 
 type ErasureLayout struct {
@@ -1236,7 +1246,7 @@ const file_unio_v1_records_proto_rawDesc = "" +
 	"\talgorithm\x18\x01 \x01(\x0e2\x1a.unio.v1.ChecksumAlgorithmR\talgorithm\x12)\n" +
 	"\x04type\x18\x02 \x01(\x0e2\x15.unio.v1.ChecksumTypeR\x04type\x12\x14\n" +
 	"\x05value\x18\x03 \x01(\fR\x05value\x12\x14\n" +
-	"\x05parts\x18\x04 \x01(\rR\x05parts\"\xca\x01\n" +
+	"\x05parts\x18\x04 \x01(\rR\x05parts\"\xe2\x01\n" +
 	"\fBucketRecord\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\x04R\x02id\x12*\n" +
@@ -1245,7 +1255,8 @@ const file_unio_v1_records_proto_rawDesc = "" +
 	"\n" +
 	"versioning\x18\x05 \x01(\x0e2\x18.unio.v1.VersioningStateR\n" +
 	"versioning\x12\x1a\n" +
-	"\bdeleting\x18\x06 \x01(\bR\bdeleting\"\xa0\x01\n" +
+	"\bdeleting\x18\x06 \x01(\bR\bdeleting\x12\x16\n" +
+	"\x06policy\x18\a \x01(\fR\x06policy\"\xa0\x01\n" +
 	"\rErasureLayout\x12\x10\n" +
 	"\x03set\x18\x01 \x01(\rR\x03set\x12\x1f\n" +
 	"\vdata_shards\x18\x02 \x01(\rR\n" +

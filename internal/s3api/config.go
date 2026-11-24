@@ -119,6 +119,9 @@ type Config struct {
 	// Console serves the web console under /unio/console/. Nil makes that path
 	// answer NoSuchKey.
 	Console *console.Handler
+	// PolicyChanged is called after a bucket policy is stored or removed on
+	// this node, so the authorizer can drop its cached copy. It may be nil.
+	PolicyChanged func(bucket string)
 }
 
 // withDefaults returns a copy of c with zero fields replaced by defaults, and

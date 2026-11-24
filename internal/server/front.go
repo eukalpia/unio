@@ -10,6 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/eukalpia/unio/internal/admin"
+	"github.com/eukalpia/unio/internal/auth/bucketpolicy"
 	"github.com/eukalpia/unio/internal/auth/iam"
 	"github.com/eukalpia/unio/internal/config"
 	"github.com/eukalpia/unio/internal/drive/local"
@@ -53,6 +54,10 @@ func startFront(lc *lifecycle, cfg *config.Config, cs *clusterServices, dp *data
 	health.AddReadinessCheck("metadata", cs.store.Ready)
 	health.AddReadinessCheck("drives", drivesReady(cfg, drives))
 
+	// Requests are authorized against the caller's identity policies and the
+	// policy of the bucket they name; see package bucketpolicy.
+	authz := bucketpolicy.New(access, dp.engine, bucketpolicy.DefaultTTL, logger.With("component", "authz"))
+
 	var token []byte
 	if cfg.Metrics.Token.IsSet() {
 		token = []byte(cfg.Metrics.Token.Expose())
@@ -79,7 +84,8 @@ func startFront(lc *lifecycle, cfg *config.Config, cs *clusterServices, dp *data
 		BufferBudget:          budget.front,
 		Admin:                 adm.api,
 		Console:               adm.console,
-	}, dp.engine, access, access, logger.With("component", "s3api"))
+		PolicyChanged:         authz.Invalidate,
+	}, dp.engine, access, authz, logger.With("component", "s3api"))
 	if err != nil {
 		return nil, fmt.Errorf("server: s3 front end: %w", err)
 	}

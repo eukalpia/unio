@@ -17,20 +17,36 @@ func (s *Store) Authorize(ctx context.Context, id auth.Identity, action auth.Act
 	if id.Root {
 		return nil
 	}
-	if id.Anonymous || id.User == "" {
-		return accessDenied()
-	}
-	ul, err := s.userLookup(ctx, id.User)
+	d, err := s.Decide(ctx, id, action, bucket, key)
 	if err != nil {
 		return err
 	}
-	if !ul.found || !ul.entry.enabled {
-		return accessDenied()
-	}
-	if policy.EvaluateAll(ul.entry.pols, action, resourceARN(bucket, key)) != policy.Allow {
+	if d != policy.Allow {
 		return accessDenied()
 	}
 	return nil
+}
+
+// Decide returns what the identity policies of id say about action on the
+// resource: Allow, Implicit when nothing matched, or Deny. It lets a caller
+// combine them with a bucket policy. Root is Allow. Anonymous identities
+// have no identity policies and get Implicit. A user that is unknown or
+// disabled gets Deny, so no bucket policy can let it in.
+func (s *Store) Decide(ctx context.Context, id auth.Identity, action auth.Action, bucket, key string) (policy.Decision, error) {
+	if id.Root {
+		return policy.Allow, nil
+	}
+	if id.Anonymous || id.User == "" {
+		return policy.Implicit, nil
+	}
+	ul, err := s.userLookup(ctx, id.User)
+	if err != nil {
+		return policy.Deny, err
+	}
+	if !ul.found || !ul.entry.enabled {
+		return policy.Deny, nil
+	}
+	return policy.EvaluateAll(ul.entry.pols, action, ResourceARN(bucket, key)), nil
 }
 
 // accessDenied returns the client-facing denial. It never says which rule
@@ -39,10 +55,10 @@ func accessDenied() error {
 	return s3err.Errorf(s3err.AccessDenied, "Access Denied")
 }
 
-// resourceARN returns the ARN that policies match against: arn:aws:s3:::bucket
+// ResourceARN returns the ARN that policies match against: arn:aws:s3:::bucket
 // for a bucket, arn:aws:s3:::bucket/key for an object, and "*" for a request
 // with no bucket.
-func resourceARN(bucket, key string) string {
+func ResourceARN(bucket, key string) string {
 	switch {
 	case bucket == "":
 		return "*"

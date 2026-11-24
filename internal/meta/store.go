@@ -33,6 +33,10 @@ type Store interface {
 	// leave unreachable records.
 	DeleteBucket(ctx context.Context, name string) error
 	SetBucketVersioning(ctx context.Context, name string, state object.VersioningState) error
+	// SetBucketPolicy replaces the bucket policy; an empty policy removes it.
+	// The store checks only the size (object.MaxBucketPolicySize): the
+	// document must already have been accepted by policy.ParseBucket.
+	SetBucketPolicy(ctx context.Context, name string, policy []byte) error
 
 	// PutObject commits rec as the newest version of rec.Bucket/rec.Key.
 	// In unversioned buckets rec.VersionID must be "" and replaces the null

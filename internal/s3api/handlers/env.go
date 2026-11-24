@@ -37,6 +37,9 @@ type Env struct {
 	WriteIdle time.Duration
 	// WriteCap caps the total time of one streamed response. Zero means none.
 	WriteCap time.Duration
+	// PolicyChanged is called after a bucket policy is stored or removed, so
+	// the authorizer of this node forgets its cached copy. It may be nil.
+	PolicyChanged func(bucket string)
 }
 
 // Call is one authenticated request ready for its operation.
@@ -86,6 +89,12 @@ func (e *Env) Handle(op router.Op, c *Call) error {
 		return e.DeleteBucket(c)
 	case router.OpGetBucketLocation:
 		return e.GetBucketLocation(c)
+	case router.OpGetBucketPolicy:
+		return e.GetBucketPolicy(c)
+	case router.OpPutBucketPolicy:
+		return e.PutBucketPolicy(c)
+	case router.OpDeleteBucketPolicy:
+		return e.DeleteBucketPolicy(c)
 	case router.OpListObjectsV1:
 		return e.ListObjectsV1(c)
 	case router.OpListObjectsV2:

@@ -182,6 +182,15 @@ func (m *Command_KvDelete) CloneVT() isCommand_Cmd {
 	return r
 }
 
+func (m *Command_SetBucketPolicy) CloneVT() isCommand_Cmd {
+	if m == nil {
+		return (*Command_SetBucketPolicy)(nil)
+	}
+	r := new(Command_SetBucketPolicy)
+	r.SetBucketPolicy = m.SetBucketPolicy.CloneVT()
+	return r
+}
+
 func (m *WriteConditions) CloneVT() *WriteConditions {
 	if m == nil {
 		return (*WriteConditions)(nil)
@@ -475,6 +484,29 @@ func (m *SetBucketVersioning) CloneVT() *SetBucketVersioning {
 }
 
 func (m *SetBucketVersioning) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *SetBucketPolicy) CloneVT() *SetBucketPolicy {
+	if m == nil {
+		return (*SetBucketPolicy)(nil)
+	}
+	r := new(SetBucketPolicy)
+	r.Name = m.Name
+	r.BucketId = m.BucketId
+	if rhs := m.Policy; rhs != nil {
+		tmpBytes := make([]byte, len(rhs))
+		copy(tmpBytes, rhs)
+		r.Policy = tmpBytes
+	}
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *SetBucketPolicy) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -1769,6 +1801,31 @@ func (this *Command_KvDelete) EqualVT(thatIface isCommand_Cmd) bool {
 	return true
 }
 
+func (this *Command_SetBucketPolicy) EqualVT(thatIface isCommand_Cmd) bool {
+	that, ok := thatIface.(*Command_SetBucketPolicy)
+	if !ok {
+		return false
+	}
+	if this == that {
+		return true
+	}
+	if this == nil && that != nil || this != nil && that == nil {
+		return false
+	}
+	if p, q := this.SetBucketPolicy, that.SetBucketPolicy; p != q {
+		if p == nil {
+			p = &SetBucketPolicy{}
+		}
+		if q == nil {
+			q = &SetBucketPolicy{}
+		}
+		if !p.EqualVT(q) {
+			return false
+		}
+	}
+	return true
+}
+
 func (this *WriteConditions) EqualVT(that *WriteConditions) bool {
 	if this == that {
 		return true
@@ -2160,6 +2217,31 @@ func (this *SetBucketVersioning) EqualVT(that *SetBucketVersioning) bool {
 
 func (this *SetBucketVersioning) EqualMessageVT(thatMsg proto.Message) bool {
 	that, ok := thatMsg.(*SetBucketVersioning)
+	if !ok {
+		return false
+	}
+	return this.EqualVT(that)
+}
+func (this *SetBucketPolicy) EqualVT(that *SetBucketPolicy) bool {
+	if this == that {
+		return true
+	} else if this == nil || that == nil {
+		return false
+	}
+	if this.Name != that.Name {
+		return false
+	}
+	if this.BucketId != that.BucketId {
+		return false
+	}
+	if string(this.Policy) != string(that.Policy) {
+		return false
+	}
+	return string(this.unknownFields) == string(that.unknownFields)
+}
+
+func (this *SetBucketPolicy) EqualMessageVT(thatMsg proto.Message) bool {
+	that, ok := thatMsg.(*SetBucketPolicy)
 	if !ok {
 		return false
 	}
@@ -3924,6 +4006,27 @@ func (m *Command_KvDelete) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	}
 	return len(dAtA) - i, nil
 }
+func (m *Command_SetBucketPolicy) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *Command_SetBucketPolicy) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.SetBucketPolicy != nil {
+		size, err := m.SetBucketPolicy.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xd2
+	}
+	return len(dAtA) - i, nil
+}
 func (m *WriteConditions) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
@@ -4759,6 +4862,58 @@ func (m *SetBucketVersioning) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.Versioning))
 		i--
 		dAtA[i] = 0x18
+	}
+	if m.BucketId != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.BucketId))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.Name) > 0 {
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Name)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *SetBucketPolicy) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *SetBucketPolicy) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *SetBucketPolicy) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.Policy) > 0 {
+		i -= len(m.Policy)
+		copy(dAtA[i:], m.Policy)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Policy)))
+		i--
+		dAtA[i] = 0x1a
 	}
 	if m.BucketId != 0 {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.BucketId))
@@ -6988,6 +7143,18 @@ func (m *Command_KvDelete) SizeVT() (n int) {
 	}
 	return n
 }
+func (m *Command_SetBucketPolicy) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.SetBucketPolicy != nil {
+		l = m.SetBucketPolicy.SizeVT()
+		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	return n
+}
 func (m *WriteConditions) SizeVT() (n int) {
 	if m == nil {
 		return 0
@@ -7320,6 +7487,27 @@ func (m *SetBucketVersioning) SizeVT() (n int) {
 	}
 	if m.Versioning != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.Versioning))
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *SetBucketPolicy) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Name)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.BucketId != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.BucketId))
+	}
+	l = len(m.Policy)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -8863,6 +9051,47 @@ func (m *Command) UnmarshalVT(dAtA []byte) error {
 					return err
 				}
 				m.Cmd = &Command_KvDelete{KvDelete: v}
+			}
+			iNdEx = postIndex
+		case 26:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SetBucketPolicy", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if oneof, ok := m.Cmd.(*Command_SetBucketPolicy); ok {
+				if err := oneof.SetBucketPolicy.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				v := &SetBucketPolicy{}
+				if err := v.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+				m.Cmd = &Command_SetBucketPolicy{SetBucketPolicy: v}
 			}
 			iNdEx = postIndex
 		default:
@@ -11057,6 +11286,142 @@ func (m *SetBucketVersioning) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
+		default:
+			iNdEx = preIndex
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *SetBucketPolicy) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return protohelpers.ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: SetBucketPolicy: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: SetBucketPolicy: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Name = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BucketId", wireType)
+			}
+			m.BucketId = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.BucketId |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Policy", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Policy = append(m.Policy[:0], dAtA[iNdEx:postIndex]...)
+			if m.Policy == nil {
+				m.Policy = []byte{}
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

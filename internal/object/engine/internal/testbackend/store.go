@@ -9,6 +9,7 @@ package testbackend
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -103,6 +104,21 @@ func (s *Store) DeleteBucket(_ context.Context, name string) error {
 		return s3err.Errorf(s3err.BucketNotEmpty, "bucket is not empty")
 	}
 	delete(s.buckets, name)
+	return nil
+}
+
+// SetBucketPolicy implements meta.Store.
+func (s *Store) SetBucketPolicy(_ context.Context, name string, policy []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b, err := s.bucketLocked(name)
+	if err != nil {
+		return err
+	}
+	b.info.Policy = nil
+	if len(policy) > 0 {
+		b.info.Policy = slices.Clone(policy)
+	}
 	return nil
 }
 

@@ -40,6 +40,9 @@ message BucketRecord {
   VersioningState versioning = 5;
   // True while the bucket is being deleted; writes are rejected.
   bool deleting = 6;
+  // The bucket policy as the client sent it: a JSON document that
+  // policy.ParseBucket accepted, or empty when the bucket has none.
+  bytes policy = 7;
 }
 
 message ErasureLayout {
