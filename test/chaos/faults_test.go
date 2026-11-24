@@ -102,7 +102,7 @@ func TestFaultInputValidation(t *testing.T) {
 
 // TestCorruptScriptBehaviour runs the real corruption template under sh on the
 // host. It checks the byte-level effect that the fake-runner tests cannot see.
-// The script needs GNU coreutils (stat -c), so the test is skipped elsewhere.
+// The script uses only POSIX utilities, so it runs on Linux, BusyBox and macOS.
 func TestCorruptScriptBehaviour(t *testing.T) {
 	sh, err := exec.LookPath("sh")
 	if err != nil {
