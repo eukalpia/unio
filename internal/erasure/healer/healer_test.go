@@ -204,6 +204,12 @@ func TestDuplicateReportsHealOnce(t *testing.T) {
 // single worker, the quiet report must be healed among the first few, not after
 // all 50. Each heal fails at once because its object does not exist, so the test
 // measures scheduling and not repair time.
+//
+// Once both feeders wait on the hand-off channel they alternate, but the busy
+// feeder may hand over a few reports before the quiet feeder's goroutine first
+// runs; under the race detector on a loaded CI runner that was five. The bound
+// leaves room for that start-up and still fails on starvation, which would put
+// the quiet report last.
 func TestSetsShareWorkers(t *testing.T) {
 	busy, busyMem := newSet(t, 1, 2, 1, rs.Options{HealQueueSize: 64})
 	quiet, quietMem := newSet(t, 2, 2, 1, rs.Options{})
@@ -226,8 +232,8 @@ func TestSetsShareWorkers(t *testing.T) {
 			break
 		}
 	}
-	if position == 0 || position > 4 {
-		t.Fatalf("the quiet set was healed at position %d of 51, want one of the first four", position)
+	if position == 0 || position > 10 {
+		t.Fatalf("the quiet set was healed at position %d of 51, want one of the first ten", position)
 	}
 	if st := h.Stats(); st.Pending != 0 {
 		t.Fatalf("stats: %+v, want nothing pending", st)
