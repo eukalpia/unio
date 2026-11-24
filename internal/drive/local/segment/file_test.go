@@ -121,3 +121,25 @@ func TestFileTruncateAndSize(t *testing.T) {
 		t.Fatalf("size = %d, %v; want 10", size, err)
 	}
 }
+
+// A failed preallocation must not leave the file behind: the drive retries
+// with the same segment id, and the leftover would make every later attempt
+// fail with "file exists", so compaction could never free space again.
+func TestCreateRemovesFileWhenPreallocationFails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "0000000000000001.seg")
+	orig := preallocateFile
+	t.Cleanup(func() { preallocateFile = orig })
+	preallocateFile = func(*os.File, int64) error { return errors.New("no space left on device") }
+	if _, err := Create(path, 1<<20); err == nil {
+		t.Fatal("Create succeeded despite the preallocation failure")
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("segment file left behind: %v", err)
+	}
+	preallocateFile = orig
+	f, err := Create(path, 1<<20)
+	if err != nil {
+		t.Fatalf("retry with the same id failed: %v", err)
+	}
+	_ = f.Close()
+}
