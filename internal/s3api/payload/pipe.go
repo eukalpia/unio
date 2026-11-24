@@ -88,13 +88,13 @@ func (h *hashPipe) dispatch() {
 		}
 		data := *slab
 		if len(h.hashers) == 1 {
-			h.hashers[0].Write(data)
+			_, _ = h.hashers[0].Write(data) // hash.Hash.Write never fails
 		} else {
 			var wg sync.WaitGroup
 			for _, hh := range h.hashers[1:] {
-				wg.Go(func() { hh.Write(data) })
+				wg.Go(func() { _, _ = hh.Write(data) })
 			}
-			h.hashers[0].Write(data)
+			_, _ = h.hashers[0].Write(data) // hash.Hash.Write never fails
 			wg.Wait()
 		}
 		slabPool.Put(slab)

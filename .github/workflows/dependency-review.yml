@@ -24,8 +24,12 @@ jobs:
           # The Go project's golang.org/x modules are BSD-3-Clause with the Go
           # patent grant (PATENTS), which the license detector reports as an
           # unknown reference. They are allowed by name, not by loosening the
-          # license list.
+          # license list. The console's typeface, Space Grotesk, is under the
+          # SIL Open Font License 1.1, which permits bundling the font with
+          # software under any license; it is allowed by name for the same
+          # reason.
           allow-dependencies-licenses: >-
+            pkg:npm/%40fontsource-variable/space-grotesk,
             pkg:golang/golang.org/x/arch,
             pkg:golang/golang.org/x/crypto,
             pkg:golang/golang.org/x/exp,
