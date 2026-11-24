@@ -22,4 +22,9 @@ type Info struct {
 	Free     uint64
 	Used     uint64
 	Online   bool
+	// Filesystem identifies, on its node, the filesystem that holds the
+	// drive, or is empty when the platform does not tell. Two drives of one
+	// node with the same value share a disk: their capacity is one capacity,
+	// and one disk failure takes both.
+	Filesystem string
 }

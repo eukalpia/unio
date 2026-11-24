@@ -261,13 +261,14 @@ func (c *Client) Info(ctx context.Context) (drive.Info, error) {
 		node = c.node
 	}
 	return drive.Info{
-		ID:       id,
-		Node:     node,
-		Endpoint: r.GetEndpoint(),
-		Total:    r.GetTotal(),
-		Free:     r.GetFree(),
-		Used:     r.GetUsed(),
-		Online:   r.GetOnline(),
+		ID:         id,
+		Node:       node,
+		Endpoint:   r.GetEndpoint(),
+		Total:      r.GetTotal(),
+		Free:       r.GetFree(),
+		Used:       r.GetUsed(),
+		Online:     r.GetOnline(),
+		Filesystem: r.GetFilesystem(),
 	}, nil
 }
 

@@ -202,13 +202,14 @@ func (s *Server) info(ctx context.Context, _ ids.NodeID, req []byte) ([]byte, er
 		return nil, err
 	}
 	return (&uniov1.DriveInfo{
-		Id:       in.ID[:],
-		Node:     string(in.Node),
-		Endpoint: in.Endpoint,
-		Total:    in.Total,
-		Free:     in.Free,
-		Used:     in.Used,
-		Online:   in.Online,
+		Id:         in.ID[:],
+		Node:       string(in.Node),
+		Endpoint:   in.Endpoint,
+		Total:      in.Total,
+		Free:       in.Free,
+		Used:       in.Used,
+		Online:     in.Online,
+		Filesystem: in.Filesystem,
 	}).MarshalVT()
 }
 

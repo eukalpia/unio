@@ -4,6 +4,10 @@ package local
 
 import "golang.org/x/sys/windows"
 
+// filesystemID is not implemented on Windows: drives are then counted as
+// separate filesystems.
+func filesystemID(string) string { return "" }
+
 // capacity returns the total and the available bytes of the volume that holds
 // path.
 func capacity(path string) (total, free uint64, err error) {

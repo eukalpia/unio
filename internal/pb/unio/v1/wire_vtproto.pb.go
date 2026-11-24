@@ -238,6 +238,7 @@ func (m *DriveInfo) CloneVT() *DriveInfo {
 	r.Free = m.Free
 	r.Used = m.Used
 	r.Online = m.Online
+	r.Filesystem = m.Filesystem
 	if rhs := m.Id; rhs != nil {
 		tmpBytes := make([]byte, len(rhs))
 		copy(tmpBytes, rhs)
@@ -897,6 +898,9 @@ func (this *DriveInfo) EqualVT(that *DriveInfo) bool {
 		return false
 	}
 	if this.Online != that.Online {
+		return false
+	}
+	if this.Filesystem != that.Filesystem {
 		return false
 	}
 	return string(this.unknownFields) == string(that.unknownFields)
@@ -1915,6 +1919,13 @@ func (m *DriveInfo) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.Filesystem) > 0 {
+		i -= len(m.Filesystem)
+		copy(dAtA[i:], m.Filesystem)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Filesystem)))
+		i--
+		dAtA[i] = 0x42
 	}
 	if m.Online {
 		i--
@@ -3166,6 +3177,10 @@ func (m *DriveInfo) SizeVT() (n int) {
 	}
 	if m.Online {
 		n += 2
+	}
+	l = len(m.Filesystem)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -4956,6 +4971,38 @@ func (m *DriveInfo) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.Online = bool(v != 0)
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Filesystem", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Filesystem = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

@@ -38,7 +38,33 @@ func openDrives(ctx context.Context, lc *lifecycle, cfg *config.Config, id ident
 		drives = append(drives, d)
 	}
 	logger.Info("local drives opened", "online", len(drives), "configured", len(cfg.LocalDrives()))
+	warnSharedFilesystems(ctx, drives, logger)
 	return drives, nil
+}
+
+// warnSharedFilesystems logs every group of local drives that sit on one
+// filesystem. Erasure coding spreads an object over drives so that losing
+// some of them loses no data; drives that share a disk fail together, so the
+// cluster tolerates fewer disk failures than its layout suggests.
+func warnSharedFilesystems(ctx context.Context, drives []*local.Drive, logger *slog.Logger) {
+	byFS := make(map[string][]string)
+	var order []string
+	for _, d := range drives {
+		info, err := d.Info(ctx)
+		if err != nil || info.Filesystem == "" {
+			continue
+		}
+		if _, seen := byFS[info.Filesystem]; !seen {
+			order = append(order, info.Filesystem)
+		}
+		byFS[info.Filesystem] = append(byFS[info.Filesystem], info.Endpoint)
+	}
+	for _, fs := range order {
+		if eps := byFS[fs]; len(eps) > 1 {
+			logger.Warn("drives share one filesystem: a failure of that disk takes all of them, so the erasure layout overstates fault tolerance",
+				"drives", eps, "filesystem", fs)
+		}
+	}
 }
 
 // openDrive formats the drive at ep if it is new and opens it, checking its

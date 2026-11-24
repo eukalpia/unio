@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eukalpia/unio/internal/cluster"
 	"github.com/eukalpia/unio/internal/drive"
 	"github.com/eukalpia/unio/internal/ids"
 	"github.com/eukalpia/unio/internal/object"
@@ -195,5 +196,31 @@ func TestInternalErrorsAreGeneric(t *testing.T) {
 	expectError(t, resp, http.StatusInternalServerError, "InternalError")
 	if strings.Contains(string(resp.Body), "secret-path") || strings.Contains(string(resp.Body), "shard") {
 		t.Errorf("the response leaks internal detail: %s", resp.Body)
+	}
+}
+
+// Drives that share a filesystem on one node are one capacity: four
+// directories of a 460 GiB disk must not report 1.8 TiB.
+func TestSumCapacityCountsASharedFilesystemOnce(t *testing.T) {
+	var drives []cluster.DriveLocation
+	stats := make(map[ids.DriveID]driveStat)
+	add := func(node string, n byte, fs string, total, used uint64) {
+		id := ids.DriveID{n}
+		drives = append(drives, cluster.DriveLocation{ID: id, Node: ids.NodeID(node)})
+		stats[id] = driveStat{online: true, total: total, used: used, free: total - used, filesystem: fs}
+	}
+	add("a", 1, "fd01", 100, 40) // four drives on one disk of node a
+	add("a", 2, "fd01", 100, 40)
+	add("a", 3, "fd01", 100, 40)
+	add("a", 4, "fd01", 100, 40)
+	add("a", 5, "fd02", 50, 10) // a second disk of node a
+	add("b", 6, "fd01", 70, 20) // same device number on another node is another disk
+	add("b", 7, "", 30, 5)      // unknown filesystem: counted on its own
+	add("b", 8, "", 30, 5)
+	got := sumCapacity(drives, stats)
+	want := capacityView{Total: 100 + 50 + 70 + 30 + 30, Used: 40 + 10 + 20 + 5 + 5}
+	want.Free = want.Total - want.Used
+	if got != want {
+		t.Fatalf("capacity = %+v, want %+v", got, want)
 	}
 }

@@ -85,6 +85,9 @@ message DriveInfo {
   uint64 free = 5;
   uint64 used = 6;
   bool online = 7;
+  // Identifies, on the drive's node, the filesystem that holds it; empty
+  // when unknown. See drive.Info.Filesystem.
+  string filesystem = 8;
 }
 
 // WalkShardsRequest asks for the next page of a walk. An empty cursor starts

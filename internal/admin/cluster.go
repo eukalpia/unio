@@ -54,7 +54,9 @@ type driveView struct {
 	Used   uint64 `json:"used"`
 }
 
-// capacityView is the sum over every drive of the cluster.
+// capacityView is the capacity of the cluster: the sum over its filesystems.
+// Drives of one node on the same filesystem count once, so pointing four
+// drives at directories of one disk does not report four disks.
 type capacityView struct {
 	Total uint64 `json:"total"`
 	Used  uint64 `json:"used"`
@@ -65,6 +67,7 @@ type capacityView struct {
 type driveStat struct {
 	online            bool
 	total, free, used uint64
+	filesystem        string
 }
 
 // cluster answers GET cluster from the cluster map, the health table and a
@@ -76,11 +79,8 @@ func (s *Service) cluster(c *call) (Response, error) {
 	view := clusterView{ClusterID: m.ClusterID, Nodes: make([]nodeView, 0, len(m.Nodes)), Sets: make([]setView, 0, len(m.Sets))}
 	for _, d := range m.Drives {
 		locs[d.ID] = d
-		st := stats[d.ID]
-		view.Capacity.Total += st.total
-		view.Capacity.Used += st.used
-		view.Capacity.Free += st.free
 	}
+	view.Capacity = sumCapacity(m.Drives, stats)
 	for _, n := range m.Nodes {
 		view.Nodes = append(view.Nodes, nodeView{
 			ID:        string(n.ID),
@@ -110,6 +110,28 @@ func (s *Service) cluster(c *call) (Response, error) {
 		view.Sets = append(view.Sets, sv)
 	}
 	return jsonResponse(http.StatusOK, view)
+}
+
+// sumCapacity adds up the capacity of the filesystems behind drives. Drives
+// of one node that report the same filesystem are counted once; a drive that
+// reports none is counted on its own.
+func sumCapacity(drives []cluster.DriveLocation, stats map[ids.DriveID]driveStat) capacityView {
+	var out capacityView
+	counted := make(map[string]bool, len(drives))
+	for _, d := range drives {
+		st := stats[d.ID]
+		if st.filesystem != "" {
+			fs := string(d.Node) + "\x00" + st.filesystem
+			if counted[fs] {
+				continue
+			}
+			counted[fs] = true
+		}
+		out.Total += st.total
+		out.Used += st.used
+		out.Free += st.free
+	}
+	return out
 }
 
 // probeDrives asks every drive for its capacity. The probes run in parallel,
@@ -147,5 +169,5 @@ func (s *Service) probeDrive(ctx context.Context, id ids.DriveID) driveStat {
 	if err != nil || !info.Online {
 		return driveStat{}
 	}
-	return driveStat{online: true, total: info.Total, free: info.Free, used: info.Used}
+	return driveStat{online: true, total: info.Total, free: info.Free, used: info.Used, filesystem: info.Filesystem}
 }

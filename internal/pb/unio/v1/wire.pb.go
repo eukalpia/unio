@@ -597,14 +597,17 @@ func (*Empty) Descriptor() ([]byte, []int) {
 
 // DriveInfo reports drive identity, capacity and health.
 type DriveInfo struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            []byte                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Node          string                 `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"`
-	Endpoint      string                 `protobuf:"bytes,3,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
-	Total         uint64                 `protobuf:"varint,4,opt,name=total,proto3" json:"total,omitempty"`
-	Free          uint64                 `protobuf:"varint,5,opt,name=free,proto3" json:"free,omitempty"`
-	Used          uint64                 `protobuf:"varint,6,opt,name=used,proto3" json:"used,omitempty"`
-	Online        bool                   `protobuf:"varint,7,opt,name=online,proto3" json:"online,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Id       []byte                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Node     string                 `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"`
+	Endpoint string                 `protobuf:"bytes,3,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
+	Total    uint64                 `protobuf:"varint,4,opt,name=total,proto3" json:"total,omitempty"`
+	Free     uint64                 `protobuf:"varint,5,opt,name=free,proto3" json:"free,omitempty"`
+	Used     uint64                 `protobuf:"varint,6,opt,name=used,proto3" json:"used,omitempty"`
+	Online   bool                   `protobuf:"varint,7,opt,name=online,proto3" json:"online,omitempty"`
+	// Identifies, on the drive's node, the filesystem that holds it; empty
+	// when unknown. See drive.Info.Filesystem.
+	Filesystem    string `protobuf:"bytes,8,opt,name=filesystem,proto3" json:"filesystem,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -686,6 +689,13 @@ func (x *DriveInfo) GetOnline() bool {
 		return x.Online
 	}
 	return false
+}
+
+func (x *DriveInfo) GetFilesystem() string {
+	if x != nil {
+		return x.Filesystem
+	}
+	return ""
 }
 
 // WalkShardsRequest asks for the next page of a walk. An empty cursor starts
@@ -1849,7 +1859,7 @@ const file_unio_v1_wire_proto_rawDesc = "" +
 	"\fShardRequest\x12\x14\n" +
 	"\x05drive\x18\x01 \x01(\fR\x05drive\x12'\n" +
 	"\x05shard\x18\x02 \x01(\v2\x11.unio.v1.ShardRefR\x05shard\"\a\n" +
-	"\x05Empty\"\xa1\x01\n" +
+	"\x05Empty\"\xc1\x01\n" +
 	"\tDriveInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\fR\x02id\x12\x12\n" +
 	"\x04node\x18\x02 \x01(\tR\x04node\x12\x1a\n" +
@@ -1857,7 +1867,10 @@ const file_unio_v1_wire_proto_rawDesc = "" +
 	"\x05total\x18\x04 \x01(\x04R\x05total\x12\x12\n" +
 	"\x04free\x18\x05 \x01(\x04R\x04free\x12\x12\n" +
 	"\x04used\x18\x06 \x01(\x04R\x04used\x12\x16\n" +
-	"\x06online\x18\a \x01(\bR\x06online\"W\n" +
+	"\x06online\x18\a \x01(\bR\x06online\x12\x1e\n" +
+	"\n" +
+	"filesystem\x18\b \x01(\tR\n" +
+	"filesystem\"W\n" +
 	"\x11WalkShardsRequest\x12\x14\n" +
 	"\x05drive\x18\x01 \x01(\fR\x05drive\x12\x16\n" +
 	"\x06cursor\x18\x02 \x01(\fR\x06cursor\x12\x14\n" +
