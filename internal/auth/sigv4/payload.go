@@ -100,5 +100,12 @@ func (d *digestReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// Unverified returns the body without this reader's digest check. It is for a
+// consumer that verifies the signed digest itself, from
+// auth.Result.PayloadSHA256, so the payload is not hashed twice. A consumer
+// that takes it must fail the request with XAmzContentSHA256Mismatch when the
+// digest differs, before committing anything.
+func (d *digestReader) Unverified() io.Reader { return d.r }
+
 // emptyDigest is the SHA-256 of an empty payload.
 var emptyDigest = sha256.Sum256(nil)

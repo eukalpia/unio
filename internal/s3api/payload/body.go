@@ -45,6 +45,10 @@ type Body struct {
 	// trailerRequired is Spec.TrailerRequired: a missing trailer fails the final Read.
 	trailerRequired bool
 
+	// pipe hashes off the request goroutine; nil for small payloads, which
+	// are hashed inline.
+	pipe *hashPipe
+
 	// scratch receives digests produced by hash.Hash.Sum, so that computing a
 	// digest never allocates.
 	scratch [sha256.Size]byte
@@ -81,6 +85,16 @@ func New(r io.Reader, spec Spec) (*Body, error) {
 	if spec.Algorithm != object.ChecksumNone {
 		b.algoh = newHash(spec.Algorithm)
 		b.wantAlgo = bytes.Clone(spec.Expected)
+	}
+	if spec.Size >= pipeThreshold {
+		hashers := []hash.Hash{b.md5h}
+		if b.sha256h != nil {
+			hashers = append(hashers, b.sha256h)
+		}
+		if b.algoh != nil {
+			hashers = append(hashers, b.algoh)
+		}
+		b.pipe = newHashPipe(hashers)
 	}
 	return b, nil
 }
@@ -157,6 +171,10 @@ func (b *Body) Checksum() object.Checksum {
 // hashers never fail to write.
 func (b *Body) accept(p []byte) {
 	b.delivered += int64(len(p))
+	if b.pipe != nil {
+		b.pipe.write(p)
+		return
+	}
 	b.md5h.Write(p)
 	if b.sha256h != nil {
 		b.sha256h.Write(p)
@@ -188,5 +206,8 @@ func (b *Body) fail(n int, err error) (int, error) {
 // digest returns the current digest of h. The result aliases b.scratch and is
 // valid until the next call to digest.
 func (b *Body) digest(h hash.Hash) []byte {
+	if b.pipe != nil {
+		b.pipe.wait()
+	}
 	return h.Sum(b.scratch[:0])
 }

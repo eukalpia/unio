@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"io"
 
 	"github.com/eukalpia/unio/internal/object"
 	"github.com/eukalpia/unio/internal/s3api/headers"
@@ -22,6 +23,11 @@ func (c *Call) verifiedBody(contentMD5 []byte, sum headers.ChecksumRequest) (*pa
 	src := c.Auth.Body
 	if src == nil {
 		src = bytes.NewReader(nil)
+	}
+	// payload.Body checks the signed SHA-256 below, so the authenticator's
+	// own check is skipped instead of hashing every byte twice.
+	if u, ok := src.(interface{ Unverified() io.Reader }); ok && c.Auth.PayloadSHA256 != nil {
+		src = u.Unverified()
 	}
 	body, err := payload.New(src, payload.Spec{
 		Size:            size,
