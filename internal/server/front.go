@@ -50,6 +50,15 @@ func startFront(lc *lifecycle, cfg *config.Config, cs *clusterServices, dp *data
 	if err != nil {
 		return nil, err
 	}
+	// With node.admin_address set, the admin API and the console get a
+	// listener of their own and the S3 port does not serve them.
+	s3Admin, s3Console := adm.api, adm.console
+	if cfg.Node.AdminAddress != "" {
+		if err := startAdminListener(lc, cfg, adm, logger.With("component", "admin")); err != nil {
+			return nil, err
+		}
+		s3Admin, s3Console = nil, nil
+	}
 	health := obs.NewHealth(logger)
 	health.AddReadinessCheck("metadata", cs.store.Ready)
 	health.AddReadinessCheck("drives", drivesReady(cfg, drives))
@@ -82,8 +91,8 @@ func startFront(lc *lifecycle, cfg *config.Config, cs *clusterServices, dp *data
 		MetricsToken:          token,
 		Observer:              observers{metrics, recorder},
 		BufferBudget:          budget.front,
-		Admin:                 adm.api,
-		Console:               adm.console,
+		Admin:                 s3Admin,
+		Console:               s3Console,
 		PolicyChanged:         authz.Invalidate,
 	}, dp.engine, access, authz, logger.With("component", "s3api"))
 	if err != nil {

@@ -96,6 +96,20 @@ func checkNode(c *Config, r *report) {
 	if err == nil && s3Port == internodePort {
 		r.errorf("node.s3_address and node.internode_address must use different ports (both are %d)", s3Port)
 	}
+	if c.Node.AdminAddress != "" {
+		host, portStr, serr := net.SplitHostPort(c.Node.AdminAddress)
+		adminPort, perr := strconv.Atoi(portStr)
+		switch {
+		case serr != nil || perr != nil || adminPort < 1 || adminPort > 65535:
+			r.errorf("node.admin_address %q must have the form 127.0.0.1:9001 (UNIO_ADMIN_ADDRESS)", c.Node.AdminAddress)
+		case adminPort == s3Port || adminPort == internodePort:
+			r.errorf("node.admin_address must use a port of its own, not the S3 or internode port (%d)", adminPort)
+		default:
+			if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
+				r.warnf("node.admin_address %q is not a loopback address: the admin API and console are served over plain HTTP there, so keep that address on a trusted network", c.Node.AdminAddress)
+			}
+		}
+	}
 }
 
 // regionPattern is the form of a node region, such as us-east-1.

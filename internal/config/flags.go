@@ -57,6 +57,8 @@ func settings() []setting {
 			func(c *Config) *string { return &c.Node.S3Address }),
 		strSetting("internode-address", "UNIO_INTERNODE_ADDRESS", "internode listen address",
 			func(c *Config) *string { return &c.Node.InternodeAddress }),
+		strSetting("admin-address", "UNIO_ADMIN_ADDRESS", "separate listen address of the admin API and console, e.g. 127.0.0.1:9001 (default: on the S3 port)",
+			func(c *Config) *string { return &c.Node.AdminAddress }),
 		strSetting("region", "UNIO_REGION", "S3 region of this node, e.g. us-east-1",
 			func(c *Config) *string { return &c.Node.Region }),
 		listSetting("domains", "UNIO_DOMAINS", "comma-separated virtual-host suffixes, e.g. s3.example.com",

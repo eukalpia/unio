@@ -46,6 +46,12 @@ type NodeConfig struct {
 	// InternodeAddress is the listen address of the internode protocol, for
 	// example ":9100".
 	InternodeAddress string `yaml:"internode_address"`
+	// AdminAddress, when set, is the only listen address of the admin API and
+	// the web console, for example "127.0.0.1:9001"; the S3 port then answers
+	// 404 under /unio/admin/ and /unio/console/. Empty keeps them on the S3
+	// port. Put it on loopback or a management network: the S3 port is often
+	// published to the internet through a proxy, the console should not be.
+	AdminAddress string `yaml:"admin_address"`
 	// Region is the S3 region this node serves. SigV4 credential scopes must
 	// name it. It is 1 to 32 characters from lowercase letters, digits and
 	// hyphens, and the default is us-east-1.
