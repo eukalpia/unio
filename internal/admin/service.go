@@ -109,8 +109,16 @@ func (s *Service) dispatch(id routeID, c *call) (Response, error) {
 		return s.createKey(c)
 	case routeKeyDelete:
 		return s.deleteKey(c)
-	case routePoliciesList, routePolicyPut, routePolicyDelete, routePolicyAttach, routePolicyDetach:
-		return Response{}, errNamedPoliciesUnsupported()
+	case routePoliciesList:
+		return s.listPolicies(c)
+	case routePolicyPut:
+		return s.putPolicy(c)
+	case routePolicyDelete:
+		return s.deletePolicy(c)
+	case routePolicyAttach:
+		return s.attachPolicy(c)
+	case routePolicyDetach:
+		return s.detachPolicy(c)
 	}
 	return Response{}, errNotFound()
 }

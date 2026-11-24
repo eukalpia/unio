@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-
-	"github.com/eukalpia/unio/internal/s3err"
 )
 
 // usersPath is the collection of users.
@@ -210,36 +208,70 @@ func TestKeyDeletion(t *testing.T) {
 	expectError(t, f.serve(f.sigv4(creds, http.MethodDelete, usersPath+"/"+testRoot+"/keys/"+akey, "", nil)), http.StatusConflict, "RootUserProtected")
 }
 
-// TestNamedPoliciesAreNotImplemented checks the policy endpoints. The IAM store
-// has no named policies, so each of them answers 501 until IAM supports them.
-func TestNamedPoliciesAreNotImplemented(t *testing.T) {
+// TestNamedPolicies runs the managed-policy endpoints end to end against the
+// IAM store: create, list, attach, show on the user, detach and delete, plus
+// the refusals for a bad document, a missing policy and the root user.
+func TestNamedPolicies(t *testing.T) {
 	f := newFixture(t)
 	key, secret := f.createUser("admin", fullPolicy)
 	f.createUser("bob", "")
 	creds := credsOf(key, secret)
-	doc := `{"document":` + adminPolicy + `}`
-	cases := []struct {
-		method, path string
-		body         string
-	}{
-		{http.MethodGet, BasePath + "/policies", ""},
-		{http.MethodPut, BasePath + "/policies/readonly", doc},
-		{http.MethodDelete, BasePath + "/policies/readonly", ""},
-		{http.MethodPost, usersPath + "/bob/policies", `{"policy":"readonly"}`},
-		{http.MethodDelete, usersPath + "/bob/policies/readonly", ""},
+	do := func(method, path, body string) Response {
+		var b []byte
+		if body != "" {
+			b = []byte(body)
+		}
+		return f.serve(f.sigv4(creds, method, path, "", b))
 	}
-	for _, tc := range cases {
-		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
-			resp := f.serve(f.sigv4(creds, tc.method, tc.path, "", []byte(tc.body)))
-			expectError(t, resp, http.StatusNotImplemented, string(s3err.NotImplemented))
-		})
+	readOnly := `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetObject","s3:ListBucket"],"Resource":["arn:aws:s3:::lms","arn:aws:s3:::lms/*"]}]}`
+
+	expectStatus(t, do(http.MethodPut, BasePath+"/policies/readonly", `{"document":`+readOnly+`}`), http.StatusNoContent)
+	resp := do(http.MethodGet, BasePath+"/policies", "")
+	expectStatus(t, resp, http.StatusOK)
+	var pols []struct {
+		Name     string          `json:"name"`
+		Document json.RawMessage `json:"document"`
 	}
-	// Users still carry an empty policies array.
-	resp := f.serve(f.sigv4(creds, http.MethodGet, usersPath, "", nil))
-	var out []map[string]json.RawMessage
-	mustUnmarshal(t, resp.Body, &out)
-	if string(out[0]["policies"]) != "[]" {
-		t.Errorf("policies = %s, want []", out[0]["policies"])
+	mustUnmarshal(t, resp.Body, &pols)
+	if len(pols) != 1 || pols[0].Name != "readonly" || !strings.Contains(string(pols[0].Document), "s3:GetObject") {
+		t.Fatalf("policies = %+v", pols)
+	}
+
+	expectStatus(t, do(http.MethodPost, usersPath+"/bob/policies", `{"policy":"readonly"}`), http.StatusNoContent)
+	resp = do(http.MethodGet, usersPath, "")
+	var users []struct {
+		Name     string   `json:"name"`
+		Policies []string `json:"policies"`
+	}
+	mustUnmarshal(t, resp.Body, &users)
+	found := false
+	for _, u := range users {
+		if u.Name == "bob" {
+			found = len(u.Policies) == 1 && u.Policies[0] == "readonly"
+		}
+		if u.Name == "admin" && u.Policies == nil {
+			t.Errorf("admin policies are null, want an array")
+		}
+	}
+	if !found {
+		t.Fatalf("bob does not show the attached policy: %+v", users)
+	}
+
+	// Refusals: a document that is not a policy, an unknown policy, root.
+	expectError(t, do(http.MethodPut, BasePath+"/policies/bad", `{"document":{"Version":"2012-10-17","Statement":[]}}`), http.StatusBadRequest, "MalformedPolicy")
+	expectError(t, do(http.MethodPut, BasePath+"/policies/bad", `{"document":"text"}`), http.StatusBadRequest, "InvalidRequest")
+	expectError(t, do(http.MethodPost, usersPath+"/bob/policies", `{"policy":"ghost"}`), http.StatusNotFound, "NoSuchEntity")
+	expectError(t, do(http.MethodPost, usersPath+"/"+testRoot+"/policies", `{"policy":"readonly"}`), http.StatusConflict, "RootUserProtected")
+
+	expectStatus(t, do(http.MethodDelete, usersPath+"/bob/policies/readonly", ""), http.StatusNoContent)
+	if got, _ := f.iam.ListUserPolicies(t.Context(), "bob"); len(got) != 0 {
+		t.Fatalf("policy still attached after detach: %v", got)
+	}
+	expectStatus(t, do(http.MethodDelete, BasePath+"/policies/readonly", ""), http.StatusNoContent)
+	resp = do(http.MethodGet, BasePath+"/policies", "")
+	mustUnmarshal(t, resp.Body, &pols)
+	if len(pols) != 0 {
+		t.Fatalf("policy still listed after delete: %+v", pols)
 	}
 }
 

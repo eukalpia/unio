@@ -9,8 +9,7 @@ import (
 )
 
 // userView is one user of GET users. Policies lists the names of the named
-// policies attached to the user. The IAM store has no named policies, so the
-// list is always empty; see policies.go.
+// managed policies attached to the user.
 type userView struct {
 	Name       string    `json:"name"`
 	Enabled    bool      `json:"enabled"`
@@ -52,10 +51,20 @@ func (s *Service) listUsers(c *call) (Response, error) {
 			}
 			return Response{}, err
 		}
+		pols, err := s.cfg.IAM.ListUserPolicies(c.ctx, u.Name)
+		if err != nil {
+			if s3err.Is(err, s3err.NoSuchEntity) {
+				continue
+			}
+			return Response{}, err
+		}
+		if pols == nil {
+			pols = []string{}
+		}
 		view := userView{
 			Name:       u.Name,
 			Enabled:    u.Enabled,
-			Policies:   []string{},
+			Policies:   pols,
 			AccessKeys: make([]keyView, 0, len(keys)),
 		}
 		for _, k := range keys {

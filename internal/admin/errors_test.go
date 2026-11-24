@@ -71,7 +71,7 @@ func TestDescribe(t *testing.T) {
 		{"unsupported media", errUnsupportedMedia(), http.StatusUnsupportedMediaType, s3err.InvalidRequest},
 		{"root", errRootProtected(), http.StatusConflict, RootUserProtected},
 		{"login limited", errLoginLimited(), http.StatusTooManyRequests, s3err.SlowDown},
-		{"not implemented", errNamedPoliciesUnsupported(), http.StatusNotImplemented, s3err.NotImplemented},
+		{"not implemented", errNotImplemented("x"), http.StatusNotImplemented, s3err.NotImplemented},
 		{"bucket not empty", s3err.Errorf(s3err.BucketNotEmpty, "x"), http.StatusConflict, s3err.BucketNotEmpty},
 		{"internal", errors.New("boom"), http.StatusInternalServerError, s3err.InternalError},
 		{"wrapped denial", fmt.Errorf("ctx: %w", errDenied()), http.StatusForbidden, s3err.AccessDenied},
