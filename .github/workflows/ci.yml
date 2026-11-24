@@ -54,6 +54,35 @@ jobs:
           GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./...
           GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build ./...
 
+  console:
+    name: Console
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web/console
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/console/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npx vite build
+      - name: Content-Security-Policy check
+        run: npm run check:csp
+
   lint:
     name: Lint and security
     needs: detect
