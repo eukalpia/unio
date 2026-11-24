@@ -44,15 +44,9 @@ func writeDirect(ctx context.Context, pool *bufpool.Pool, f *os.File, r io.Reade
 		!errors.Is(err, unix.EOPNOTSUPP) && !errors.Is(err, unix.ENOSYS) {
 		return 0, nil, fmt.Errorf("blob: preallocate %d bytes: %w", size, err)
 	}
-	buf, err := pool.Get(ctx)
-	if err != nil {
-		return 0, nil, err
-	}
-	defer buf.Release()
-
 	var tail []byte
 	var tailOff int64
-	err = copyExact(ctx, buf.Bytes(), r, size, func(p []byte, off int64) error {
+	err := copyFromPool(ctx, pool, r, size, func(p []byte, off int64) error {
 		whole := len(p) - len(p)%directAlign
 		if whole > 0 {
 			if _, err := f.WriteAt(p[:whole], off); err != nil {
