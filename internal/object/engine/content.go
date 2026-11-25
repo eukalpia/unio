@@ -30,13 +30,15 @@ func contentOf(rec meta.ObjectRecord) content {
 // selectPart narrows c to the part with number n, as GetObject with
 // PartNumber does. n == 0 selects the whole content. A single-part object
 // has the part number 1, and inline objects have no parts other than that.
+// A number that names no part of the object is InvalidPartNumber, which S3
+// answers with 416.
 func selectPart(rec meta.ObjectRecord, c content, n int) (content, error) {
 	if n == 0 {
 		return c, nil
 	}
 	if !rec.Multipart {
 		if n != 1 {
-			return content{}, s3err.Errorf(s3err.InvalidArgument, "part number %d does not exist", n)
+			return content{}, errNoSuchPart()
 		}
 		return c, nil
 	}
@@ -45,7 +47,29 @@ func selectPart(rec meta.ObjectRecord, c content, n int) (content, error) {
 			return content{parts: []meta.PartRecord{p}, size: p.Size}, nil
 		}
 	}
-	return content{}, s3err.Errorf(s3err.InvalidArgument, "part number %d does not exist", n)
+	return content{}, errNoSuchPart()
+}
+
+// noSuchPartCause is the cause of the InvalidArgument error that a read returns
+// for a part number that names no part of the object. The layer reports every
+// bad part number as InvalidArgument; the front end declares a local interface
+// with NoSuchPart and maps this case to InvalidPartNumber, which S3 answers with
+// 416, so that the error does not reveal how many parts the object has.
+type noSuchPartCause struct{}
+
+// Error implements error.
+func (noSuchPartCause) Error() string {
+	return "the object has no part with that number"
+}
+
+// NoSuchPart reports that the part number named no part of the object.
+func (noSuchPartCause) NoSuchPart() bool {
+	return true
+}
+
+// errNoSuchPart is the error for a part number that names no part.
+func errNoSuchPart() error {
+	return s3err.Wrap(s3err.InvalidArgument, noSuchPartCause{})
 }
 
 // window resolves an optional range against c. It returns the absolute

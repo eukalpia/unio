@@ -33,6 +33,10 @@ type Store interface {
 	// leave unreachable records.
 	DeleteBucket(ctx context.Context, name string) error
 	SetBucketVersioning(ctx context.Context, name string, state object.VersioningState) error
+	// SetBucketPolicy replaces the bucket policy; an empty policy removes it.
+	// The store checks only the size (object.MaxBucketPolicySize): the
+	// document must already have been accepted by policy.ParseBucket.
+	SetBucketPolicy(ctx context.Context, name string, policy []byte) error
 
 	// PutObject commits rec as the newest version of rec.Bucket/rec.Key.
 	// In unversioned buckets rec.VersionID must be "" and replaces the null
@@ -61,6 +65,17 @@ type Store interface {
 	// part still references data. Used by repair. Fails with
 	// ErrRevisionMismatch if the version no longer references data.
 	UpdateLayout(ctx context.Context, bucket, key, versionID string, partNumber int, data ids.DataID, layout erasure.Layout) error
+
+	// UpdateTags replaces the stored tag set of one version: the latest when
+	// versionID is "". tags is the stored form of the set (object.EncodeTags),
+	// and the store checks it with object.DecodeTags. Nothing else changes: no
+	// version is created, and the data, ETag and modification time stay as
+	// they were. The result is the updated record without its inline content.
+	// Fails with NoSuchKey when the key has no versions, or when versionID is
+	// "" and the latest version is a delete marker; NoSuchVersion when versionID
+	// is unknown; MethodNotAllowed when versionID names a delete marker. The
+	// check and the write are one atomic step.
+	UpdateTags(ctx context.Context, bucket, key, versionID, tags string) (ObjectRecord, error)
 
 	CreateUpload(ctx context.Context, up UploadRecord) error
 	// GetUpload fails with NoSuchUpload.

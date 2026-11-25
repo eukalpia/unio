@@ -18,8 +18,45 @@ func TestValidate(t *testing.T) {
 	}{
 		{name: "valid cluster"},
 		{name: "node id missing", mutate: func(c *Config) { c.Node.ID = "" }, wantErr: "node.id is required"},
-		{name: "node id invalid", mutate: func(c *Config) { c.Node.ID = "no_de" }, wantErr: "not a valid host name"},
+		{name: "node id invalid", mutate: func(c *Config) { c.Node.ID = "no_de" }, wantErr: "node.id: host \"no_de\""},
 		{name: "node id matches no endpoint", mutate: func(c *Config) { c.Node.ID = "node9" }, wantErr: "no endpoint belongs to node \"node9\""},
+		{name: "node id matches an endpoint ignoring case", mutate: func(c *Config) { c.Node.ID = "NODE1" }},
+		{name: "node id with a trailing dot", mutate: func(c *Config) { c.Node.ID = "node1." }, wantErr: "trailing dot"},
+		{name: "region with upper case", mutate: func(c *Config) { c.Node.Region = "US-EAST-1" }, wantErr: "node.region \"US-EAST-1\""},
+		{name: "region empty", mutate: func(c *Config) { c.Node.Region = "" }, wantErr: "node.region \"\""},
+		{name: "region longer than 32", mutate: func(c *Config) { c.Node.Region = strings.Repeat("a", 33) }, wantErr: "node.region"},
+		{name: "region of 32 characters", mutate: func(c *Config) { c.Node.Region = strings.Repeat("a", 32) }},
+		{name: "region with underscore", mutate: func(c *Config) { c.Node.Region = "eu_west" }, wantErr: "node.region"},
+		{name: "virtual host domains", mutate: func(c *Config) { c.Node.Domains = []string{"s3.example.com", "S3.Local"} }},
+		{name: "domain is an ip address", mutate: func(c *Config) { c.Node.Domains = []string{"10.0.0.1"} }, wantErr: "is an IP address"},
+		{name: "domain with trailing dot", mutate: func(c *Config) { c.Node.Domains = []string{"s3.example.com."} }, wantErr: "trailing dot"},
+		{name: "domain with underscore", mutate: func(c *Config) { c.Node.Domains = []string{"s_3.example.com"} }, wantErr: "node.domains entry \"s_3.example.com\""},
+		{name: "domain with surrounding blank", mutate: func(c *Config) { c.Node.Domains = []string{" s3.example.com"} }, wantErr: "surrounding blanks"},
+		{name: "empty domain", mutate: func(c *Config) { c.Node.Domains = []string{""} }, wantErr: "surrounding blanks"},
+		{name: "kubernetes fqdn endpoints", mutate: func(c *Config) {
+			c.Node.ID = "unio-0.unio-hl.default.svc.cluster.local"
+			c.Cluster.Endpoints = []string{"https://unio-{0...3}.unio-hl.default.svc.cluster.local:9100/data{1...4}"}
+		}},
+		{name: "ipv4 endpoints", mutate: func(c *Config) {
+			c.Node.ID = "10.0.0.1"
+			c.Cluster.Endpoints = []string{"https://10.0.0.{1...4}:9100/data{1...4}"}
+		}},
+		{name: "ipv6 endpoint", mutate: func(c *Config) {
+			c.Node.ID = "fd00::1"
+			c.Cluster.Endpoints = []string{"https://[fd00::1]:9100/data{1...4}"}
+		}},
+		{name: "two hosts with the same first label", mutate: func(c *Config) {
+			c.Node.ID = "unio-0.a.example"
+			c.Cluster.Endpoints = []string{"https://unio-0.a.example:9100/data1", "https://unio-0.b.example:9100/data1"}
+		}, wantErr: "both name node \"unio-0\""},
+		{name: "ipv4 host and dns host name the same node", mutate: func(c *Config) {
+			c.Node.ID = "ip-10-0-0-5"
+			c.Cluster.Endpoints = []string{"https://ip-10-0-0-5:9100/data1", "https://10.0.0.5:9100/data1"}
+		}, wantErr: "both name node \"ip-10-0-0-5\""},
+		{name: "endpoint host with an underscore", mutate: func(c *Config) {
+			c.Node.ID = "node_1"
+			c.Cluster.Endpoints = []string{"https://node_1:9100/data1"}
+		}, wantErr: "host \"node_1\""},
 		{name: "s3 address without port", mutate: func(c *Config) { c.Node.S3Address = "9000" }, wantErr: "node.s3_address"},
 		{name: "s3 port out of range", mutate: func(c *Config) { c.Node.S3Address = ":70000" }, wantErr: "node.s3_address"},
 		{name: "same ports", mutate: func(c *Config) { c.Node.S3Address = ":9100" }, wantErr: "must use different ports"},
@@ -28,11 +65,10 @@ func TestValidate(t *testing.T) {
 		{name: "bad endpoint pattern", mutate: func(c *Config) { c.Cluster.Endpoints = []string{"https://node{1...x}:9100/d"} }, wantErr: "cluster.endpoints"},
 		{name: "plain http without insecure flag", mutate: func(c *Config) {
 			c.Cluster.Endpoints = []string{"http://node{1...4}:9100/data{1...4}"}
-		}, wantErr: "must use https"},
-		{name: "plain http with insecure flag", mutate: func(c *Config) {
-			c.Cluster.Endpoints = []string{"http://node{1...4}:9100/data{1...4}"}
-			c.Cluster.InsecureInternode = true
-		}, wantWarnings: "INSECURE INTERNODE"},
+		}, wantErr: "internode traffic is always mutual TLS"},
+		{name: "one plain http endpoint among https ones", mutate: func(c *Config) {
+			c.Cluster.Endpoints = []string{"https://node{1...4}:9100/data{1...4}", "http://node5:9100/data1"}
+		}, wantErr: "endpoint http://node5:9100/data1 uses plain http"},
 		{name: "cluster secret missing", mutate: func(c *Config) { c.Cluster.Secret = Secret{} }, wantErr: "cluster.secret is not set"},
 		{name: "cluster secret too short", mutate: func(c *Config) { c.Cluster.Secret = NewSecret("short") }, wantErr: "cluster.secret must be at least 32"},
 		{name: "erasure set does not divide drives", mutate: func(c *Config) { c.Erasure.SetDriveCount = 5 }, wantErr: "must be between 4 and 16 and divide"},
@@ -63,9 +99,17 @@ func TestValidate(t *testing.T) {
 		{name: "inline threshold too large", mutate: func(c *Config) { c.Storage.InlineThreshold = 128 * kiB }, wantErr: "storage.inline_threshold"},
 		{name: "memory budget too small", mutate: func(c *Config) { c.Storage.MemoryBudget = miB }, wantErr: "storage.memory_budget"},
 		{name: "max requests zero", mutate: func(c *Config) { c.Limits.MaxRequests = 0 }, wantErr: "limits.max_requests"},
-		{name: "negative queue", mutate: func(c *Config) { c.Limits.RequestQueue = -1 }, wantErr: "limits.request_queue"},
+		{name: "negative queue", mutate: func(c *Config) { c.Limits.RequestQueue = -1 }, wantErr: "limits.request_queue -1 must be between 1"},
+		{name: "zero queue is refused", mutate: func(c *Config) { c.Limits.RequestQueue = 0 }, wantErr: "limits.request_queue 0 must be between 1"},
+		{name: "queue of one", mutate: func(c *Config) { c.Limits.RequestQueue = 1 }},
 		{name: "zero background concurrency", mutate: func(c *Config) { c.Limits.BackgroundConcurrency = 0 }, wantErr: "limits.background_concurrency"},
-		{name: "zero read timeout", mutate: func(c *Config) { c.Timeouts.Read = 0 }, wantErr: "timeouts.read"},
+		{name: "zero read idle timeout", mutate: func(c *Config) { c.Timeouts.ReadIdle = 0 }, wantErr: "timeouts.read_idle"},
+		{name: "zero write idle timeout", mutate: func(c *Config) { c.Timeouts.WriteIdle = 0 }, wantErr: "timeouts.write_idle"},
+		{name: "write idle timeout over a day", mutate: func(c *Config) { c.Timeouts.WriteIdle = 25 * time.Hour }, wantErr: "timeouts.write_idle"},
+		{name: "write cap zero means no cap", mutate: func(c *Config) { c.Timeouts.Write = 0 }},
+		{name: "write cap set", mutate: func(c *Config) { c.Timeouts.Write = 30 * time.Minute }},
+		{name: "negative write cap", mutate: func(c *Config) { c.Timeouts.Write = -time.Second }, wantErr: "timeouts.write -1s must be 0 for no cap"},
+		{name: "write cap over a day", mutate: func(c *Config) { c.Timeouts.Write = 25 * time.Hour }, wantErr: "timeouts.write 25h0m0s must be 0 for no cap"},
 		{name: "timeout over a day", mutate: func(c *Config) { c.Timeouts.Idle = 25 * time.Hour }, wantErr: "timeouts.idle"},
 		{name: "cert without key", mutate: func(c *Config) { c.TLS.CertFile = tlsCert }, wantErr: "must be set together"},
 		{name: "cert file missing", mutate: func(c *Config) {
@@ -78,20 +122,69 @@ func TestValidate(t *testing.T) {
 			c.TLS.KeyFile = tlsKey
 		}},
 		{name: "root user missing", mutate: func(c *Config) { c.Auth.RootUser = Secret{} }, wantErr: "auth.root_user is not set"},
-		{name: "root user short", mutate: func(c *Config) { c.Auth.RootUser = NewSecret("short") }, wantErr: "auth.root_user must be at least 12"},
-		{name: "root user is a default", mutate: func(c *Config) { c.Auth.RootUser = NewSecret("administrator") }, wantErr: "well-known default"},
-		{name: "root password missing", mutate: func(c *Config) { c.Auth.RootPassword = Secret{} }, wantErr: "auth.root_password is not set"},
-		{name: "root password short", mutate: func(c *Config) { c.Auth.RootPassword = NewSecret("Pw7Kd2Rx9Lm4") }, wantErr: "auth.root_password must be at least 32"},
-		{name: "root password equals user", mutate: func(c *Config) {
+		{name: "root user short", mutate: func(c *Config) { c.Auth.RootUser = NewSecret("short") }, wantErr: "root access key must be at least 12"},
+		{name: "root user with a hyphen", mutate: func(c *Config) { c.Auth.RootUser = NewSecret("unio-root-adm01") }, wantErr: "only letters and digits"},
+		{name: "root user is a well-known name", mutate: func(c *Config) { c.Auth.RootUser = NewSecret("administrator") }, wantErr: "well-known default name"},
+		{name: "root user is a well-known name in other case", mutate: func(c *Config) { c.Auth.RootUser = NewSecret("Administrator") }, wantErr: "well-known default name"},
+		{name: "root password equal to the root user", mutate: func(c *Config) {
 			v := "Pw7Kd2Rx9Lm4Vq8Zt1Nb6Hc3Yf5Gs0JaAA"
 			c.Auth.RootUser = NewSecret(v)
 			c.Auth.RootPassword = NewSecret(v)
-		}, wantErr: "must differ from the root user name"},
+		}, wantErr: "must differ from the root access key"},
 		{name: "root password is a template", mutate: func(c *Config) {
-			c.Auth.RootPassword = NewSecret("password-password-password-password-1234")
-		}, wantErr: "well-known default or template"},
-		{name: "metrics token missing", mutate: func(c *Config) { c.Metrics.Token = Secret{} }, wantErr: "metrics.token is not set"},
+			c.Auth.RootPassword = NewSecret("ChangeMe-Please-Rotate-This-Value-9876")
+		}, wantErr: "template or documentation example"},
+		{name: "root password mentions password", mutate: func(c *Config) {
+			c.Auth.RootPassword = NewSecret("my-password-is-long-enough-123456")
+		}, wantErr: "word password"},
+		{name: "root user of 128 letters and digits", mutate: func(c *Config) { c.Auth.RootUser = NewSecret(strings.Repeat("R", 128)) }},
+		{name: "root user longer than 128", mutate: func(c *Config) { c.Auth.RootUser = NewSecret(strings.Repeat("R", 129)) }, wantErr: "at most 128"},
+		{name: "root password missing", mutate: func(c *Config) { c.Auth.RootPassword = Secret{} }, wantErr: "auth.root_password is not set"},
+		{name: "root password short", mutate: func(c *Config) { c.Auth.RootPassword = NewSecret("Pw7Kd2Rx9Lm4") }, wantErr: "root secret key must be at least 32"},
+		{name: "root password longer than 256", mutate: func(c *Config) { c.Auth.RootPassword = NewSecret(strings.Repeat("Ab3", 90)) }, wantErr: "root secret key must be at most 256"},
+		{name: "root password with a space", mutate: func(c *Config) {
+			c.Auth.RootPassword = NewSecret("Pw7Kd2Rx9Lm4 Vq8Zt1Nb6Hc3Yf5Gs0Ja")
+		}, wantErr: "printable characters without spaces"},
+		{name: "root password with few distinct characters", mutate: func(c *Config) {
+			c.Auth.RootPassword = NewSecret(strings.Repeat("ab", 16))
+		}, wantErr: "at least 10 distinct characters"},
+		{name: "root password of 256 characters", mutate: func(c *Config) { c.Auth.RootPassword = NewSecret(strings.Repeat("Ab3Cd5Ef7Gh9Jk", 18) + "Ab3C") }},
+		{name: "metrics token optional", mutate: func(c *Config) { c.Metrics.Token = Secret{} }},
+		{name: "metrics token of 32 characters", mutate: func(c *Config) { c.Metrics.Token = NewSecret("Hm4Tq9Zr2Lx7Wc1Pk8Vb3Ny6Gd5Fs0Ja") }},
+		{name: "metrics token too short", mutate: func(c *Config) { c.Metrics.Token = NewSecret("Hm4Tq9Zr2Lx7Wc1Pk8Vb3Ny6Gd5Fs0") }, wantErr: "metrics.token must be at least 32"},
 		{name: "metrics token equals cluster secret", mutate: func(c *Config) { c.Metrics.Token = NewSecret(testSecret) }, wantErr: "must differ from cluster.secret"},
+		{name: "pprof enabled without token", mutate: func(c *Config) {
+			c.Metrics.Pprof = true
+			c.Metrics.Token = Secret{}
+		}, wantErr: "metrics.pprof is enabled but metrics.token is not set"},
+		{name: "pprof on loopback", mutate: func(c *Config) { c.Metrics.Pprof = true }},
+		{name: "pprof on ipv6 loopback", mutate: func(c *Config) { c.Metrics.PprofAddress = "[::1]:9190" }},
+		{name: "pprof address empty", mutate: func(c *Config) { c.Metrics.PprofAddress = "" }, wantErr: "metrics.pprof_address \"\" must have the form"},
+		{name: "pprof address without port", mutate: func(c *Config) { c.Metrics.PprofAddress = "127.0.0.1" }, wantErr: "must have the form"},
+		{name: "pprof address on all interfaces", mutate: func(c *Config) { c.Metrics.PprofAddress = "0.0.0.0:9190" }, wantErr: "must name a loopback IP address"},
+		{name: "pprof address on a wildcard ipv6", mutate: func(c *Config) { c.Metrics.PprofAddress = "[::]:9190" }, wantErr: "must name a loopback IP address"},
+		{name: "pprof address on a host name", mutate: func(c *Config) { c.Metrics.PprofAddress = "localhost:9190" }, wantErr: "must name a loopback IP address"},
+		{name: "pprof address on a public address", mutate: func(c *Config) { c.Metrics.PprofAddress = "10.0.0.5:9190" }, wantErr: "must name a loopback IP address"},
+		{name: "pprof port zero", mutate: func(c *Config) { c.Metrics.PprofAddress = "127.0.0.1:0" }, wantErr: "the port must be between 1 and 65535"},
+		{name: "pprof address refused even when pprof is off", mutate: func(c *Config) { c.Metrics.PprofAddress = "0.0.0.0:9190" }, wantErr: "loopback"},
+		{name: "pprof port equals s3 port on all interfaces", mutate: func(c *Config) {
+			c.Metrics.Pprof = true
+			c.Metrics.PprofAddress = "127.0.0.1:9000"
+		}, wantErr: "node.s3_address"},
+		{name: "pprof port equals internode port on the same address", mutate: func(c *Config) {
+			c.Metrics.Pprof = true
+			c.Node.InternodeAddress = "127.0.0.1:9190"
+			c.Cluster.Endpoints = []string{"https://node{1...4}:9190/data{1...4}"}
+			c.Metrics.PprofAddress = "127.0.0.1:9190"
+		}, wantErr: "node.internode_address"},
+		{name: "pprof port equals s3 port on another address", mutate: func(c *Config) {
+			c.Metrics.Pprof = true
+			c.Node.S3Address = "10.0.0.5:9000"
+			c.Metrics.PprofAddress = "127.0.0.1:9000"
+		}},
+		{name: "pprof port equals s3 port while pprof is off", mutate: func(c *Config) {
+			c.Metrics.PprofAddress = "127.0.0.1:9000"
+		}},
 		{name: "bad log level", mutate: func(c *Config) { c.Log.Level = "verbose" }, wantErr: "log.level"},
 		{name: "bad log format", mutate: func(c *Config) { c.Log.Format = "xml" }, wantErr: "log.format"},
 		{name: "plain http warning on valid config", wantWarnings: "plain HTTP"},

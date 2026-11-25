@@ -9,6 +9,7 @@ package testbackend
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -103,6 +104,21 @@ func (s *Store) DeleteBucket(_ context.Context, name string) error {
 		return s3err.Errorf(s3err.BucketNotEmpty, "bucket is not empty")
 	}
 	delete(s.buckets, name)
+	return nil
+}
+
+// SetBucketPolicy implements meta.Store.
+func (s *Store) SetBucketPolicy(_ context.Context, name string, policy []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b, err := s.bucketLocked(name)
+	if err != nil {
+		return err
+	}
+	b.info.Policy = nil
+	if len(policy) > 0 {
+		b.info.Policy = slices.Clone(policy)
+	}
 	return nil
 }
 
@@ -296,6 +312,47 @@ func (s *Store) UpdateLayout(_ context.Context, bucketName, key, versionID strin
 		break
 	}
 	return meta.ErrRevisionMismatch
+}
+
+// UpdateTags implements meta.Store. The versions of a key are kept newest
+// first, so the latest version is the first one.
+func (s *Store) UpdateTags(_ context.Context, bucketName, key, versionID, tags string) (meta.ObjectRecord, error) {
+	if _, err := object.DecodeTags(tags); err != nil {
+		return meta.ObjectRecord{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b, err := s.bucketLocked(bucketName)
+	if err != nil {
+		return meta.ObjectRecord{}, err
+	}
+	versions := b.keys[key]
+	i := -1
+	switch {
+	case versionID == "" && len(versions) > 0:
+		i = 0
+	case versionID != "":
+		for j, v := range versions {
+			if v.VersionID == versionID {
+				i = j
+				break
+			}
+		}
+	}
+	switch {
+	case i < 0 && versionID == "":
+		return meta.ObjectRecord{}, s3err.Errorf(s3err.NoSuchKey, "no such key")
+	case i < 0:
+		return meta.ObjectRecord{}, s3err.Errorf(s3err.NoSuchVersion, "no such version")
+	case versions[i].DeleteMarker && versionID == "":
+		return meta.ObjectRecord{}, s3err.Errorf(s3err.NoSuchKey, "no such key")
+	case versions[i].DeleteMarker:
+		return meta.ObjectRecord{}, s3err.Errorf(s3err.MethodNotAllowed, "the requested version is a delete marker")
+	}
+	versions[i].Tags = tags
+	rec := versions[i]
+	rec.Inline = nil
+	return rec, nil
 }
 
 // CreateUpload implements meta.Store.

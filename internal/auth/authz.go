@@ -11,8 +11,12 @@ const (
 	ActionDeleteBucket               Action = "s3:DeleteBucket"
 	ActionListAllMyBuckets           Action = "s3:ListAllMyBuckets"
 	ActionListBucket                 Action = "s3:ListBucket"
+	ActionListBucketVersions         Action = "s3:ListBucketVersions"
 	ActionListBucketMultipartUploads Action = "s3:ListBucketMultipartUploads"
 	ActionGetBucketLocation          Action = "s3:GetBucketLocation"
+	ActionGetBucketPolicy            Action = "s3:GetBucketPolicy"
+	ActionPutBucketPolicy            Action = "s3:PutBucketPolicy"
+	ActionDeleteBucketPolicy         Action = "s3:DeleteBucketPolicy"
 	ActionGetObject                  Action = "s3:GetObject"
 	ActionPutObject                  Action = "s3:PutObject"
 	ActionDeleteObject               Action = "s3:DeleteObject"
@@ -20,6 +24,7 @@ const (
 	ActionListMultipartUploadParts   Action = "s3:ListMultipartUploadParts"
 	ActionGetObjectTagging           Action = "s3:GetObjectTagging"
 	ActionPutObjectTagging           Action = "s3:PutObjectTagging"
+	ActionDeleteObjectTagging        Action = "s3:DeleteObjectTagging"
 	ActionAdmin                      Action = "unio:Admin"
 )
 

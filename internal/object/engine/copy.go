@@ -57,7 +57,7 @@ func (e *Engine) CopyObject(ctx context.Context, src object.Ref, dstBucket, dstK
 	if err != nil {
 		return object.Info{}, wrapCause("checksum", err)
 	}
-	if c.size <= e.inline {
+	if e.inlineFits(c.size) {
 		data, err := e.readInline(ctx, c, dg)
 		if err != nil {
 			return object.Info{}, err

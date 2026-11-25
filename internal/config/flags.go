@@ -28,15 +28,21 @@ type FlagSpec struct {
 	Usage string
 	// Bool reports whether the flag takes no value (--flag or --flag=false).
 	Bool bool
+	// Hidden marks a removed flag. It is registered only so that using it
+	// reports the removal, and it is left out of the help text.
+	Hidden bool
 }
 
-// FlagSpecs returns the flags that set configuration keys, in a stable order.
-// Secrets have no flags on purpose: a flag value is visible in the process
-// table.
+// FlagSpecs returns the flags that set configuration keys, in a stable order,
+// followed by the hidden flags of removed settings. Secrets have no flags on
+// purpose: a flag value is visible in the process table.
 func FlagSpecs() []FlagSpec {
 	var specs []FlagSpec
 	for _, s := range settings() {
 		specs = append(specs, FlagSpec{Name: s.flag, Env: s.env, Usage: s.usage, Bool: s.isBool})
+	}
+	for _, r := range removedSettings() {
+		specs = append(specs, FlagSpec{Name: r.flag, Env: r.env, Usage: "removed setting", Bool: r.isBool, Hidden: true})
 	}
 	return specs
 }
@@ -51,10 +57,14 @@ func settings() []setting {
 			func(c *Config) *string { return &c.Node.S3Address }),
 		strSetting("internode-address", "UNIO_INTERNODE_ADDRESS", "internode listen address",
 			func(c *Config) *string { return &c.Node.InternodeAddress }),
+		strSetting("admin-address", "UNIO_ADMIN_ADDRESS", "separate listen address of the admin API and console, e.g. 127.0.0.1:9001 (default: on the S3 port)",
+			func(c *Config) *string { return &c.Node.AdminAddress }),
+		strSetting("region", "UNIO_REGION", "S3 region of this node, e.g. us-east-1",
+			func(c *Config) *string { return &c.Node.Region }),
+		listSetting("domains", "UNIO_DOMAINS", "comma-separated virtual-host suffixes, e.g. s3.example.com",
+			func(c *Config) *[]string { return &c.Node.Domains }),
 		listSetting("endpoints", "UNIO_ENDPOINTS", "comma-separated drive endpoint patterns, e.g. https://node{1...4}:9100/data{1...4}",
 			func(c *Config) *[]string { return &c.Cluster.Endpoints }),
-		boolSetting("insecure-internode", "UNIO_INSECURE_INTERNODE", "allow plain HTTP internode traffic (development only)",
-			func(c *Config) *bool { return &c.Cluster.InsecureInternode }),
 		strSetting("tls-cert-file", "UNIO_TLS_CERT_FILE", "PEM certificate chain for the S3 endpoint",
 			func(c *Config) *string { return &c.TLS.CertFile }),
 		strSetting("tls-key-file", "UNIO_TLS_KEY_FILE", "PEM private key for the S3 endpoint",
@@ -67,10 +77,14 @@ func settings() []setting {
 			func(c *Config) *int { return &c.Erasure.Parity }),
 		intSetting("metadata-partitions", "UNIO_METADATA_PARTITIONS", "number of metadata partitions (fixed at cluster creation)",
 			func(c *Config) *int { return &c.Metadata.Partitions }),
+		strSetting("metadata-dir", "UNIO_METADATA_DIR", "absolute directory of the metadata store (default: .unio/meta under the first local drive)",
+			func(c *Config) *string { return &c.Metadata.Dir }),
 		sizeSetting("inline-threshold", "UNIO_INLINE_THRESHOLD", "largest object stored inline in metadata, e.g. 4KiB",
 			func(c *Config) *Size { return &c.Storage.InlineThreshold }),
 		sizeSetting("memory-budget", "UNIO_MEMORY_BUDGET", "memory budget for I/O buffers, e.g. 1GiB",
 			func(c *Config) *Size { return &c.Storage.MemoryBudget }),
+		strSetting("storage-sync", "UNIO_STORAGE_SYNC", "when drive writes reach stable storage: always (each write) or batch (in groups; a power loss can lose the last batch)",
+			func(c *Config) *string { return &c.Storage.Sync }),
 		intSetting("max-requests", "UNIO_MAX_REQUESTS", "concurrent S3 requests",
 			func(c *Config) *int { return &c.Limits.MaxRequests }),
 		intSetting("request-queue", "UNIO_REQUEST_QUEUE", "S3 requests waiting for a slot before 503 SlowDown",
@@ -79,10 +93,12 @@ func settings() []setting {
 			func(c *Config) *int { return &c.Limits.BackgroundConcurrency }),
 		durSetting("read-header-timeout", "UNIO_READ_HEADER_TIMEOUT", "time allowed to read request headers",
 			func(c *Config) *time.Duration { return &c.Timeouts.ReadHeader }),
-		durSetting("read-timeout", "UNIO_READ_TIMEOUT", "time allowed to read a whole request",
-			func(c *Config) *time.Duration { return &c.Timeouts.Read }),
-		durSetting("write-timeout", "UNIO_WRITE_TIMEOUT", "time allowed to write a response",
+		durSetting("read-idle-timeout", "UNIO_READ_IDLE_TIMEOUT", "time a request read may stall without data",
+			func(c *Config) *time.Duration { return &c.Timeouts.ReadIdle }),
+		durSetting("write-timeout", "UNIO_WRITE_TIMEOUT", "cap on the time to write one response; 0 means no cap",
 			func(c *Config) *time.Duration { return &c.Timeouts.Write }),
+		durSetting("write-idle-timeout", "UNIO_WRITE_IDLE_TIMEOUT", "time a response write may stall without the client accepting data",
+			func(c *Config) *time.Duration { return &c.Timeouts.WriteIdle }),
 		durSetting("idle-timeout", "UNIO_IDLE_TIMEOUT", "idle keep-alive connection timeout",
 			func(c *Config) *time.Duration { return &c.Timeouts.Idle }),
 		durSetting("shutdown-timeout", "UNIO_SHUTDOWN_TIMEOUT", "graceful shutdown deadline",
@@ -93,6 +109,8 @@ func settings() []setting {
 			func(c *Config) *string { return &c.Log.Format }),
 		boolSetting("pprof", "UNIO_PPROF", "enable the token-protected pprof endpoints",
 			func(c *Config) *bool { return &c.Metrics.Pprof }),
+		strSetting("pprof-address", "UNIO_PPROF_ADDRESS", "loopback listen address of the pprof endpoints, e.g. 127.0.0.1:9190",
+			func(c *Config) *string { return &c.Metrics.PprofAddress }),
 	}
 }
 

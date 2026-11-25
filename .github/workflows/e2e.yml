@@ -1,0 +1,42 @@
+name: E2E
+
+# Runs the end-to-end harness against a single node and against the 4-node
+# cluster. Only manual and nightly runs for now. Add pull_request once the node
+# binary serves S3, so that every change is tested end to end.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 4 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: E2E (${{ matrix.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    concurrency:
+      group: e2e-${{ matrix.mode }}-${{ github.ref }}
+      cancel-in-progress: true
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [single, cluster]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Run the e2e suites
+        run: test/e2e/run.sh ${{ matrix.mode }} integration security
+      - name: Upload logs of the failed run
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-logs-${{ matrix.mode }}
+          path: test/e2e/out/
+          if-no-files-found: ignore
+          retention-days: 14

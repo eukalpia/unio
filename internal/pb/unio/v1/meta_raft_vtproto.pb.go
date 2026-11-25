@@ -119,6 +119,15 @@ func (m *Command_SetPartitionVersioning) CloneVT() isCommand_Cmd {
 	return r
 }
 
+func (m *Command_UpdateTags) CloneVT() isCommand_Cmd {
+	if m == nil {
+		return (*Command_UpdateTags)(nil)
+	}
+	r := new(Command_UpdateTags)
+	r.UpdateTags = m.UpdateTags.CloneVT()
+	return r
+}
+
 func (m *Command_CreateBucket) CloneVT() isCommand_Cmd {
 	if m == nil {
 		return (*Command_CreateBucket)(nil)
@@ -170,6 +179,15 @@ func (m *Command_KvDelete) CloneVT() isCommand_Cmd {
 	}
 	r := new(Command_KvDelete)
 	r.KvDelete = m.KvDelete.CloneVT()
+	return r
+}
+
+func (m *Command_SetBucketPolicy) CloneVT() isCommand_Cmd {
+	if m == nil {
+		return (*Command_SetBucketPolicy)(nil)
+	}
+	r := new(Command_SetBucketPolicy)
+	r.SetBucketPolicy = m.SetBucketPolicy.CloneVT()
 	return r
 }
 
@@ -256,6 +274,26 @@ func (m *UpdateLayout) CloneVT() *UpdateLayout {
 }
 
 func (m *UpdateLayout) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *UpdateTags) CloneVT() *UpdateTags {
+	if m == nil {
+		return (*UpdateTags)(nil)
+	}
+	r := new(UpdateTags)
+	r.BucketId = m.BucketId
+	r.Key = m.Key
+	r.VersionId = m.VersionId
+	r.Tags = m.Tags
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *UpdateTags) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -449,6 +487,29 @@ func (m *SetBucketVersioning) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
+func (m *SetBucketPolicy) CloneVT() *SetBucketPolicy {
+	if m == nil {
+		return (*SetBucketPolicy)(nil)
+	}
+	r := new(SetBucketPolicy)
+	r.Name = m.Name
+	r.BucketId = m.BucketId
+	if rhs := m.Policy; rhs != nil {
+		tmpBytes := make([]byte, len(rhs))
+		copy(tmpBytes, rhs)
+		r.Policy = tmpBytes
+	}
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *SetBucketPolicy) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
 func (m *KVPut) CloneVT() *KVPut {
 	if m == nil {
 		return (*KVPut)(nil)
@@ -501,6 +562,7 @@ func (m *ApplyResult) CloneVT() *ApplyResult {
 	r.ReplacedPart = m.ReplacedPart.CloneVT()
 	r.Bucket = m.Bucket.CloneVT()
 	r.Revision = m.Revision
+	r.Object = m.Object.CloneVT()
 	if rhs := m.Garbage; rhs != nil {
 		tmpContainer := make([]*ObjectRecord, len(rhs))
 		for k, v := range rhs {
@@ -1564,6 +1626,31 @@ func (this *Command_SetPartitionVersioning) EqualVT(thatIface isCommand_Cmd) boo
 	return true
 }
 
+func (this *Command_UpdateTags) EqualVT(thatIface isCommand_Cmd) bool {
+	that, ok := thatIface.(*Command_UpdateTags)
+	if !ok {
+		return false
+	}
+	if this == that {
+		return true
+	}
+	if this == nil && that != nil || this != nil && that == nil {
+		return false
+	}
+	if p, q := this.UpdateTags, that.UpdateTags; p != q {
+		if p == nil {
+			p = &UpdateTags{}
+		}
+		if q == nil {
+			q = &UpdateTags{}
+		}
+		if !p.EqualVT(q) {
+			return false
+		}
+	}
+	return true
+}
+
 func (this *Command_CreateBucket) EqualVT(thatIface isCommand_Cmd) bool {
 	that, ok := thatIface.(*Command_CreateBucket)
 	if !ok {
@@ -1714,6 +1801,31 @@ func (this *Command_KvDelete) EqualVT(thatIface isCommand_Cmd) bool {
 	return true
 }
 
+func (this *Command_SetBucketPolicy) EqualVT(thatIface isCommand_Cmd) bool {
+	that, ok := thatIface.(*Command_SetBucketPolicy)
+	if !ok {
+		return false
+	}
+	if this == that {
+		return true
+	}
+	if this == nil && that != nil || this != nil && that == nil {
+		return false
+	}
+	if p, q := this.SetBucketPolicy, that.SetBucketPolicy; p != q {
+		if p == nil {
+			p = &SetBucketPolicy{}
+		}
+		if q == nil {
+			q = &SetBucketPolicy{}
+		}
+		if !p.EqualVT(q) {
+			return false
+		}
+	}
+	return true
+}
+
 func (this *WriteConditions) EqualVT(that *WriteConditions) bool {
 	if this == that {
 		return true
@@ -1827,6 +1939,34 @@ func (this *UpdateLayout) EqualVT(that *UpdateLayout) bool {
 
 func (this *UpdateLayout) EqualMessageVT(thatMsg proto.Message) bool {
 	that, ok := thatMsg.(*UpdateLayout)
+	if !ok {
+		return false
+	}
+	return this.EqualVT(that)
+}
+func (this *UpdateTags) EqualVT(that *UpdateTags) bool {
+	if this == that {
+		return true
+	} else if this == nil || that == nil {
+		return false
+	}
+	if this.BucketId != that.BucketId {
+		return false
+	}
+	if this.Key != that.Key {
+		return false
+	}
+	if this.VersionId != that.VersionId {
+		return false
+	}
+	if this.Tags != that.Tags {
+		return false
+	}
+	return string(this.unknownFields) == string(that.unknownFields)
+}
+
+func (this *UpdateTags) EqualMessageVT(thatMsg proto.Message) bool {
+	that, ok := thatMsg.(*UpdateTags)
 	if !ok {
 		return false
 	}
@@ -2082,6 +2222,31 @@ func (this *SetBucketVersioning) EqualMessageVT(thatMsg proto.Message) bool {
 	}
 	return this.EqualVT(that)
 }
+func (this *SetBucketPolicy) EqualVT(that *SetBucketPolicy) bool {
+	if this == that {
+		return true
+	} else if this == nil || that == nil {
+		return false
+	}
+	if this.Name != that.Name {
+		return false
+	}
+	if this.BucketId != that.BucketId {
+		return false
+	}
+	if string(this.Policy) != string(that.Policy) {
+		return false
+	}
+	return string(this.unknownFields) == string(that.unknownFields)
+}
+
+func (this *SetBucketPolicy) EqualMessageVT(thatMsg proto.Message) bool {
+	that, ok := thatMsg.(*SetBucketPolicy)
+	if !ok {
+		return false
+	}
+	return this.EqualVT(that)
+}
 func (this *KVPut) EqualVT(that *KVPut) bool {
 	if this == that {
 		return true
@@ -2185,6 +2350,9 @@ func (this *ApplyResult) EqualVT(that *ApplyResult) bool {
 		return false
 	}
 	if this.Revision != that.Revision {
+		return false
+	}
+	if !this.Object.EqualVT(that.Object) {
 		return false
 	}
 	return string(this.unknownFields) == string(that.unknownFields)
@@ -3693,6 +3861,25 @@ func (m *Command_SetPartitionVersioning) MarshalToSizedBufferVT(dAtA []byte) (in
 	}
 	return len(dAtA) - i, nil
 }
+func (m *Command_UpdateTags) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *Command_UpdateTags) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.UpdateTags != nil {
+		size, err := m.UpdateTags.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x52
+	}
+	return len(dAtA) - i, nil
+}
 func (m *Command_CreateBucket) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
@@ -3816,6 +4003,27 @@ func (m *Command_KvDelete) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		dAtA[i] = 0x1
 		i--
 		dAtA[i] = 0xca
+	}
+	return len(dAtA) - i, nil
+}
+func (m *Command_SetBucketPolicy) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *Command_SetBucketPolicy) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.SetBucketPolicy != nil {
+		size, err := m.SetBucketPolicy.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xd2
 	}
 	return len(dAtA) - i, nil
 }
@@ -4056,6 +4264,65 @@ func (m *UpdateLayout) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.PartNumber))
 		i--
 		dAtA[i] = 0x20
+	}
+	if len(m.VersionId) > 0 {
+		i -= len(m.VersionId)
+		copy(dAtA[i:], m.VersionId)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.VersionId)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Key) > 0 {
+		i -= len(m.Key)
+		copy(dAtA[i:], m.Key)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Key)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if m.BucketId != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.BucketId))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *UpdateTags) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *UpdateTags) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *UpdateTags) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.Tags) > 0 {
+		i -= len(m.Tags)
+		copy(dAtA[i:], m.Tags)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Tags)))
+		i--
+		dAtA[i] = 0x22
 	}
 	if len(m.VersionId) > 0 {
 		i -= len(m.VersionId)
@@ -4611,6 +4878,58 @@ func (m *SetBucketVersioning) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *SetBucketPolicy) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *SetBucketPolicy) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *SetBucketPolicy) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.Policy) > 0 {
+		i -= len(m.Policy)
+		copy(dAtA[i:], m.Policy)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Policy)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if m.BucketId != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.BucketId))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.Name) > 0 {
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Name)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
 func (m *KVPut) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
@@ -4737,6 +5056,16 @@ func (m *ApplyResult) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.Object != nil {
+		size, err := m.Object.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x4a
 	}
 	if m.Revision != 0 {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.Revision))
@@ -6730,6 +7059,18 @@ func (m *Command_SetPartitionVersioning) SizeVT() (n int) {
 	}
 	return n
 }
+func (m *Command_UpdateTags) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.UpdateTags != nil {
+		l = m.UpdateTags.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	return n
+}
 func (m *Command_CreateBucket) SizeVT() (n int) {
 	if m == nil {
 		return 0
@@ -6798,6 +7139,18 @@ func (m *Command_KvDelete) SizeVT() (n int) {
 	_ = l
 	if m.KvDelete != nil {
 		l = m.KvDelete.SizeVT()
+		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	return n
+}
+func (m *Command_SetBucketPolicy) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.SetBucketPolicy != nil {
+		l = m.SetBucketPolicy.SizeVT()
 		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	return n
@@ -6903,6 +7256,31 @@ func (m *UpdateLayout) SizeVT() (n int) {
 	}
 	if m.Layout != nil {
 		l = m.Layout.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *UpdateTags) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.BucketId != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.BucketId))
+	}
+	l = len(m.Key)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.VersionId)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.Tags)
+	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -7114,6 +7492,27 @@ func (m *SetBucketVersioning) SizeVT() (n int) {
 	return n
 }
 
+func (m *SetBucketPolicy) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Name)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.BucketId != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.BucketId))
+	}
+	l = len(m.Policy)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
 func (m *KVPut) SizeVT() (n int) {
 	if m == nil {
 		return 0
@@ -7191,6 +7590,10 @@ func (m *ApplyResult) SizeVT() (n int) {
 	}
 	if m.Revision != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.Revision))
+	}
+	if m.Object != nil {
+		l = m.Object.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -8363,6 +8766,47 @@ func (m *Command) UnmarshalVT(dAtA []byte) error {
 				m.Cmd = &Command_SetPartitionVersioning{SetPartitionVersioning: v}
 			}
 			iNdEx = postIndex
+		case 10:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field UpdateTags", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if oneof, ok := m.Cmd.(*Command_UpdateTags); ok {
+				if err := oneof.UpdateTags.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				v := &UpdateTags{}
+				if err := v.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+				m.Cmd = &Command_UpdateTags{UpdateTags: v}
+			}
+			iNdEx = postIndex
 		case 20:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field CreateBucket", wireType)
@@ -8607,6 +9051,47 @@ func (m *Command) UnmarshalVT(dAtA []byte) error {
 					return err
 				}
 				m.Cmd = &Command_KvDelete{KvDelete: v}
+			}
+			iNdEx = postIndex
+		case 26:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SetBucketPolicy", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if oneof, ok := m.Cmd.(*Command_SetBucketPolicy); ok {
+				if err := oneof.SetBucketPolicy.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				v := &SetBucketPolicy{}
+				if err := v.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+				m.Cmd = &Command_SetBucketPolicy{SetBucketPolicy: v}
 			}
 			iNdEx = postIndex
 		default:
@@ -9341,6 +9826,172 @@ func (m *UpdateLayout) UnmarshalVT(dAtA []byte) error {
 			if err := m.Layout.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *UpdateTags) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return protohelpers.ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: UpdateTags: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: UpdateTags: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BucketId", wireType)
+			}
+			m.BucketId = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.BucketId |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Key", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Key = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field VersionId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.VersionId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Tags", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Tags = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -10657,6 +11308,142 @@ func (m *SetBucketVersioning) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
+func (m *SetBucketPolicy) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return protohelpers.ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: SetBucketPolicy: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: SetBucketPolicy: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Name = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BucketId", wireType)
+			}
+			m.BucketId = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.BucketId |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Policy", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Policy = append(m.Policy[:0], dAtA[iNdEx:postIndex]...)
+			if m.Policy == nil {
+				m.Policy = []byte{}
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
 func (m *KVPut) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -11167,6 +11954,42 @@ func (m *ApplyResult) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Object", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Object == nil {
+				m.Object = &ObjectRecord{}
+			}
+			if err := m.Object.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

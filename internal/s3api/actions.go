@@ -15,30 +15,50 @@ func requiresPreAuthorization(op router.Op) bool {
 
 // primaryAction maps a routed operation to the IAM action checked before the
 // operation runs. Operations that touch a second object, such as CopyObject's
-// source or DeleteObjects' keys, are authorized again by their handlers.
-func primaryAction(op router.Op) auth.Action {
+// source or DeleteObjects' keys, are authorized again by their handlers. It
+// reports false for an operation with no mapping, which is then refused: a
+// new operation added without an action must be denied, never authorized as
+// some other action.
+func primaryAction(op router.Op) (auth.Action, bool) {
 	switch op {
 	case router.OpListBuckets:
-		return auth.ActionListAllMyBuckets
+		return auth.ActionListAllMyBuckets, true
 	case router.OpCreateBucket:
-		return auth.ActionCreateBucket
+		return auth.ActionCreateBucket, true
 	case router.OpHeadBucket, router.OpListObjectsV1, router.OpListObjectsV2:
-		return auth.ActionListBucket
+		return auth.ActionListBucket, true
+	case router.OpListObjectVersions:
+		return auth.ActionListBucketVersions, true
 	case router.OpDeleteBucket:
-		return auth.ActionDeleteBucket
+		return auth.ActionDeleteBucket, true
 	case router.OpGetBucketLocation:
-		return auth.ActionGetBucketLocation
+		return auth.ActionGetBucketLocation, true
+	case router.OpGetBucketPolicy:
+		return auth.ActionGetBucketPolicy, true
+	case router.OpPutBucketPolicy:
+		return auth.ActionPutBucketPolicy, true
+	case router.OpDeleteBucketPolicy:
+		return auth.ActionDeleteBucketPolicy, true
 	case router.OpListMultipartUploads:
-		return auth.ActionListBucketMultipartUploads
+		return auth.ActionListBucketMultipartUploads, true
 	case router.OpDeleteObjects, router.OpDeleteObject:
-		return auth.ActionDeleteObject
+		return auth.ActionDeleteObject, true
 	case router.OpGetObject, router.OpHeadObject:
-		return auth.ActionGetObject
+		return auth.ActionGetObject, true
+	case router.OpPutObject, router.OpCopyObject, router.OpCreateMultipartUpload,
+		router.OpUploadPart, router.OpUploadPartCopy, router.OpCompleteMultipartUpload:
+		return auth.ActionPutObject, true
 	case router.OpAbortMultipartUpload:
-		return auth.ActionAbortMultipartUpload
+		return auth.ActionAbortMultipartUpload, true
 	case router.OpListParts:
-		return auth.ActionListMultipartUploadParts
+		return auth.ActionListMultipartUploadParts, true
+	case router.OpGetObjectTagging:
+		return auth.ActionGetObjectTagging, true
+	case router.OpPutObjectTagging:
+		return auth.ActionPutObjectTagging, true
+	case router.OpDeleteObjectTagging:
+		return auth.ActionDeleteObjectTagging, true
 	default:
-		return auth.ActionPutObject
+		return "", false
 	}
 }

@@ -44,5 +44,5 @@ In scope:
   crafted requests;
 - secret exposure in logs, metrics or errors.
 
-Out of scope: deployments with `--insecure-internode` or plain-HTTP S3
-endpoints exposed to untrusted networks against documented guidance.
+Out of scope: plain-HTTP S3 endpoints exposed to untrusted networks against
+documented guidance.

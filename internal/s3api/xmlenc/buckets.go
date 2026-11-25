@@ -17,6 +17,12 @@ func AppendListBuckets(dst []byte, r *ListBucketsResult) []byte {
 		dst = appendClose(dst, "Bucket")
 	}
 	dst = appendClose(dst, "Buckets")
+	if r.ContinuationToken != "" {
+		dst = appendTextElem(dst, "ContinuationToken", r.ContinuationToken)
+	}
+	if r.Prefix != "" {
+		dst = appendTextElem(dst, "Prefix", r.Prefix)
+	}
 	return appendClose(dst, "ListAllMyBucketsResult")
 }
 

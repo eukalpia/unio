@@ -32,6 +32,11 @@ func copyExact(ctx context.Context, buf []byte, r io.Reader, size int64, sink fu
 		}
 		off += n
 	}
+	return checkDrained(r, size)
+}
+
+// checkDrained fails if r, after size bytes, still holds data or fails.
+func checkDrained(r io.Reader, size int64) error {
 	var one [1]byte
 	n, err := r.Read(one[:])
 	if n > 0 {
@@ -50,13 +55,7 @@ func writeBuffered(ctx context.Context, pool *bufpool.Pool, path string, r io.Re
 	if err != nil {
 		return fmt.Errorf("blob: create %s: %w", path, err)
 	}
-	buf, err := pool.Get(ctx)
-	if err != nil {
-		_ = f.Close()
-		return err
-	}
-	defer buf.Release()
-	err = copyExact(ctx, buf.Bytes(), r, size, func(p []byte, off int64) error {
+	err = copyFromPool(ctx, pool, r, size, func(p []byte, off int64) error {
 		_, werr := f.WriteAt(p, off)
 		return werr
 	})

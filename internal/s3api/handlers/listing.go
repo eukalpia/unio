@@ -42,16 +42,17 @@ func (e *Env) ListObjectsV2(c *Call) error {
 		return err
 	}
 	res := xmlenc.ListObjectsV2Result{
-		Name:              c.Route.Bucket,
-		Prefix:            prefix,
-		Delimiter:         delimiter,
-		StartAfter:        q.Get("start-after"),
-		ContinuationToken: token,
-		EncodingType:      encoding,
-		MaxKeys:           maxKeys,
-		IsTruncated:       page.IsTruncated,
-		Contents:          contents(page.Objects, fetchOwner, c.ownerName()),
-		CommonPrefixes:    page.CommonPrefixes,
+		Name:                  c.Route.Bucket,
+		Prefix:                prefix,
+		Delimiter:             delimiter,
+		StartAfter:            q.Get("start-after"),
+		ContinuationToken:     token,
+		EchoContinuationToken: hasParam(q, "continuation-token"),
+		EncodingType:          encoding,
+		MaxKeys:               maxKeys,
+		IsTruncated:           page.IsTruncated,
+		Contents:              contents(page.Objects, fetchOwner, c.ownerName()),
+		CommonPrefixes:        page.CommonPrefixes,
 	}
 	res.KeyCount = len(res.Contents) + len(res.CommonPrefixes)
 	if page.IsTruncated {
@@ -145,4 +146,10 @@ func contents(objs []object.Info, withOwner bool, owner string) []xmlenc.Content
 		out = append(out, entry)
 	}
 	return out
+}
+
+// hasParam reports whether the query carries the parameter, even when empty.
+func hasParam(q url.Values, name string) bool {
+	_, ok := q[name]
+	return ok
 }

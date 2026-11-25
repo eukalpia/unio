@@ -54,6 +54,7 @@ func storeCases() []storeCase {
 	cases = append(cases, listCases()...)
 	cases = append(cases, uploadCases()...)
 	cases = append(cases, layoutCases()...)
+	cases = append(cases, tagsCases()...)
 	return cases
 }
 
@@ -67,6 +68,7 @@ func bucketCases() []storeCase {
 		{"Bucket/GetMissing", caseGetMissingBucket},
 		{"Bucket/ListOrderedByName", caseListBucketsOrdered},
 		{"Bucket/SetVersioning", caseSetVersioning},
+		{"Bucket/SetPolicy", caseSetPolicy},
 		{"Bucket/DeleteEmpty", caseDeleteEmptyBucket},
 		{"Bucket/DeleteMissing", caseDeleteMissingBucket},
 		{"Bucket/DeleteNotEmptyObject", caseDeleteNotEmptyObject},
@@ -156,6 +158,38 @@ func caseSetVersioning(t *testing.T, s meta.Store) {
 		}
 	}
 	requireCode(t, s.SetBucketVersioning(t.Context(), "absent", object.VersioningEnabled), s3err.NoSuchBucket)
+}
+
+func caseSetPolicy(t *testing.T, s meta.Store) {
+	mustCreateBucket(t, s, "pol-bkt", object.VersioningUnversioned)
+	got, err := s.GetBucket(t.Context(), "pol-bkt")
+	mustNoErr(t, err)
+	if got.Policy != nil {
+		t.Fatalf("new bucket has a policy: %q", got.Policy)
+	}
+	doc := []byte(`{"Version":"2012-10-17","Statement":[]}`)
+	mustNoErr(t, s.SetBucketPolicy(t.Context(), "pol-bkt", doc))
+	doc[0] = 'X' // the store must have kept its own copy
+	got, err = s.GetBucket(t.Context(), "pol-bkt")
+	mustNoErr(t, err)
+	if string(got.Policy) != `{"Version":"2012-10-17","Statement":[]}` {
+		t.Fatalf("Policy = %q after setting it", got.Policy)
+	}
+	// Versioning and the policy are independent fields of one record.
+	mustNoErr(t, s.SetBucketVersioning(t.Context(), "pol-bkt", object.VersioningEnabled))
+	got, err = s.GetBucket(t.Context(), "pol-bkt")
+	mustNoErr(t, err)
+	if len(got.Policy) == 0 || got.Versioning != object.VersioningEnabled {
+		t.Fatalf("policy %q, versioning %d after changing versioning", got.Policy, got.Versioning)
+	}
+	mustNoErr(t, s.SetBucketPolicy(t.Context(), "pol-bkt", nil))
+	got, err = s.GetBucket(t.Context(), "pol-bkt")
+	mustNoErr(t, err)
+	if got.Policy != nil {
+		t.Fatalf("Policy = %q after removing it", got.Policy)
+	}
+	requireCode(t, s.SetBucketPolicy(t.Context(), "absent", doc), s3err.NoSuchBucket)
+	requireCode(t, s.SetBucketPolicy(t.Context(), "pol-bkt", make([]byte, object.MaxBucketPolicySize+1)), s3err.InvalidArgument)
 }
 
 func caseDeleteEmptyBucket(t *testing.T, s meta.Store) {

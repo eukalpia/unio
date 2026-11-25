@@ -29,8 +29,8 @@ func validatePutOptions(opts object.PutOptions) error {
 	if opts.ChecksumAlgorithm > object.ChecksumSHA256 {
 		return s3err.Errorf(s3err.InvalidArgument, "unknown checksum algorithm")
 	}
-	if tags := opts.Tags; tags != "" && strings.Count(tags, "&")+1 > object.MaxTags {
-		return s3err.Errorf(s3err.InvalidTag, "more than %d tags", object.MaxTags)
+	if _, err := object.DecodeTags(opts.Tags); err != nil {
+		return err
 	}
 	return nil
 }
@@ -87,12 +87,14 @@ func normalizeETag(etag string) string {
 }
 
 // checkPartNumberOpt validates GetOptions.PartNumber, where zero means that no
-// part was requested.
+// part was requested. A positive number is not checked against the range of
+// part numbers here: a number that names no part of the object is reported by
+// selectPart as InvalidPartNumber, which is the answer S3 gives for it.
 func checkPartNumberOpt(n int) error {
-	if n == 0 {
-		return nil
+	if n < 0 {
+		return s3err.Errorf(s3err.InvalidArgument, "part number must be positive")
 	}
-	return validatePartNumber(n)
+	return nil
 }
 
 // checkBody rejects a missing request body. A nil body is a caller error, and

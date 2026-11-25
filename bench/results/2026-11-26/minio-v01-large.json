@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "tool": "unio-bench",
+  "started_at": "2026-11-25T21:33:28.081980702Z",
+  "finished_at": "2026-11-25T21:34:07.421720467Z",
+  "interrupted": false,
+  "environment": {
+    "go_version": "go1.27.4",
+    "goos": "linux",
+    "goarch": "amd64",
+    "num_cpu": 4
+  },
+  "config": {
+    "endpoint": "http://127.0.0.1:19500",
+    "region": "us-east-1",
+    "path_style": true,
+    "bucket": "unio-bench-78a9ecc1",
+    "workloads": [
+      "put-64m",
+      "get-64m"
+    ],
+    "concurrency": 4,
+    "duration_seconds": 15,
+    "warmup_seconds": 3,
+    "list_keys": 20000,
+    "list_page": 1000,
+    "seed": 1
+  },
+  "workloads": [
+    {
+      "name": "put-64m",
+      "operations": [
+        {
+          "operation": "PUT",
+          "summary": {
+            "operations": 151,
+            "errors": 0,
+            "dropped_samples": 0,
+            "bytes": 10133438464,
+            "duration_seconds": 15,
+            "ops_per_second": 10.066666666666666,
+            "mib_per_second": 644.2666666666667,
+            "latency_ms": {
+              "min": 314.297013,
+              "mean": 390.479763,
+              "p50": 385.651339,
+              "p95": 456.057032,
+              "p99": 483.021989,
+              "max": 487.429453
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "get-64m",
+      "operations": [
+        {
+          "operation": "GET",
+          "summary": {
+            "operations": 1281,
+            "errors": 0,
+            "dropped_samples": 0,
+            "bytes": 85966454784,
+            "duration_seconds": 15,
+            "ops_per_second": 85.4,
+            "mib_per_second": 5465.6,
+            "latency_ms": {
+              "min": 35.775937,
+              "mean": 46.685541286494924,
+              "p50": 46.033741,
+              "p95": 56.288711,
+              "p99": 63.550601,
+              "max": 72.597755
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

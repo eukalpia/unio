@@ -6,6 +6,7 @@ import (
 
 	"go.uber.org/goleak"
 
+	"github.com/eukalpia/unio/internal/bufpool"
 	"github.com/eukalpia/unio/internal/drive"
 	"github.com/eukalpia/unio/internal/drive/drivetest"
 	"github.com/eukalpia/unio/internal/drive/local"
@@ -48,4 +49,17 @@ func TestLocalConformanceBatchSync(t *testing.T) {
 	drivetest.RunSuite(t, func(t *testing.T) drive.Drive {
 		return openTestDrive(t, local.Options{SyncPolicy: local.SyncBatch})
 	})
+}
+
+// TestLocalConformanceSharedBudget runs the suite with every drive on one
+// budget of two megabytes. That is small enough that operations wait for
+// memory, and large enough for one blob or packed buffer.
+func TestLocalConformanceSharedBudget(t *testing.T) {
+	budget := bufpool.NewBudget(2 << 20)
+	drivetest.RunSuite(t, func(t *testing.T) drive.Drive {
+		return openTestDrive(t, local.Options{Budget: budget})
+	})
+	if got := budget.InUse(); got != 0 {
+		t.Fatalf("InUse after the suite = %d bytes, want 0", got)
+	}
 }

@@ -184,11 +184,37 @@ func isReservedPath(rawPath string) bool {
 	return rawPath == reservedPrefix || strings.HasPrefix(rawPath, reservedPrefix+"/")
 }
 
+// adminPrefix and consolePrefix are the reserved paths of the admin API and
+// of the web console. They are recognised only for path-style and bare-domain
+// requests, because a virtual-hosted request is always an object request.
+const (
+	adminPrefix   = reservedPrefix + "/admin/v1"
+	consolePrefix = reservedPrefix + "/console"
+)
+
+// isAdminPath reports whether rawPath is the admin API or inside it.
+func isAdminPath(rawPath string) bool {
+	return rawPath == adminPrefix || strings.HasPrefix(rawPath, adminPrefix+"/")
+}
+
+// isConsolePath reports whether rawPath is the console or inside it.
+func isConsolePath(rawPath string) bool {
+	return rawPath == consolePrefix || strings.HasPrefix(rawPath, consolePrefix+"/")
+}
+
 // serviceOp routes a request in the reserved namespace. Health and metrics
 // endpoints accept GET and HEAD (metrics only GET); anything else in the
 // namespace is reported as NoSuchKey, so that probes cannot tell it apart
 // from a missing object.
 func serviceOp(method, rawPath string) (Op, error) {
+	// The admin API and the console take every method and route it themselves,
+	// so that they can answer 405 with their own error format.
+	if isAdminPath(rawPath) {
+		return OpAdminAPI, nil
+	}
+	if isConsolePath(rawPath) {
+		return OpConsole, nil
+	}
 	switch rawPath {
 	case "/unio/health/live":
 		return serviceMethod(method, OpHealthLive, true)

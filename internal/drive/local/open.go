@@ -15,10 +15,10 @@ import (
 )
 
 // Open opens the drive formatted at path. It checks the format record against
-// opts.ClusterID, then loads the index. If the index is missing or disagrees
-// with the segment files, the index is rebuilt from them. Bytes past each
-// segment's committed end are discarded, and blob files that the index does
-// not reference are removed.
+// opts.ClusterID and opts.ExpectedID, then loads the index. A refused drive is
+// not changed. If the index is missing or disagrees with the segment files, the
+// index is rebuilt from them. Bytes past each segment's committed end are
+// discarded, and blob files that the index does not reference are removed.
 func Open(ctx context.Context, path string, opts Options) (*Drive, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -31,10 +31,14 @@ func Open(ctx context.Context, path string, opts Options) (*Drive, error) {
 	if err != nil {
 		return nil, err
 	}
-	id, err := readFormat(lay, opts.ClusterID)
+	rec, err := loadFormat(lay)
 	if err != nil {
 		return nil, err
 	}
+	if err := rec.verify(opts.ClusterID, opts.ExpectedID); err != nil {
+		return nil, err
+	}
+	id := rec.id
 	for _, dir := range lay.dirs() {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return nil, fmt.Errorf("local: create %s: %w", dir, err)

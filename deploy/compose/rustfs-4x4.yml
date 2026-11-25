@@ -10,8 +10,8 @@
 # Usage, from the repository root:
 #   docker compose -f deploy/compose/rustfs-4x4.yml up -d
 #
-# Do not run this together with cluster-4x4.yml: both publish host ports
-# 9001 to 9004 on 127.0.0.1. Stop one stack before starting the other.
+# Do not run this together with cluster-4x4.yml or single.yml: they all publish
+# host ports 9001 to 9004 on 127.0.0.1. Stop one stack before starting another.
 
 name: rustfs-4x4
 

@@ -1,0 +1,14 @@
+apiVersion: v2
+name: unio
+description: Distributed S3-compatible object store, run as a StatefulSet with one persistent volume per drive.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.27.0-0"
+home: https://github.com/eukalpia/unio
+sources:
+  - https://github.com/eukalpia/unio
+keywords:
+  - object-storage
+  - s3
+  - erasure-coding

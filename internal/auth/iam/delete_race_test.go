@@ -168,3 +168,53 @@ func TestCleanupDeletesOnlyTheNamedIncarnation(t *testing.T) {
 		t.Fatalf("live incarnation's key was deleted: %v", err)
 	}
 }
+
+// TestRepeatedDeleteUserCannotRemoveRecreatedUser interrupts a deletion after
+// the user's keys are gone, then has a repeat call race with a complete
+// deletion and a re-creation of the same name. The repeat call reads the old
+// policy, and the policy and the user record it then removes belong to the new
+// incarnation. Both must survive.
+func TestRepeatedDeleteUserCannotRemoveRecreatedUser(t *testing.T) {
+	s, kv, _ := newHookedStore(t)
+	ctx := context.Background()
+	mustCreateUser(t, s, "quinn")
+	key := mustCreateKey(t, s, "quinn")
+	if err := s.SetUserPolicy(ctx, "quinn", []byte(readAllowPolicy)); err != nil {
+		t.Fatal(err)
+	}
+
+	kv.failNext("delete", keyPath(key.ID), errors.New("storage unavailable"))
+	if err := s.DeleteUser(ctx, "quinn"); err == nil {
+		t.Fatal("interrupted delete reported success")
+	}
+
+	var ran bool
+	kv.arm("get", policyPath("quinn"), false, func() {
+		if ran {
+			return
+		}
+		ran = true
+		if err := s.DeleteUser(ctx, "quinn"); err != nil {
+			t.Errorf("delete during the repeat: %v", err)
+		}
+		if _, err := s.CreateUser(ctx, "quinn"); err != nil {
+			t.Errorf("re-create during the repeat: %v", err)
+		}
+		if err := s.SetUserPolicy(ctx, "quinn", []byte(readAllowPolicy)); err != nil {
+			t.Errorf("policy for the new user during the repeat: %v", err)
+		}
+	})
+	if err := s.DeleteUser(ctx, "quinn"); err != nil {
+		t.Fatalf("repeat delete: %v", err)
+	}
+	if !ran {
+		t.Fatal("the race was not staged")
+	}
+
+	if _, _, err := kv.Get(ctx, userPath("quinn")); err != nil {
+		t.Fatalf("re-created user's record was removed by the repeat delete: %v", err)
+	}
+	if _, _, err := kv.Get(ctx, policyPath("quinn")); err != nil {
+		t.Fatalf("re-created user's policy was removed by the repeat delete: %v", err)
+	}
+}

@@ -90,17 +90,10 @@ func TestServerCommand(t *testing.T) {
 		notStderr  string
 	}{
 		{
-			name:       "valid configuration reaches the placeholder",
-			env:        validEnv(),
-			wantCode:   1,
-			wantStderr: "not yet available",
-		},
-		{
 			name:       "invalid configuration is reported before starting",
 			env:        withEnv(validEnv(), map[string]*string{"UNIO_CLUSTER_SECRET": nil}),
 			wantCode:   1,
 			wantStderr: "cluster.secret is not set",
-			notStderr:  "not yet available",
 		},
 		{
 			name:       "flags override the environment",
@@ -123,13 +116,25 @@ func TestServerCommand(t *testing.T) {
 			wantStderr: "plain HTTP",
 		},
 		{
-			name: "insecure internode prints a banner",
+			name: "plain http endpoint is refused",
 			env: withEnv(validEnv(), map[string]*string{
-				"UNIO_ENDPOINTS":          str("http://node{1...4}:9100/data{1...4}"),
-				"UNIO_INSECURE_INTERNODE": str("true"),
+				"UNIO_ENDPOINTS": str("http://node{1...4}:9100/data{1...4}"),
 			}),
 			wantCode:   1,
-			wantStderr: "INSECURE INTERNODE TRAFFIC",
+			wantStderr: "internode traffic is always mutual TLS",
+		},
+		{
+			name:       "removed insecure internode variable is refused by name",
+			env:        withEnv(validEnv(), map[string]*string{"UNIO_INSECURE_INTERNODE": str("true")}),
+			wantCode:   1,
+			wantStderr: "environment variable UNIO_INSECURE_INTERNODE was removed",
+		},
+		{
+			name:       "removed insecure internode flag is refused by name",
+			env:        validEnv(),
+			args:       []string{"--insecure-internode"},
+			wantCode:   1,
+			wantStderr: "flag --insecure-internode was removed",
 		},
 	}
 	for _, tt := range tests {
@@ -171,7 +176,7 @@ func TestConfigValidateCommand(t *testing.T) {
 		if res.code != 1 {
 			t.Fatalf("exit code = %d, want 1", res.code)
 		}
-		for _, want := range []string{"node.id is required", "well-known default", "log.level"} {
+		for _, want := range []string{"node.id is required", "well-known default name", "log.level"} {
 			if !strings.Contains(res.stderr, want) {
 				t.Errorf("stderr does not mention %q:\n%s", want, res.stderr)
 			}
@@ -219,7 +224,7 @@ func TestConfigPrintCommand(t *testing.T) {
 		}
 	})
 	t.Run("invalid configuration is not printed", func(t *testing.T) {
-		env := withEnv(validEnv(), map[string]*string{"UNIO_METRICS_TOKEN": nil})
+		env := withEnv(validEnv(), map[string]*string{"UNIO_LOG_LEVEL": str("loud")})
 		res := runCLI(t, env, "config", "print")
 		if res.code != 1 || res.stdout != "" {
 			t.Fatalf("code = %d, stdout = %q", res.code, res.stdout)

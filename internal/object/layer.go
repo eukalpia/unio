@@ -10,6 +10,10 @@ import "context"
 type Layer interface {
 	MakeBucket(ctx context.Context, bucket string, opts MakeBucketOptions) (BucketInfo, error)
 	GetBucketInfo(ctx context.Context, bucket string) (BucketInfo, error)
+	// SetBucketPolicy stores the bucket policy document, or removes it when
+	// policy is empty. The caller has already validated the document with
+	// policy.ParseBucket; the layer checks only the name and the size.
+	SetBucketPolicy(ctx context.Context, bucket string, policy []byte) error
 	ListBuckets(ctx context.Context) ([]BucketInfo, error)
 	DeleteBucket(ctx context.Context, bucket string, opts DeleteBucketOptions) error
 
@@ -27,6 +31,20 @@ type Layer interface {
 	DeleteObjects(ctx context.Context, bucket string, objects []ToDelete) ([]DeleteResult, error)
 	CopyObject(ctx context.Context, src Ref, dstBucket, dstKey string, opts CopyOptions) (Info, error)
 	ListObjects(ctx context.Context, bucket string, opts ListOptions) (ListResult, error)
+
+	// PutObjectTags replaces the tag set of one version: the latest when
+	// opts.VersionID is "". It creates no version, and the data, ETag and
+	// modification time are unchanged. The returned Info describes the version
+	// that was tagged. Errors: NoSuchKey or NoSuchVersion for a missing target,
+	// and MethodNotAllowed when the version is a delete marker.
+	PutObjectTags(ctx context.Context, bucket, key string, opts TagOptions) (Info, error)
+	// GetObjectTags returns the tag set of one version, the latest when
+	// versionID is "", with the version's Info. Errors are those of
+	// PutObjectTags.
+	GetObjectTags(ctx context.Context, bucket, key, versionID string) (Info, TagSet, error)
+	// DeleteObjectTags removes every tag of one version. It is PutObjectTags with
+	// an empty tag set, with the same errors and effects.
+	DeleteObjectTags(ctx context.Context, bucket, key, versionID string) (Info, error)
 
 	NewMultipartUpload(ctx context.Context, bucket, key string, opts PutOptions) (uploadID string, err error)
 	PutObjectPart(ctx context.Context, bucket, key, uploadID string, partNumber int, body Body) (PartInfo, error)

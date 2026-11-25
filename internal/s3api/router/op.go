@@ -27,12 +27,24 @@ const (
 	OpCompleteMultipartUpload
 	OpAbortMultipartUpload
 	OpListParts
+	OpPutObjectTagging
+	OpGetObjectTagging
+	OpDeleteObjectTagging
+	OpListObjectVersions
+	OpGetBucketPolicy
+	OpPutBucketPolicy
+	OpDeleteBucketPolicy
 
 	// Service endpoints of the reserved /unio/ namespace. They are not S3
 	// operations and never name a bucket.
 	OpHealthLive
 	OpHealthReady
 	OpMetrics
+	// OpAdminAPI is the admin API under /unio/admin/v1/. The handler behind it
+	// checks the method and routes the rest of the path.
+	OpAdminAPI
+	// OpConsole is the web console under /unio/console/.
+	OpConsole
 )
 
 var opNames = [...]string{
@@ -57,9 +69,18 @@ var opNames = [...]string{
 	OpCompleteMultipartUpload: "CompleteMultipartUpload",
 	OpAbortMultipartUpload:    "AbortMultipartUpload",
 	OpListParts:               "ListParts",
+	OpPutObjectTagging:        "PutObjectTagging",
+	OpGetObjectTagging:        "GetObjectTagging",
+	OpDeleteObjectTagging:     "DeleteObjectTagging",
+	OpListObjectVersions:      "ListObjectVersions",
+	OpGetBucketPolicy:         "GetBucketPolicy",
+	OpPutBucketPolicy:         "PutBucketPolicy",
+	OpDeleteBucketPolicy:      "DeleteBucketPolicy",
 	OpHealthLive:              "HealthLive",
 	OpHealthReady:             "HealthReady",
 	OpMetrics:                 "Metrics",
+	OpAdminAPI:                "Admin",
+	OpConsole:                 "Console",
 }
 
 // String returns the S3 operation name, for logs and metrics.
@@ -73,5 +94,9 @@ func (o Op) String() string {
 // IsService reports whether o is a service endpoint of the reserved
 // namespace rather than an S3 operation.
 func (o Op) IsService() bool {
-	return o == OpHealthLive || o == OpHealthReady || o == OpMetrics
+	switch o {
+	case OpHealthLive, OpHealthReady, OpMetrics, OpAdminAPI, OpConsole:
+		return true
+	}
+	return false
 }

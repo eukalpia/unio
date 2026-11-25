@@ -1,0 +1,5 @@
+# `make console` copies the built web console here. Only the placeholder page
+# is committed, so a plain `go build` works without Node.
+*
+!.gitignore
+!index.html

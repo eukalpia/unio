@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 # Unio server image.
 #
 # Build from the repository root:
@@ -9,6 +7,42 @@
 # credentials as build arguments; provide secrets at runtime instead.
 
 ARG GO_IMAGE=golang:1.27.3-bookworm
+
+# The web console is optional. By default no Node stage runs, and the image embeds
+# the placeholder page. Build the console into the image with:
+#   docker build -f deploy/docker/Dockerfile --build-arg CONSOLE_STAGE=console-build -t unio:local .
+# That needs NODE_IMAGE to be available. Node is not in the base image, and it
+# is not cached on every build machine.
+ARG NODE_IMAGE=node:22-bookworm-slim
+ARG CONSOLE_STAGE=console-skip
+
+# ---------------------------------------------------------------------------
+# Console build (only when CONSOLE_STAGE=console-build)
+# ---------------------------------------------------------------------------
+FROM ${NODE_IMAGE} AS console-build
+
+WORKDIR /src
+
+# Only the sources are copied. A host node_modules may hold binaries for another platform.
+COPY web/console/package.json web/console/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY web/console/index.html web/console/vite.config.ts web/console/tsconfig.json web/console/tsconfig.node.json web/console/eslint.config.js ./
+COPY web/console/public ./public
+COPY web/console/scripts ./scripts
+COPY web/console/src ./src
+RUN npm run build && mkdir -p /console && mv dist /console/dist
+
+# ---------------------------------------------------------------------------
+# Console placeholder (the default). It leaves /console/dist empty, so the
+# builder keeps the committed placeholder page.
+# ---------------------------------------------------------------------------
+FROM ${GO_IMAGE} AS console-skip
+RUN mkdir -p /console/dist
+
+# ---------------------------------------------------------------------------
+# The stage the builder copies from. It is one of the two stages above.
+# ---------------------------------------------------------------------------
+FROM ${CONSOLE_STAGE} AS console
 
 # ---------------------------------------------------------------------------
 # Builder
@@ -28,7 +62,12 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 COPY . .
 
-# Drive mount points for the volumes in deploy/compose/cluster-4x4.yml.
+# Embed the built console. With the default CONSOLE_STAGE this copies nothing,
+# and internal/console keeps its committed placeholder page.
+COPY --from=console /console/dist/ /src/internal/console/assets/
+
+# Drive mount points for the volumes in deploy/compose/cluster-4x4.yml and
+# deploy/compose/single.yml.
 # A named volume copies the owner of an existing image directory; without
 # these, Docker creates the mount point as root and the nonroot process cannot
 # write to it. They are copied in the runtime stage as the contents of
@@ -68,6 +107,8 @@ COPY --from=builder /out/unio /usr/local/bin/unio
 COPY --from=builder --chown=65532:65532 /out/drives/ /
 
 # S3 (9000) and internode UniWire (9100). Publish S3 only; 9100 stays internal.
+# Readiness is served on the S3 port at /unio/health/ready, and liveness at
+# /unio/health/live.
 EXPOSE 9000 9100
 
 # Numeric UID so that Kubernetes runAsNonRoot can verify the user.
@@ -76,5 +117,7 @@ USER 65532:65532
 ENTRYPOINT ["/usr/local/bin/unio"]
 CMD ["server"]
 
+# The probe asks for readiness, so the container is healthy only when the node
+# can serve requests. The probe runs in the container, against the S3 port.
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
-  CMD ["/usr/local/bin/unio", "healthcheck"]
+  CMD ["/usr/local/bin/unio", "healthcheck", "--url", "http://127.0.0.1:9000/unio/health/ready"]

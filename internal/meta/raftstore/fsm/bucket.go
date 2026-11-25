@@ -175,6 +175,38 @@ func (f *FSM) deleteBucket(b *pebble.Batch, c *pb.DeleteBucket) (*pb.ApplyResult
 	return &pb.ApplyResult{}, nil
 }
 
+// setBucketPolicy replaces the policy of a bucket that is not being deleted.
+// An empty policy removes it. Only the size is checked here: the document
+// was parsed before it was proposed, and parsing is not repeated in the
+// state machine so that a stricter parser in a later release cannot make
+// replaying an old log diverge.
+func (f *FSM) setBucketPolicy(b *pebble.Batch, c *pb.SetBucketPolicy) (*pb.ApplyResult, error) {
+	if err := validBucketName(c.Name); err != nil {
+		return nil, err
+	}
+	if err := validBucketID(c.BucketId); err != nil {
+		return nil, err
+	}
+	if len(c.Policy) > maxBucketPolicySize {
+		return nil, fmt.Errorf("fsm: bucket policy of %d bytes exceeds %d", len(c.Policy), maxBucketPolicySize)
+	}
+	rec, err := f.currentBucket(c.Name, c.BucketId)
+	if err != nil {
+		return nil, err
+	}
+	if rec.Deleting {
+		return nil, errNoBucket
+	}
+	rec.Policy = c.Policy
+	if len(rec.Policy) == 0 {
+		rec.Policy = nil
+	}
+	if err := putBucket(b, rec); err != nil {
+		return nil, err
+	}
+	return &pb.ApplyResult{Bucket: rec}, nil
+}
+
 // setBucketVersioning changes the versioning state of a bucket that is not
 // being deleted.
 func (f *FSM) setBucketVersioning(b *pebble.Batch, c *pb.SetBucketVersioning) (*pb.ApplyResult, error) {

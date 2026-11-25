@@ -25,6 +25,11 @@ func (e *Env) CreateMultipartUpload(c *Call) error {
 	if err != nil {
 		return err
 	}
+	// S3 reports the checksum algorithm of the upload in a header, not in the
+	// body, so that clients learn the algorithm the parts must carry.
+	if attrs.ChecksumAlgorithm != object.ChecksumNone {
+		c.RC.Response.Header.Set("x-amz-checksum-algorithm", attrs.ChecksumAlgorithm.String())
+	}
 	res := xmlenc.InitiateMultipartUploadResult{Bucket: c.Route.Bucket, Key: c.Route.Key, UploadID: uploadID}
 	writeXML(c, 200, xmlenc.AppendInitiateMultipartUpload(make([]byte, 0, 256), &res))
 	return nil
@@ -107,6 +112,11 @@ func (e *Env) CompleteMultipartUpload(c *Call) error {
 	conds, err := headers.ParseConditions(c.Header)
 	if err != nil {
 		return err
+	}
+	// A digest of the whole object sent on completion is not verified by the
+	// object layer, so the request is refused rather than committed unverified.
+	if headers.HasChecksumDigest(c.Header) {
+		return s3err.Errorf(s3err.NotImplemented, "a checksum sent on completion is not supported by this server")
 	}
 	data, err := c.readXML()
 	if err != nil {

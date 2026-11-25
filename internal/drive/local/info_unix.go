@@ -3,10 +3,22 @@
 package local
 
 import (
+	"fmt"
+
 	"golang.org/x/sys/unix"
 
 	"github.com/eukalpia/unio/internal/drive/local/internal/safeint"
 )
+
+// filesystemID returns the device number of the filesystem that holds path,
+// in hex, or "" when it cannot be read.
+func filesystemID(path string) string {
+	var st unix.Stat_t
+	if err := unix.Stat(path, &st); err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%x", st.Dev)
+}
 
 // capacity returns the total and the available bytes of the filesystem that
 // holds path.

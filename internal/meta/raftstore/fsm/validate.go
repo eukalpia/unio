@@ -21,6 +21,9 @@ const (
 	maxSystemKeyLength = 4096
 	// maxBucketOwnerLength bounds the owner recorded for a bucket.
 	maxBucketOwnerLength = 256
+	// maxBucketPolicySize bounds a stored bucket policy. It equals
+	// object.MaxBucketPolicySize, which the store checks before proposing.
+	maxBucketPolicySize = 20 << 10
 	// maxChecksumLength bounds the digest of an additional checksum.
 	maxChecksumLength = 64
 	// maxShards bounds the total number of shards of one erasure layout.
@@ -328,4 +331,20 @@ func validUpdateLayout(c *pb.UpdateLayout) error {
 		return err
 	}
 	return validLayout(c.Layout)
+}
+
+// validUpdateTags checks an UpdateTags command. The tag set must be in its
+// stored form and must pass the tag rules that the S3 layer applies, so that
+// every replica accepts or rejects the same sets.
+func validUpdateTags(c *pb.UpdateTags) error {
+	if err := validBucketID(c.BucketId); err != nil {
+		return err
+	}
+	if err := validKey(c.Key); err != nil {
+		return err
+	}
+	if _, err := object.DecodeTags(c.Tags); err != nil {
+		return errMalformed("tag set")
+	}
+	return nil
 }

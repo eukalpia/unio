@@ -8,6 +8,10 @@ const (
 	DefaultS3Address = ":9000"
 	// DefaultInternodeAddress is the default internode listen address.
 	DefaultInternodeAddress = ":9100"
+	// DefaultRegion is the default S3 region of the node.
+	DefaultRegion = "us-east-1"
+	// DefaultPprofAddress is the default loopback listen address of pprof.
+	DefaultPprofAddress = "127.0.0.1:9190"
 	// DefaultPartitions is the default number of metadata partitions.
 	DefaultPartitions = 16
 	// DefaultInlineThreshold is the default largest inline object (ADR-0005).
@@ -22,10 +26,13 @@ const (
 	DefaultBackgroundConcurrency = 4
 	// DefaultReadHeaderTimeout is the default header read timeout.
 	DefaultReadHeaderTimeout = 10 * time.Second
-	// DefaultReadTimeout is the default whole-request read timeout.
-	DefaultReadTimeout = 10 * time.Minute
-	// DefaultWriteTimeout is the default response write timeout.
-	DefaultWriteTimeout = 10 * time.Minute
+	// DefaultReadIdleTimeout is the default bound on a stalled request read.
+	DefaultReadIdleTimeout = 60 * time.Second
+	// DefaultWriteTimeout is the default cap on one response write. Zero means
+	// no cap.
+	DefaultWriteTimeout = 0
+	// DefaultWriteIdleTimeout is the default bound on a stalled response write.
+	DefaultWriteIdleTimeout = 60 * time.Second
 	// DefaultIdleTimeout is the default keep-alive idle timeout.
 	DefaultIdleTimeout = 2 * time.Minute
 	// DefaultShutdownTimeout is the default graceful shutdown deadline.
@@ -44,11 +51,13 @@ func Defaults() Config {
 		Node: NodeConfig{
 			S3Address:        DefaultS3Address,
 			InternodeAddress: DefaultInternodeAddress,
+			Region:           DefaultRegion,
 		},
 		Metadata: MetadataConfig{Partitions: DefaultPartitions},
 		Storage: StorageConfig{
 			InlineThreshold: DefaultInlineThreshold,
 			MemoryBudget:    DefaultMemoryBudget,
+			Sync:            SyncAlways,
 		},
 		Limits: LimitsConfig{
 			MaxRequests:           DefaultMaxRequests,
@@ -57,11 +66,13 @@ func Defaults() Config {
 		},
 		Timeouts: TimeoutsConfig{
 			ReadHeader: DefaultReadHeaderTimeout,
-			Read:       DefaultReadTimeout,
+			ReadIdle:   DefaultReadIdleTimeout,
 			Write:      DefaultWriteTimeout,
+			WriteIdle:  DefaultWriteIdleTimeout,
 			Idle:       DefaultIdleTimeout,
 			Shutdown:   DefaultShutdownTimeout,
 		},
-		Log: LogConfig{Level: DefaultLogLevel, Format: DefaultLogFormat},
+		Log:     LogConfig{Level: DefaultLogLevel, Format: DefaultLogFormat},
+		Metrics: MetricsConfig{PprofAddress: DefaultPprofAddress},
 	}
 }

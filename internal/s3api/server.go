@@ -28,7 +28,9 @@ import (
 	"github.com/eukalpia/unio/internal/s3api/apierr"
 	"github.com/eukalpia/unio/internal/s3api/handlers"
 	"github.com/eukalpia/unio/internal/s3api/middleware"
+	"github.com/eukalpia/unio/internal/s3api/reqstat"
 	"github.com/eukalpia/unio/internal/s3api/router"
+	"github.com/eukalpia/unio/internal/s3err"
 )
 
 // maxRequestBody is the transport body limit. Bodies are streamed, never
@@ -40,16 +42,17 @@ const maxRequestBody = math.MaxInt
 // Server serves the S3 API. Create it with New, then call Run or Serve. A
 // Server serves at most one listener at a time.
 type Server struct {
-	cfg     Config
-	logger  *slog.Logger
-	router  *router.Router
-	env     *handlers.Env
-	authn   auth.Authenticator
-	authz   auth.Authorizer
-	tls     *tls.Config
-	hostID  string
-	limiter *middleware.Limiter
-	engine  *route.Engine
+	cfg          Config
+	logger       *slog.Logger
+	router       *router.Router
+	env          *handlers.Env
+	authn        auth.Authenticator
+	authz        auth.Authorizer
+	tls          *tls.Config
+	hostID       string
+	limiter      *middleware.Limiter
+	engine       *route.Engine
+	metricsToken tokenDigest
 
 	stop     chan struct{}
 	stopOnce sync.Once
@@ -90,17 +93,23 @@ func New(cfg Config, layer object.Layer, authn auth.Authenticator, authz auth.Au
 	if err != nil {
 		return nil, err
 	}
+	// The token is reduced to its digest here, so the Server holds no copy of
+	// the secret and the caller's slice can change afterwards without effect.
+	metricsToken := newTokenDigest(cfg.MetricsToken)
+	cfg.MetricsToken = nil
 	s := &Server{
-		cfg:    cfg,
-		logger: logger,
-		router: rt,
+		cfg:          cfg,
+		logger:       logger,
+		router:       rt,
+		metricsToken: metricsToken,
 		env: &handlers.Env{
-			Layer:     layer,
-			Region:    cfg.Region,
-			Logger:    logger,
-			CopyPool:  bufpool.NewPool(copyBufferSize, cfg.BufferBudget),
-			WriteIdle: cfg.WriteIdleTimeout,
-			WriteCap:  cfg.WriteTimeout,
+			Layer:         layer,
+			Region:        cfg.Region,
+			Logger:        logger,
+			CopyPool:      bufpool.NewPool(copyBufferSize, cfg.BufferBudget),
+			WriteIdle:     cfg.WriteIdleTimeout,
+			WriteCap:      cfg.WriteTimeout,
+			PolicyChanged: cfg.PolicyChanged,
 		},
 		authn:   authn,
 		authz:   authz,
@@ -110,7 +119,7 @@ func New(cfg Config, layer object.Layer, authn auth.Authenticator, authz auth.Au
 		stop:    make(chan struct{}),
 		done:    make(chan struct{}),
 	}
-	s.engine = s.newHertz(nil).Engine
+	s.engine = s.newHertz(nil, nil).Engine
 	return s, nil
 }
 
@@ -152,7 +161,8 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	s.mu.Unlock()
 	defer close(s.done)
 
-	h := s.newHertz(deadlineListener{Listener: ln, headerTimeout: s.cfg.ReadHeaderTimeout})
+	conns := newConnTracker()
+	h := s.newHertz(deadlineListener{Listener: ln, headerTimeout: s.cfg.ReadHeaderTimeout, conns: conns}, conns)
 	errCh := make(chan error, 1)
 	go func() { errCh <- h.Run() }()
 
@@ -163,14 +173,23 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	case <-ctx.Done():
 	case <-s.stop:
 	}
-	// Closing the listener stops new connections even when Hertz has not
-	// reached its running state yet; Shutdown then drains the active ones.
-	_ = ln.Close()
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), s.cfg.ShutdownTimeout)
-	defer cancel()
-	if err := h.Shutdown(shutdownCtx); err != nil {
-		s.logger.Warn("graceful shutdown did not complete", "error", err)
+	// Hertz's Shutdown closes the listener and then waits for the requests
+	// in flight to finish. Closing the listener first would make Run return
+	// at once, and Shutdown would find the engine stopped and return without
+	// waiting, cutting responses that were still being written. Before Hertz
+	// reaches its running state nothing is served yet, and closing the
+	// listener is what makes Run return.
+	if h.IsRunning() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), s.cfg.ShutdownTimeout)
+		defer cancel()
+		// Idle keep-alive connections are closed at once; busy ones close
+		// after their response.
+		go conns.drain(shutdownCtx)
+		if err := h.Shutdown(shutdownCtx); err != nil {
+			s.logger.Warn("graceful shutdown did not complete", "error", err.Error())
+		}
 	}
+	_ = ln.Close()
 	<-errCh
 	return nil
 }
@@ -196,7 +215,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // newHertz builds the Hertz engine: the standard transport with streamed
 // request bodies, the timeouts and limits of cfg, the middleware chain and
 // the catch-all route. ln is nil for the test engine.
-func (s *Server) newHertz(ln net.Listener) *server.Hertz {
+func (s *Server) newHertz(ln net.Listener, conns *connTracker) *server.Hertz {
 	opts := []config.Option{
 		server.WithTransport(standard.NewTransporter),
 		server.WithStreamBody(true),
@@ -214,6 +233,13 @@ func (s *Server) newHertz(ln net.Listener) *server.Hertz {
 		opts = append(opts, server.WithTLS(s.tls))
 	}
 	h := server.New(opts...)
+	if conns != nil {
+		h.Use(conns.trackRequests)
+	}
+	if s.cfg.Observer != nil {
+		// Outermost, so that its duration covers every inner rejection too.
+		h.Use(middleware.Observe(s.cfg.Observer.ObserveHTTPRequest))
+	}
 	h.Use(
 		middleware.RequestID(s.hostID, s.logger),
 		middleware.WriteDeadline(s.cfg.WriteIdleTimeout),
@@ -229,11 +255,14 @@ func (s *Server) newHertz(ln net.Listener) *server.Hertz {
 // handle serves one S3 request: route, authenticate, authorize, dispatch.
 // Every failure is rendered as an S3 error by apierr.
 func (s *Server) handle(ctx context.Context, c *app.RequestContext) {
+	// st is nil when no observer is configured; its methods then do nothing.
+	st := reqstat.Get(c)
 	rt, err := s.router.Match(routeRequest(c))
 	if err != nil {
 		apierr.Write(c, s.logger, err, string(c.Request.URI().PathOriginal()))
 		return
 	}
+	st.SetOp(observedName(rt.Op))
 	if rt.Op.IsService() {
 		s.serveService(ctx, c, rt)
 		return
@@ -241,7 +270,7 @@ func (s *Server) handle(ctx context.Context, c *app.RequestContext) {
 	resource := resourceOf(rt)
 
 	header := requestHeader(c)
-	res, err := s.authn.Authenticate(ctx, authRequest(c, header, requestBody(c, s.cfg.ReadBodyIdleTimeout)))
+	res, err := s.authn.Authenticate(ctx, authRequest(c, header, requestBody(c, s.cfg.ReadBodyIdleTimeout, st)))
 	if err != nil {
 		apierr.Write(c, s.logger, err, resource)
 		return
@@ -251,7 +280,12 @@ func (s *Server) handle(ctx context.Context, c *app.RequestContext) {
 		return s.authz.Authorize(ctx, identity, action, bucket, key)
 	}
 	if requiresPreAuthorization(rt.Op) {
-		if err := authorize(primaryAction(rt.Op), rt.Bucket, rt.Key); err != nil {
+		action, ok := primaryAction(rt.Op)
+		if !ok {
+			apierr.Write(c, s.logger, s3err.Wrap(s3err.AccessDenied, fmt.Errorf("s3api: no action for operation %s", rt.Op)), resource)
+			return
+		}
+		if err := authorize(action, rt.Bucket, rt.Key); err != nil {
 			apierr.Write(c, s.logger, err, resource)
 			return
 		}
@@ -264,6 +298,7 @@ func (s *Server) handle(ctx context.Context, c *app.RequestContext) {
 		Auth:      res,
 		Authorize: authorize,
 		Resource:  resource,
+		Stats:     st,
 	}
 	if err := s.env.Handle(rt.Op, call); err != nil {
 		apierr.Write(c, s.logger, err, resource)

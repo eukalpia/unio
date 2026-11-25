@@ -8,6 +8,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 
 	"github.com/eukalpia/unio/internal/auth"
+	"github.com/eukalpia/unio/internal/s3api/reqstat"
 	"github.com/eukalpia/unio/internal/s3api/router"
 )
 
@@ -51,11 +52,13 @@ func authRequest(c *app.RequestContext, header http.Header, body io.Reader) *aut
 // idleBody bounds every read of a request body by an idle timeout: the
 // connection read deadline is pushed forward before each read, so a client
 // that sends nothing for longer than idle is disconnected, while a long but
-// steadily flowing upload is not cut off.
+// steadily flowing upload is not cut off. It also counts the bytes read into
+// the request record, when there is one.
 type idleBody struct {
-	conn interface{ SetReadTimeout(time.Duration) error }
-	r    io.Reader
-	idle time.Duration
+	conn  interface{ SetReadTimeout(time.Duration) error }
+	r     io.Reader
+	idle  time.Duration
+	stats *reqstat.Stats
 }
 
 // Read implements io.Reader.
@@ -63,15 +66,18 @@ func (b *idleBody) Read(p []byte) (int, error) {
 	if b.idle > 0 && b.conn != nil {
 		_ = b.conn.SetReadTimeout(b.idle)
 	}
-	return b.r.Read(p)
+	n, err := b.r.Read(p)
+	b.stats.AddBytesIn(n)
+	return n, err
 }
 
 // requestBody returns the bounded request body reader for c, or nil when the
-// request has no body stream.
-func requestBody(c *app.RequestContext, idle time.Duration) io.Reader {
+// request has no body stream. st receives the count of bytes read and may be
+// nil.
+func requestBody(c *app.RequestContext, idle time.Duration, st *reqstat.Stats) io.Reader {
 	stream := c.Request.BodyStream()
 	if stream == nil {
 		return nil
 	}
-	return &idleBody{conn: c.GetConn(), r: stream, idle: idle}
+	return &idleBody{conn: c.GetConn(), r: stream, idle: idle, stats: st}
 }

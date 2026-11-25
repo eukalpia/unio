@@ -45,6 +45,7 @@ func RunLayerSuite(t *testing.T, newLayer func(t *testing.T) object.Layer) {
 		{"copy", suiteCopy},
 		{"list", suiteList},
 		{"multipart", suiteMultipart},
+		{"tags", suiteTags},
 		{"failures", suiteFailures},
 		{"aliasing", suiteAliasing},
 	}

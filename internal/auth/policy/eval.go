@@ -32,22 +32,38 @@ type Policy struct {
 // Evaluate decides whether the policy allows action on resource. The
 // resource is an S3 ARN such as arn:aws:s3:::bucket/key, or "*" for
 // service-level actions. Actions compare case-insensitively, resources
-// case-sensitively.
+// case-sensitively. A nil policy yields Implicit.
 func (p *Policy) Evaluate(action auth.Action, resource string) Decision {
-	if p == nil {
-		return Implicit
-	}
+	return EvaluateAll([]*Policy{p}, action, resource)
+}
+
+// EvaluateAll decides whether a set of policies allows action on resource.
+// The set is what applies to one user: its inline policy and every managed
+// policy attached to it. The rule is the union of their statements. An
+// explicit Deny in any matching statement of any policy wins. Otherwise an
+// Allow in any matching statement allows the request. Otherwise the result
+// is Implicit, which callers must treat as a denial. Nil policies contribute
+// no statements, and an empty set yields Implicit.
+//
+// The cost is linear in the total number of statements, and evaluation stops
+// at the first matching Deny.
+func EvaluateAll(policies []*Policy, action auth.Action, resource string) Decision {
 	a := string(action)
 	allowed := false
-	for i := range p.statements {
-		st := &p.statements[i]
-		if !st.matches(a, resource) {
+	for _, p := range policies {
+		if p == nil {
 			continue
 		}
-		if !st.allow {
-			return Deny
+		for i := range p.statements {
+			st := &p.statements[i]
+			if !st.matches(a, resource) {
+				continue
+			}
+			if !st.allow {
+				return Deny
+			}
+			allowed = true
 		}
-		allowed = true
 	}
 	if allowed {
 		return Allow

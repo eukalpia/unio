@@ -282,3 +282,37 @@ func (f *Fake) UpdateLayout(_ context.Context, bucket, key, versionID string, pa
 	}
 	return meta.ErrRevisionMismatch
 }
+
+// UpdateTags implements meta.Store. It applies the rules of the state machine:
+// the latest version when versionID is "", and no tagging of a delete marker.
+// The check and the write happen under one lock.
+func (f *Fake) UpdateTags(_ context.Context, bucket, key, versionID, tags string) (meta.ObjectRecord, error) {
+	if _, err := object.DecodeTags(tags); err != nil {
+		return meta.ObjectRecord{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	b, err := f.bucketLocked(bucket)
+	if err != nil {
+		return meta.ObjectRecord{}, err
+	}
+	vs := b.objects[key]
+	i := len(vs) - 1
+	if versionID != "" {
+		i = versionIndex(vs, versionID)
+	}
+	switch {
+	case i < 0 && versionID == "":
+		return meta.ObjectRecord{}, s3err.Errorf(s3err.NoSuchKey, "key %q does not exist", key)
+	case i < 0:
+		return meta.ObjectRecord{}, s3err.Errorf(s3err.NoSuchVersion, "version %q of key %q does not exist", versionID, key)
+	case vs[i].DeleteMarker && versionID == "":
+		return meta.ObjectRecord{}, s3err.Errorf(s3err.NoSuchKey, "key %q does not exist", key)
+	case vs[i].DeleteMarker:
+		return meta.ObjectRecord{}, s3err.Errorf(s3err.MethodNotAllowed, "the requested version is a delete marker")
+	}
+	vs[i].Tags = tags
+	rec := cloneObject(vs[i])
+	rec.Inline = nil
+	return rec, nil
+}

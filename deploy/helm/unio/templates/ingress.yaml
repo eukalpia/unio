@@ -1,0 +1,9 @@
+{{- if .Values.ingress.s3.enabled }}
+{{- include "unio.ingress" (dict "root" . "suffix" "-s3" "path" "/" "ing" .Values.ingress.s3) }}
+{{- end }}
+{{- if .Values.ingress.console.enabled }}
+{{- if .Values.ingress.s3.enabled }}
+---
+{{- end }}
+{{- include "unio.ingress" (dict "root" . "suffix" "-console" "path" "/unio/console" "ing" .Values.ingress.console) }}
+{{- end }}

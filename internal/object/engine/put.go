@@ -42,7 +42,7 @@ func (e *Engine) PutObject(ctx context.Context, bucket, key string, body object.
 		return object.Info{}, err
 	}
 	rec := newVersion(bucket, key, plan.id, e.now(), opts)
-	if size <= e.inline {
+	if e.inlineFits(size) {
 		return e.putInline(ctx, body, rec, plan, opts.Conditions)
 	}
 	return e.putErasure(ctx, body, rec, plan, opts.Conditions)

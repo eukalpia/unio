@@ -25,7 +25,7 @@ type Config struct {
 	// KEK is the 32-byte key-encryption key, usually from DeriveKEK. Required.
 	KEK []byte
 	// RootAccessKey and RootSecret are the root credentials. They are
-	// required, validated by ValidateRootCredentials, and kept only in
+	// required, validated by auth.ValidateRootCredentials, and kept only in
 	// memory. Root bypasses policies.
 	RootAccessKey string
 	RootSecret    string
@@ -69,7 +69,7 @@ func New(kv meta.SystemKV, cfg Config) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("iam: key-encryption key: %w", err)
 	}
-	if err := ValidateRootCredentials(cfg.RootAccessKey, cfg.RootSecret); err != nil {
+	if err := auth.ValidateRootCredentials(cfg.RootAccessKey, cfg.RootSecret); err != nil {
 		return nil, err
 	}
 	if cfg.Region == "" {
@@ -147,6 +147,37 @@ func (s *Store) deleteKey(ctx context.Context, key string) error {
 		}
 	}
 	return ErrTooManyRetries
+}
+
+// deleteWhile removes key with a compare-and-swap, but only while owned still
+// holds for the stored value. It reports whether the key was removed. A key
+// that is absent, or whose value no longer belongs to the caller, is left
+// alone, so a cleanup can never remove a record written by a newer
+// incarnation of the same name.
+func (s *Store) deleteWhile(ctx context.Context, key string, owned func(raw []byte) bool) (bool, error) {
+	for range s.maxRetries {
+		raw, rev, err := s.kv.Get(ctx, key)
+		if errors.Is(err, meta.ErrNotFound) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		if !owned(raw) {
+			return false, nil
+		}
+		err = s.kv.Delete(ctx, key, rev)
+		if err == nil {
+			return true, nil
+		}
+		if errors.Is(err, meta.ErrNotFound) {
+			return false, nil
+		}
+		if !errors.Is(err, meta.ErrRevisionMismatch) {
+			return false, err
+		}
+	}
+	return false, ErrTooManyRetries
 }
 
 // clearCaches drops every cached key and user. Local administrative changes

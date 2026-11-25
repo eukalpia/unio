@@ -44,6 +44,7 @@ func bucketToProto(info object.BucketInfo, deleting bool) (*uniov1.BucketRecord,
 		Owner:           info.Owner,
 		Versioning:      versioning,
 		Deleting:        deleting,
+		Policy:          info.Policy,
 	}, nil
 }
 
@@ -61,6 +62,9 @@ func bucketFromProto(p *uniov1.BucketRecord) (object.BucketInfo, bool, error) {
 		Created:    TimeFromNano(p.GetCreatedUnixNano()),
 		Owner:      p.GetOwner(),
 		Versioning: versioning,
+	}
+	if pol := p.GetPolicy(); len(pol) > 0 {
+		info.Policy = pol
 	}
 	return info, p.GetDeleting(), nil
 }

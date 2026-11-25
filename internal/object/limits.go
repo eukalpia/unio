@@ -1,5 +1,7 @@
 package object
 
+import "unicode/utf8"
+
 // Protocol and safety limits. Every layer may rely on inputs that reached
 // it having been checked against them.
 const (
@@ -28,6 +30,14 @@ const (
 	MaxListKeys = 1000
 	// MaxTags is the maximum number of tags on an object.
 	MaxTags = 10
+	// MaxTagKeyLength is the maximum length of a tag key in characters.
+	MaxTagKeyLength = 128
+	// MaxTagValueLength is the maximum length of a tag value in characters.
+	MaxTagValueLength = 256
+	// MaxEncodedTagsLength bounds the URL-encoded form of a tag set. A
+	// character takes at most utf8.UTFMax bytes, and percent-encoding turns
+	// each byte into at most three, so this covers every valid tag set.
+	MaxEncodedTagsLength = MaxTags * (3*utf8.UTFMax*(MaxTagKeyLength+MaxTagValueLength) + len("=&"))
 )
 
 // Storage tier defaults (ADR-0005).

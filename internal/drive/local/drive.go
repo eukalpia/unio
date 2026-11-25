@@ -123,13 +123,14 @@ func (d *Drive) Info(ctx context.Context) (drive.Info, error) {
 		used = total - free
 	}
 	return drive.Info{
-		ID:       d.id,
-		Node:     d.opts.NodeID,
-		Endpoint: d.opts.Endpoint,
-		Total:    total,
-		Free:     free,
-		Used:     used,
-		Online:   d.faultError() == nil,
+		ID:         d.id,
+		Node:       d.opts.NodeID,
+		Endpoint:   d.opts.Endpoint,
+		Total:      total,
+		Free:       free,
+		Used:       used,
+		Online:     d.faultError() == nil,
+		Filesystem: filesystemID(d.lay.root),
 	}, nil
 }
 

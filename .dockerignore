@@ -1,0 +1,7 @@
+# Keep the build context small and free of local state. The image builds the
+# Go module and, in its optional Node stage, the console from source.
+.git
+.local
+**/node_modules
+web/console/dist
+test/e2e/out

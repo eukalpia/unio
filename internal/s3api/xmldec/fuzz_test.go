@@ -67,3 +67,22 @@ func FuzzParseCreateBucketConfiguration(f *testing.F) {
 		}
 	})
 }
+
+func FuzzParseTagging(f *testing.F) {
+	f.Add([]byte(`<Tagging><TagSet><Tag><Key>a</Key><Value>b</Value></Tag></TagSet></Tagging>`))
+	f.Add([]byte(`<Tagging><TagSet/></Tagging>`))
+	f.Add([]byte(`<!DOCTYPE x><Tagging/>`))
+	f.Fuzz(func(t *testing.T, data []byte) {
+		tags, err := ParseTagging(data)
+		checkCode(t, err)
+		if err != nil {
+			if tags != nil {
+				t.Fatal("tag set returned together with an error")
+			}
+			return
+		}
+		if len(tags) > object.MaxTags {
+			t.Fatalf("%d tags exceed the limit", len(tags))
+		}
+	})
+}

@@ -170,6 +170,13 @@ func (q *Queue) Close(ctx context.Context) error {
 	}
 }
 
+// Pending returns the number of accepted deletions that have not finished.
+func (q *Queue) Pending() int {
+	q.pendingMu.Lock()
+	defer q.pendingMu.Unlock()
+	return q.pending
+}
+
 // Completed returns the number of deletions that succeeded.
 func (q *Queue) Completed() uint64 { return q.completed.Load() }
 

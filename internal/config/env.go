@@ -40,6 +40,9 @@ func secretSettings() []secretSetting {
 // An empty variable counts as unset, so that unset compose substitutions do not
 // clear values from the file.
 func applyEnv(c *Config, env map[string]string) error {
+	if err := checkRemovedEnv(env); err != nil {
+		return err
+	}
 	for _, s := range settings() {
 		v := env[s.env]
 		if v == "" {

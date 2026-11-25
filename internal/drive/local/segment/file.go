@@ -20,6 +20,9 @@ type File struct {
 	end      int64
 }
 
+// preallocateFile reserves the space of a new segment. Tests replace it.
+var preallocateFile = preallocate
+
 // Create makes a new, empty segment file of the given capacity. Where the
 // platform supports it, the file's space is preallocated so that appends do
 // not allocate. The caller is responsible for syncing the parent directory.
@@ -31,8 +34,11 @@ func Create(path string, capacity int64) (*File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("segment: create %s: %w", path, err)
 	}
-	if err := preallocate(f, capacity); err != nil {
+	if err := preallocateFile(f, capacity); err != nil {
+		// The file must not outlive the failure: callers retry with the same
+		// id, and O_EXCL would then refuse it with "file exists" forever.
 		_ = f.Close()
+		_ = os.Remove(path)
 		return nil, fmt.Errorf("segment: preallocate %s: %w", path, err)
 	}
 	return &File{f: f, path: path, capacity: capacity}, nil

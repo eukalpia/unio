@@ -8,10 +8,17 @@
 // never appear in a file that may be committed or in the process table.
 //
 // Validation reports every problem at once. Warnings (for example plain HTTP
-// or insecure internode traffic) are returned separately from errors.
+// on the S3 endpoint) are returned separately from errors.
 package config
 
-import "time"
+import (
+	"errors"
+	"fmt"
+	"path"
+	"time"
+
+	"github.com/eukalpia/unio/internal/ids"
+)
 
 // Config is the complete configuration of one node.
 type Config struct {
@@ -30,14 +37,29 @@ type Config struct {
 
 // NodeConfig identifies this node and where it listens.
 type NodeConfig struct {
-	// ID is this node's name. It must equal the host part of the drive
-	// endpoints that belong to this node, for example node1.
+	// ID is the host of this node, as written in its drive endpoints, for
+	// example node1 or unio-0.unio-hl.default.svc.cluster.local. It is compared
+	// without case. NodeID derives the node's identity from it.
 	ID string `yaml:"id"`
 	// S3Address is the listen address of the S3 API, for example ":9000".
 	S3Address string `yaml:"s3_address"`
 	// InternodeAddress is the listen address of the internode protocol, for
 	// example ":9100".
 	InternodeAddress string `yaml:"internode_address"`
+	// AdminAddress, when set, is the only listen address of the admin API and
+	// the web console, for example "127.0.0.1:9001"; the S3 port then answers
+	// 404 under /unio/admin/ and /unio/console/. Empty keeps them on the S3
+	// port. Put it on loopback or a management network: the S3 port is often
+	// published to the internet through a proxy, the console should not be.
+	AdminAddress string `yaml:"admin_address"`
+	// Region is the S3 region this node serves. SigV4 credential scopes must
+	// name it. It is 1 to 32 characters from lowercase letters, digits and
+	// hyphens, and the default is us-east-1.
+	Region string `yaml:"region"`
+	// Domains are the virtual-host suffixes under which buckets are addressed,
+	// for example s3.example.com, so that bucket.s3.example.com names the bucket
+	// bucket. Each must be a DNS name.
+	Domains []string `yaml:"domains"`
 }
 
 // TLSConfig holds the optional certificate of the S3 endpoint.
@@ -56,9 +78,6 @@ type ClusterConfig struct {
 	// example https://node{1...4}:9100/data{1...4}. Together they list every
 	// drive of every node, including this one.
 	Endpoints []string `yaml:"endpoints"`
-	// InsecureInternode allows plain HTTP endpoints and disables internode
-	// TLS. It is for benchmarks and development only and prints a warning.
-	InsecureInternode bool `yaml:"insecure_internode"`
 	// Secret is the cluster secret from which the internode CA is derived.
 	// It must come from the environment (UNIO_CLUSTER_SECRET).
 	Secret Secret `yaml:"secret"`
@@ -83,6 +102,9 @@ type MetadataConfig struct {
 	// Partitions is the number of metadata partitions. It is fixed at
 	// cluster creation. The default is 16.
 	Partitions int `yaml:"partitions"`
+	// Dir is the absolute directory of the metadata store on this node. When it
+	// is empty, the store lives in .unio/meta under the first drive of the node.
+	Dir string `yaml:"dir"`
 }
 
 // StorageConfig controls the data tiers and memory use.
@@ -93,14 +115,27 @@ type StorageConfig struct {
 	// MemoryBudget bounds the buffer pool. Requests wait for memory rather
 	// than allocating past it.
 	MemoryBudget Size `yaml:"memory_budget"`
+	// Sync selects when a drive write reaches stable storage: SyncAlways
+	// syncs every write before it is acknowledged; SyncBatch acknowledges
+	// writes in the page cache and syncs them in groups, so a power loss can
+	// lose writes from the last batch interval.
+	Sync string `yaml:"sync"`
 }
+
+// Drive sync modes for StorageConfig.Sync.
+const (
+	// SyncAlways syncs every drive write before acknowledging it.
+	SyncAlways = "always"
+	// SyncBatch syncs drive writes in groups after acknowledging them.
+	SyncBatch = "batch"
+)
 
 // LimitsConfig bounds concurrency.
 type LimitsConfig struct {
 	// MaxRequests is the number of S3 requests processed at the same time.
 	MaxRequests int `yaml:"max_requests"`
-	// RequestQueue is the number of requests waiting for a slot. Beyond it,
-	// clients get 503 SlowDown.
+	// RequestQueue is the number of requests waiting for a slot, at least 1.
+	// Beyond it, clients get 503 SlowDown.
 	RequestQueue int `yaml:"request_queue"`
 	// BackgroundConcurrency bounds GC, compaction and repair jobs.
 	BackgroundConcurrency int `yaml:"background_concurrency"`
@@ -110,10 +145,16 @@ type LimitsConfig struct {
 type TimeoutsConfig struct {
 	// ReadHeader bounds how long a client may take to send request headers.
 	ReadHeader time.Duration `yaml:"read_header"`
-	// Read bounds reading a whole request, including its body.
-	Read time.Duration `yaml:"read"`
-	// Write bounds writing a whole response.
+	// ReadIdle bounds how long reading a request may stall without any data
+	// arriving. It replaces the whole-request read timeout, which cut off large
+	// uploads on slow links.
+	ReadIdle time.Duration `yaml:"read_idle"`
+	// Write caps the time that writing one whole response may take. Zero means
+	// no cap, which is the default, because a cap cuts off large downloads.
 	Write time.Duration `yaml:"write"`
+	// WriteIdle bounds how long writing a response may stall without the client
+	// accepting any data.
+	WriteIdle time.Duration `yaml:"write_idle"`
 	// Idle bounds how long a keep-alive connection may stay idle.
 	Idle time.Duration `yaml:"idle"`
 	// Shutdown bounds the graceful drain on SIGINT or SIGTERM.
@@ -139,24 +180,75 @@ type LogConfig struct {
 
 // MetricsConfig controls the token-protected observability endpoints.
 type MetricsConfig struct {
-	// Token is the bearer token for /unio/metrics and, when enabled, pprof.
-	// It must come from the environment and differ from the cluster secret.
+	// Token is the optional bearer token for /unio/metrics. When set, it must
+	// come from the environment, be at least 32 characters and differ from the
+	// cluster secret. Pprof requires it.
 	Token Secret `yaml:"token"`
-	// Pprof enables the pprof endpoints. They are off by default.
+	// Pprof enables the pprof endpoints, which are served only on PprofAddress
+	// and only with the token. They are off by default.
 	Pprof bool `yaml:"pprof"`
+	// PprofAddress is the listen address of the pprof endpoints. Its host must
+	// be a loopback IP address, so that profiles are never served on a network
+	// interface.
+	PprofAddress string `yaml:"pprof_address"`
 }
 
 // LocalDrives returns the drives owned by this node, that is, the endpoints
-// whose host equals Node.ID. It returns nil before Load has resolved the
-// drives.
+// whose host equals Node.ID, ignoring case. It returns nil before Load has
+// resolved the drives.
 func (c *Config) LocalDrives() []Endpoint {
-	var local []Endpoint
-	for _, d := range c.Cluster.Drives {
-		if d.Host == c.Node.ID {
-			local = append(local, d)
+	return localDrives(c.Node.ID, c.Cluster.Drives)
+}
+
+// NodeID returns the identity of this node, which is NodeIDFromHost applied to
+// Node.ID. Load guarantees that it is valid. Before Load it returns "" for an
+// unusable Node.ID.
+func (c *Config) NodeID() ids.NodeID {
+	id, err := ids.NodeIDFromHost(c.Node.ID)
+	if err != nil {
+		return ""
+	}
+	return id
+}
+
+// MetadataDir returns the directory of the metadata store: Metadata.Dir when it
+// is set, and otherwise .unio/meta under the first drive of this node. It
+// returns "" before Load has resolved the drives.
+func (c *Config) MetadataDir() string {
+	if c.Metadata.Dir != "" {
+		return c.Metadata.Dir
+	}
+	local := c.LocalDrives()
+	if len(local) == 0 {
+		return ""
+	}
+	return path.Join(local[0].Path, ".unio", "meta")
+}
+
+// ErasureLayout resolves the automatic values of erasure.set_drive_count and
+// erasure.parity. It returns the number of drives in each erasure set and the
+// number of parity shards per set. A zero set size is chosen by
+// AutoSetDriveCount, and a zero parity by DefaultParity. It needs the drives
+// that Load resolves, and it fails when they cannot form erasure sets.
+func (c *Config) ErasureLayout() (setDrives, parity int, err error) {
+	total := len(c.Cluster.Drives)
+	if total == 0 {
+		return 0, 0, errors.New("config: erasure layout: no drives are resolved; call Load first")
+	}
+	setDrives = c.Erasure.SetDriveCount
+	if setDrives == 0 {
+		if setDrives, err = AutoSetDriveCount(total); err != nil {
+			return 0, 0, fmt.Errorf("config: erasure layout: %w", err)
 		}
 	}
-	return local
+	if total%setDrives != 0 {
+		return 0, 0, fmt.Errorf("config: erasure layout: %d drives do not divide into erasure sets of %d", total, setDrives)
+	}
+	parity = c.Erasure.Parity
+	if parity == 0 {
+		parity = DefaultParity(setDrives)
+	}
+	return setDrives, parity, nil
 }
 
 // TLSEnabled reports whether the S3 endpoint is configured to serve HTTPS.

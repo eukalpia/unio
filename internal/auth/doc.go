@@ -3,6 +3,6 @@
 // policies, and IAM user and key management.
 //
 // Implementations: auth/sigv4 (AWS Signature Version 4 in all variants),
-// auth/policy (IAM policy evaluation), auth/iam (users and keys on
+// auth/policy (IAM policy evaluation), auth/iam (users, keys and policies on
 // meta.SystemKV). Package auth/authtest provides fakes for tests.
 package auth

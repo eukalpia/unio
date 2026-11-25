@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "tool": "unio-bench",
+  "started_at": "2026-11-25T21:34:12.158022508Z",
+  "finished_at": "2026-11-25T21:34:51.35882703Z",
+  "interrupted": false,
+  "environment": {
+    "go_version": "go1.27.4",
+    "goos": "linux",
+    "goarch": "amd64",
+    "num_cpu": 4
+  },
+  "config": {
+    "endpoint": "http://127.0.0.1:19500",
+    "region": "us-east-1",
+    "path_style": true,
+    "bucket": "unio-bench-d7d23c64",
+    "workloads": [
+      "put-64m",
+      "get-64m"
+    ],
+    "concurrency": 4,
+    "duration_seconds": 15,
+    "warmup_seconds": 3,
+    "list_keys": 20000,
+    "list_page": 1000,
+    "seed": 1
+  },
+  "workloads": [
+    {
+      "name": "put-64m",
+      "operations": [
+        {
+          "operation": "PUT",
+          "summary": {
+            "operations": 157,
+            "errors": 0,
+            "dropped_samples": 0,
+            "bytes": 10536091648,
+            "duration_seconds": 15,
+            "ops_per_second": 10.466666666666667,
+            "mib_per_second": 669.8666666666667,
+            "latency_ms": {
+              "min": 329.075975,
+              "mean": 378.04991057961786,
+              "p50": 376.218913,
+              "p95": 406.142823,
+              "p99": 422.94108,
+              "max": 439.687477
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "get-64m",
+      "operations": [
+        {
+          "operation": "GET",
+          "summary": {
+            "operations": 1529,
+            "errors": 0,
+            "dropped_samples": 0,
+            "bytes": 102609453056,
+            "duration_seconds": 15,
+            "ops_per_second": 101.93333333333334,
+            "mib_per_second": 6523.733333333334,
+            "latency_ms": {
+              "min": 24.465263,
+              "mean": 39.10075066775671,
+              "p50": 38.730511,
+              "p95": 47.433273,
+              "p99": 54.027662,
+              "max": 63.673342
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -10,8 +10,8 @@ import (
 )
 
 // numCommandKinds is the number of command selectors buildCommand knows. The
-// data group takes selectors 0..8 and the system group 9..14.
-const numCommandKinds = 15
+// data group takes selectors 0..9 and the system group 10..15.
+const numCommandKinds = 16
 
 // Fuzz modes: even values feed raw bytes to Apply, odd values build a command
 // from the structured parameters.
@@ -167,22 +167,26 @@ func buildCommand(sel uint8, p genParams) *pb.Command {
 			BucketId: p.bucket, Versioning: pb.VersioningState(p.number % 4),
 		}}}
 	case 9:
+		return &pb.Command{Cmd: &pb.Command_UpdateTags{UpdateTags: &pb.UpdateTags{
+			BucketId: p.bucket, Key: p.key, VersionId: p.version, Tags: p.name,
+		}}}
+	case 10:
 		return &pb.Command{Cmd: &pb.Command_CreateBucket{CreateBucket: &pb.CreateBucket{
 			Name: p.name, Owner: p.key, Versioning: pb.VersioningState(p.number % 4), CreatedUnixNano: int64(p.number),
 		}}}
-	case 10:
+	case 11:
 		return &pb.Command{Cmd: &pb.Command_MarkBucketDeleting{MarkBucketDeleting: &pb.MarkBucketDeleting{
 			Name: p.name, BucketId: p.bucket, Deleting: p.number%2 == 1,
 		}}}
-	case 11:
+	case 12:
 		return &pb.Command{Cmd: &pb.Command_DeleteBucket{DeleteBucket: &pb.DeleteBucket{
 			Name: p.name, BucketId: p.bucket,
 		}}}
-	case 12:
+	case 13:
 		return &pb.Command{Cmd: &pb.Command_SetBucketVersioning{SetBucketVersioning: &pb.SetBucketVersioning{
 			Name: p.name, BucketId: p.bucket, Versioning: pb.VersioningState(p.number % 4),
 		}}}
-	case 13:
+	case 14:
 		return &pb.Command{Cmd: &pb.Command_KvPut{KvPut: &pb.KVPut{
 			Key: p.key, Value: p.payload, ExpectRevision: uint64(p.number),
 		}}}
@@ -246,6 +250,7 @@ func fuzzSeeds() []struct {
 			Record: withRecord(func(r *pb.ObjectRecord) { r.Key = "seed"; r.Parts = []*pb.PartRecord{goodPart(1)} }),
 		}}}},
 		{0, &pb.Command{Cmd: &pb.Command_AbortUpload{AbortUpload: &pb.AbortUpload{BucketId: 1, Key: "seed", UploadId: "seed-up"}}}},
+		{0, &pb.Command{Cmd: &pb.Command_UpdateTags{UpdateTags: &pb.UpdateTags{BucketId: 1, Key: "seed", Tags: "env=it"}}}},
 		{0, fenceCmd(1, false)},
 		{0, versioningCmd(1, pb.VersioningState_VERSIONING_STATE_UNVERSIONED)},
 		{1, &pb.Command{Cmd: &pb.Command_CreateBucket{CreateBucket: &pb.CreateBucket{Name: "bucket-two", Owner: "o"}}}},
@@ -285,7 +290,7 @@ func FuzzApply(f *testing.F) {
 	}
 	for sel := uint8(0); sel < numCommandKinds; sel++ {
 		kindSel := uint8(0)
-		if sel >= 9 {
+		if sel >= 10 {
 			kindSel = 1
 		}
 		f.Add(fuzzStructured, kindSel, []byte(nil), sel, uint64(1), "bkt", "seed", "seed-up", uint32(1), []byte("payload"), uint8(0))

@@ -7,6 +7,7 @@ import (
 
 	"github.com/cockroachdb/pebble/v2"
 
+	"github.com/eukalpia/unio/internal/bufpool"
 	"github.com/eukalpia/unio/internal/drive/local/internal/faults"
 	"github.com/eukalpia/unio/internal/drive/local/segment"
 	"github.com/eukalpia/unio/internal/ids"
@@ -50,6 +51,10 @@ type Options struct {
 	// ClusterID, when set, must match the cluster id in the drive's format
 	// record. Open refuses drives that belong to another cluster.
 	ClusterID string
+	// ExpectedID, when non-zero, must match the drive id in the format record.
+	// Open refuses a drive whose id differs, with ErrDriveIDMismatch, so that a
+	// drive moved to another slot cannot serve that slot's shards.
+	ExpectedID ids.DriveID
 	// NodeID and Endpoint are reported by Info.
 	NodeID   ids.NodeID
 	Endpoint string
@@ -69,8 +74,12 @@ type Options struct {
 	// Pebble's default cache.
 	IndexCache *pebble.Cache
 	// BufferBudget bounds the memory used for I/O buffers. Zero selects
-	// DefaultBufferBudget.
+	// DefaultBufferBudget. It is ignored when Budget is set.
 	BufferBudget int64
+	// Budget, when non-nil, is the memory budget the drive draws its I/O
+	// buffers from. It replaces BufferBudget. The budget is shared with other
+	// drives and consumers of the node, and the drive does not close it.
+	Budget *bufpool.Budget
 	// CompactRate bounds the bytes per second read by compaction. Zero
 	// selects DefaultCompactRate, and a negative value disables compaction.
 	CompactRate int64
@@ -84,7 +93,7 @@ type resolved struct {
 	Options
 	packedMax   int64
 	segmentSize int64
-	budget      int64
+	budget      int64 // total buffer memory the drive may draw
 	compactRate int64
 	batchEvery  time.Duration
 }
@@ -101,7 +110,10 @@ func (o Options) resolve() (resolved, error) {
 		r.segmentSize = DefaultSegmentSize
 	}
 	r.budget = o.BufferBudget
-	if r.budget == 0 {
+	switch {
+	case o.Budget != nil:
+		r.budget = o.Budget.Total()
+	case r.budget == 0:
 		r.budget = DefaultBufferBudget
 	}
 	r.compactRate = o.CompactRate
@@ -121,7 +133,7 @@ func (o Options) resolve() (resolved, error) {
 		return r, errors.New("local: a segment must hold at least one packed shard")
 	case o.SyncPolicy != SyncAlways && o.SyncPolicy != SyncBatch:
 		return r, fmt.Errorf("local: unknown sync policy %d", o.SyncPolicy)
-	case r.budget < r.bigPoolSize() || r.budget < blobChunk:
+	case r.budget < r.bigPoolSize() || r.budget < r.blobPoolCharge():
 		return r, fmt.Errorf("local: buffer budget %d is too small", r.budget)
 	}
 	return r, nil
@@ -130,6 +142,12 @@ func (o Options) resolve() (resolved, error) {
 // bigPoolSize is the buffer size for the largest packed record.
 func (r resolved) bigPoolSize() int64 {
 	return r.packedMax + segment.HeaderSize
+}
+
+// blobPoolCharge is the budget charge of one blob buffer, alignment slack
+// included. The budget must be able to hold it, or the pool cannot be created.
+func (r resolved) blobPoolCharge() int64 {
+	return blobChunk + blobAlign
 }
 
 // smallPoolSize is the buffer size for packed records up to smallRecordLimit.

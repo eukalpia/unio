@@ -6,7 +6,62 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-26
+
+The first release: a single binary that runs a Unio node, alone or in a
+cluster, with the core S3 API. Benchmarks against MinIO on the same machine
+are in `bench/results/2026-11-26`.
+
 ### Added
 
+- `unio server` assembles a node from the modules: S3 API, SigV4 and IAM,
+  Multi-Raft metadata on Pebble, Reed-Solomon erasure coding with bitrot
+  hashes, packed segments and blobs, mTLS internode transport, web console,
+  metrics and health endpoints.
+- `unio-mirror` copies and verifies buckets from MinIO or any S3 store.
+- Release builds: binaries for Linux and macOS (amd64, arm64) with the web
+  console embedded, and a multi-arch image at `ghcr.io/eukalpia/unio`.
 - Architecture design and architecture decision records.
+- Object tagging: PutObjectTagging, GetObjectTagging and DeleteObjectTagging,
+  with `versionId`. Tag sets are checked by the same rules for the
+  `x-amz-tagging` header and for the Tagging document.
 - Project governance, contribution guidelines and security policy.
+- Configuration keys `node.region` (`UNIO_REGION`), `node.domains`
+  (`UNIO_DOMAINS`), `metadata.dir` (`UNIO_METADATA_DIR`),
+  `timeouts.write_idle` (`UNIO_WRITE_IDLE_TIMEOUT`) and
+  `metrics.pprof_address` (`UNIO_PPROF_ADDRESS`).
+
+### Changed
+
+- Configuration is checked with the same rules the node applies at start.
+  Node identity comes from the host of the node's endpoints, and two hosts
+  that name the same node are refused. Root credentials are checked with
+  `auth.ValidateRootCredentials`.
+- Endpoints must use `https`. Internode traffic is always mutual TLS.
+- `timeouts.write` defaults to no cap, so large downloads are not cut off.
+- `metrics.token` is optional. Pprof requires it and listens only on a
+  loopback address.
+- `unio init` generates a root access key of letters and digits, which the
+  node accepts.
+
+### Fixed
+
+- An unsigned `Cache-Control` header is accepted, as S3 does. Clients that
+  set it without signing it (several AWS SDKs) were refused.
+- Steady small writes no longer slow down over time. The metadata databases
+  use value separation and larger memtables, so compactions stop rewriting
+  inline objects.
+- The admin login compares secrets in constant time without hashing them,
+  and user-supplied names are cleaned before they are logged.
+
+### Removed
+
+- `cluster.insecure_internode`, `UNIO_INSECURE_INTERNODE` and
+  `--insecure-internode`. A configuration that still sets them fails to load
+  and says that the setting was removed.
+- `timeouts.read`, `UNIO_READ_TIMEOUT` and `--read-timeout`, replaced by
+  `timeouts.read_idle`, `UNIO_READ_IDLE_TIMEOUT` and `--read-idle-timeout`.
+  The read timeout bounds a stalled read, not a whole request.
+
+[Unreleased]: https://github.com/eukalpia/unio/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/eukalpia/unio/releases/tag/v0.1.0

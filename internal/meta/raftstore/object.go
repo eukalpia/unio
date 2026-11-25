@@ -134,6 +134,33 @@ func (s *Store) UpdateLayout(ctx context.Context, bucket, key, versionID string,
 	return err
 }
 
+// UpdateTags implements meta.Store. The state machine checks the tag set and
+// the target version, and the reply is the record it wrote.
+func (s *Store) UpdateTags(ctx context.Context, bucket, key, versionID, tags string) (meta.ObjectRecord, error) {
+	if err := object.ValidateKey(key); err != nil {
+		return meta.ObjectRecord{}, err
+	}
+	info, _, err := s.lookupBucket(ctx, bucket, false)
+	if err != nil {
+		return meta.ObjectRecord{}, err
+	}
+	cmd := &pb.Command{Cmd: &pb.Command_UpdateTags{UpdateTags: &pb.UpdateTags{
+		BucketId:  uint64(info.ID),
+		Key:       key,
+		VersionId: versionID,
+		Tags:      tags,
+	}}}
+	res, err := s.router.Propose(ctx, s.partitionOf(info.ID, key), cmd)
+	if err != nil {
+		return meta.ObjectRecord{}, err
+	}
+	rec, err := recordpb.ObjectFromProto(res.GetObject())
+	if err != nil {
+		return meta.ObjectRecord{}, fmt.Errorf("raftstore: decode object: %w", err)
+	}
+	return rec, nil
+}
+
 // conditionsToProto keeps the preconditions a write evaluates.
 func conditionsToProto(c object.Conditions) *pb.WriteConditions {
 	return &pb.WriteConditions{IfMatch: c.IfMatch, IfNoneMatch: c.IfNoneMatch}

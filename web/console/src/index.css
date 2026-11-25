@@ -1,0 +1,142 @@
+@import "tailwindcss";
+
+/* Dark mode follows the `dark` class on <html>, which theme-init.js and the theme toggle set. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Space Grotesk Variable", "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --color-ink: #0e1116;
+  --color-paper: #ffffff;
+  --color-signal: #2f6bff;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-brand: var(--brand);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+
+  --animate-indeterminate: indeterminate 1.4s ease-in-out infinite;
+  @keyframes indeterminate {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(300%);
+    }
+  }
+}
+
+/*
+ * Light theme. Contrast was checked against WCAG 2.1 AA: text pairs reach 4.5:1,
+ * and control boundaries and focus rings reach 3:1. The `primary` blue is a shade
+ * darker than the brand Signal blue, because white text on #2F6BFF measures
+ * 4.50:1, which only just passes. The brand blue is used for accents and graphics.
+ */
+:root {
+  color-scheme: light;
+  --background: #ffffff;
+  --foreground: #0e1116;
+  --card: #ffffff;
+  --card-foreground: #0e1116;
+  --muted: #f3f5f8;
+  --muted-foreground: #4b5563;
+  --accent: #eef3ff;
+  --accent-foreground: #0e1116;
+  --border: #e2e6ec;
+  --input: #8a93a3;
+  --ring: #2f6bff;
+  --primary: #2a66f8;
+  --primary-foreground: #ffffff;
+  --brand: #2f6bff;
+  --destructive: #b42318;
+  --destructive-foreground: #ffffff;
+  --success: #15803d;
+  --warning: #a15c00;
+  --chart-1: #2f6bff;
+  --chart-2: #eb6834;
+}
+
+/* Dark theme: Ink background, Signal blue (dark) accents. */
+.dark {
+  color-scheme: dark;
+  --background: #0e1116;
+  --foreground: #e6eaf0;
+  --card: #151a22;
+  --card-foreground: #e6eaf0;
+  --muted: #1a202a;
+  --muted-foreground: #9aa4b2;
+  --accent: #1c2430;
+  --accent-foreground: #e6eaf0;
+  --border: #262d38;
+  --input: #5f6b7d;
+  --ring: #5b8cff;
+  --primary: #5b8cff;
+  --primary-foreground: #0e1116;
+  --brand: #5b8cff;
+  --destructive: #f87171;
+  --destructive-foreground: #0e1116;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --chart-1: #5b8cff;
+  --chart-2: #d95926;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

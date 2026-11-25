@@ -30,6 +30,9 @@ func (e *Env) CopyObject(c *Call) error {
 	if err != nil {
 		return err
 	}
+	if err := headers.ParseTaggingDirective(c.Header); err != nil {
+		return err
+	}
 	put, err := headers.ParseObjectAttributes(c.Header)
 	if err != nil {
 		return err

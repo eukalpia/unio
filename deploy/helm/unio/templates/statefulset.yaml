@@ -1,0 +1,248 @@
+{{- $fn := include "unio.fullname" . }}
+{{- $selector := include "unio.selectorLabels" . }}
+{{- $scheme := "HTTP" }}
+{{- if .Values.tls.existingSecret }}
+{{- $scheme = "HTTPS" }}
+{{- end }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $fn }}
+  labels:
+    {{- include "unio.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "unio.headlessService" . }}
+  replicas: {{ int .Values.replicas }}
+  # Start all pods at once. The nodes wait for each other while the Raft
+  # groups form, so an ordered start would deadlock.
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      {{- $selector | nindent 6 }}
+  updateStrategy:
+    type: RollingUpdate
+  # Keep the drive volumes when the StatefulSet is deleted or scaled down.
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  template:
+    metadata:
+      labels:
+        {{- $selector | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ $fn }}
+      automountServiceAccountToken: false
+      # Without this, Kubernetes adds UNIO_SERVICE_* variables for every Service
+      # in the namespace, and the node warns about each of them.
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: {{ int .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        # The drive volumes and the secret files are group-owned by this GID,
+        # so the nonroot process can write its drives and read its secrets.
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if ne .Values.antiAffinity "none" }}
+      affinity:
+        podAntiAffinity:
+          {{- if eq .Values.antiAffinity "required" }}
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  {{- $selector | nindent 18 }}
+          {{- else }}
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    {{- $selector | nindent 20 }}
+          {{- end }}
+      {{- end }}
+      containers:
+        - name: unio
+          image: {{ include "unio.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - server
+          ports:
+            - name: s3
+              containerPort: 9000
+              protocol: TCP
+            - name: internode
+              containerPort: 9100
+              protocol: TCP
+          env:
+            # POD_NAME must come first: UNIO_NODE_ID refers to it with $(POD_NAME).
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            # The node identity is the first DNS label of this pod's own host,
+            # which must match the host of its drive endpoints.
+            - name: UNIO_NODE_ID
+              value: {{ printf "$(POD_NAME).%s.%s.svc.%s" (include "unio.headlessService" .) .Release.Namespace .Values.clusterDomain | quote }}
+            - name: UNIO_ENDPOINTS
+              value: {{ include "unio.endpoints" . | quote }}
+            # Secrets are read from files, never from plain environment values.
+            - name: UNIO_CLUSTER_SECRET_FILE
+              value: /run/secrets/unio/cluster-secret
+            - name: UNIO_ROOT_USER_FILE
+              value: /run/secrets/unio/root-user
+            - name: UNIO_ROOT_PASSWORD_FILE
+              value: /run/secrets/unio/root-password
+            {{- if .Values.metrics.token.enabled }}
+            - name: UNIO_METRICS_TOKEN_FILE
+              value: /run/secrets/unio/metrics-token
+            {{- end }}
+            {{- if .Values.tls.existingSecret }}
+            - name: UNIO_TLS_CERT_FILE
+              value: /run/secrets/unio-tls/tls.crt
+            - name: UNIO_TLS_KEY_FILE
+              value: /run/secrets/unio-tls/tls.key
+            {{- end }}
+            {{- if .Values.tls.require }}
+            - name: UNIO_REQUIRE_TLS
+              value: "true"
+            {{- end }}
+            - name: UNIO_REGION
+              value: {{ .Values.config.region | quote }}
+            {{- with .Values.config.domains }}
+            - name: UNIO_DOMAINS
+              value: {{ join "," . | quote }}
+            {{- end }}
+            - name: UNIO_STORAGE_SYNC
+              value: {{ .Values.config.storageSync | quote }}
+            - name: UNIO_MEMORY_BUDGET
+              value: {{ .Values.config.memoryBudget | quote }}
+            - name: UNIO_LOG_LEVEL
+              value: {{ .Values.config.logLevel | quote }}
+            - name: UNIO_LOG_FORMAT
+              value: {{ .Values.config.logFormat | quote }}
+            {{- if gt (int .Values.config.erasure.setDriveCount) 0 }}
+            - name: UNIO_ERASURE_SET_DRIVE_COUNT
+              value: {{ int .Values.config.erasure.setDriveCount | quote }}
+            {{- end }}
+            {{- if gt (int .Values.config.erasure.parity) 0 }}
+            - name: UNIO_ERASURE_PARITY
+              value: {{ int .Values.config.erasure.parity | quote }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          # Probes use the S3 port. Liveness does not depend on other nodes;
+          # readiness is false until every Raft group this node hosts has a leader.
+          startupProbe:
+            httpGet:
+              path: /unio/health/live
+              port: s3
+              scheme: {{ $scheme }}
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: {{ int .Values.probes.startupFailureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: /unio/health/live
+              port: s3
+              scheme: {{ $scheme }}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /unio/health/ready
+              port: s3
+              scheme: {{ $scheme }}
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            {{- range $i := until (int .Values.drivesPerNode) }}
+            - name: data{{ add $i 1 }}
+              mountPath: /data{{ add $i 1 }}
+            {{- end }}
+            - name: credentials
+              mountPath: /run/secrets/unio
+              readOnly: true
+            {{- if .Values.tls.existingSecret }}
+            - name: tls
+              mountPath: /run/secrets/unio-tls
+              readOnly: true
+            {{- end }}
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: credentials
+          secret:
+            secretName: {{ include "unio.credentialsSecret" . }}
+            # Mode 0440 (decimal 288): read by the nonroot group through fsGroup.
+            defaultMode: 288
+        {{- if .Values.tls.existingSecret }}
+        - name: tls
+          secret:
+            secretName: {{ .Values.tls.existingSecret }}
+            defaultMode: 288
+        {{- end }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+  volumeClaimTemplates:
+    {{- range $i := until (int .Values.drivesPerNode) }}
+    - metadata:
+        name: data{{ add $i 1 }}
+        labels:
+          {{- $selector | nindent 10 }}
+        {{- with $.Values.persistence.annotations }}
+        annotations:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      spec:
+        accessModes:
+          {{- toYaml $.Values.persistence.accessModes | nindent 10 }}
+        {{- with $.Values.persistence.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $.Values.persistence.size }}
+    {{- end }}

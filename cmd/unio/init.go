@@ -3,8 +3,8 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/base32"
 	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -15,15 +15,21 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/eukalpia/unio/internal/auth"
 	"github.com/eukalpia/unio/internal/config"
 )
+
+// rootUserEncoding writes the access key ID in upper-case letters and the
+// digits 2 to 7, with no padding. That is the form of an AWS access key ID, and
+// it is accepted by auth.ValidAccessKeyID.
+var rootUserEncoding = base32.StdEncoding.WithPadding(base32.NoPadding)
 
 // Sizes of generated random material. Each value is checked against the
 // configuration rules before it is accepted, so `unio init` cannot produce
 // credentials that the server would reject.
 const (
 	clusterSecretBytes = 48 // base64url gives 64 characters
-	rootUserHexBytes   = 10 // "unio-" plus 20 hex characters
+	rootUserBytes      = 12 // base32 gives 20 letters and digits
 	rootPasswordBytes  = 36 // base64url gives 48 characters
 	metricsTokenBytes  = 48
 	generationAttempts = 5
@@ -80,18 +86,19 @@ func generateCredentials(random io.Reader) (credentials, error) {
 		return credentials{}, fmt.Errorf("cluster secret: %w", err)
 	}
 	if creds.rootUser, err = generateChecked(func() (string, error) {
-		raw, err := randomString(random, rootUserHexBytes, hex.EncodeToString)
-		if err != nil {
-			return "", err
+		return randomString(random, rootUserBytes, rootUserEncoding.EncodeToString)
+	}, func(v string) error {
+		if !auth.ValidAccessKeyID(v) {
+			return errors.New("access key ID is not letters and digits")
 		}
-		return "unio-" + raw, nil
-	}, config.CheckRootUser); err != nil {
+		return nil
+	}); err != nil {
 		return credentials{}, fmt.Errorf("root user: %w", err)
 	}
 	if creds.rootPassword, err = generateChecked(func() (string, error) {
 		return randomString(random, rootPasswordBytes, base64.RawURLEncoding.EncodeToString)
 	}, func(v string) error {
-		return config.CheckRootPassword(creds.rootUser, v)
+		return auth.ValidateRootCredentials(creds.rootUser, v)
 	}); err != nil {
 		return credentials{}, fmt.Errorf("root password: %w", err)
 	}

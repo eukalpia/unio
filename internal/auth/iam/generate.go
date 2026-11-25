@@ -54,8 +54,9 @@ func newSecret() (string, error) {
 	return randomChars(secretAlphabet, secretLen)
 }
 
-// newUserID returns a random identifier for a user incarnation.
-func newUserID() (string, error) {
+// newIncarnationID returns a random identifier for one incarnation of a user
+// or a managed policy. A name that is deleted and created again gets a new one.
+func newIncarnationID() (string, error) {
 	b := make([]byte, userIDBytes)
 	if _, err := io.ReadFull(rand.Reader, b); err != nil {
 		return "", err

@@ -1,0 +1,42 @@
+# Headless service for internode traffic (UniWire, port 9100). Each pod gets a
+# stable DNS name under it, which is also its node identity. Pods are published
+# before they are ready, so that peers find each other while the cluster forms.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "unio.headlessService" . }}
+  labels:
+    {{- include "unio.labels" . | nindent 4 }}
+    app.kubernetes.io/component: internode
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "unio.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: internode
+      port: 9100
+      targetPort: internode
+      protocol: TCP
+---
+# S3 and console service. Clients reach it through a Service or an Ingress.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "unio.fullname" . }}
+  labels:
+    {{- include "unio.labels" . | nindent 4 }}
+    app.kubernetes.io/component: s3
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "unio.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: s3
+      port: 9000
+      targetPort: s3
+      protocol: TCP

@@ -1,0 +1,2 @@
+{{- /* Runs the checks of unio.validate. It renders no object. */ -}}
+{{- include "unio.validate" . -}}

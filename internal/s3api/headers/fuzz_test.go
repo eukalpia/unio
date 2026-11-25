@@ -2,7 +2,6 @@ package headers
 
 import (
 	"net/http"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -91,43 +90,6 @@ func FuzzParseCopySource(f *testing.F) {
 		}
 		if len(ref.VersionID) > maxVersionIDLen {
 			t.Fatalf("version id too long: %d bytes", len(ref.VersionID))
-		}
-	})
-}
-
-func FuzzParseTagging(f *testing.F) {
-	for _, s := range []string{
-		"", "k=v", "b=2&a=1", "a+b=c+d", "flag", "k=", "k=a=b", "%3D=v", "%D0%BA=%D0%B7",
-		"a=1&a=2", "=v", "a=1&&b=2", "a=%ZZ", "%FF=v", "k=%00", "a=1&",
-	} {
-		f.Add(s)
-	}
-	f.Fuzz(func(t *testing.T, s string) {
-		out, err := ParseTagging(s)
-		if err != nil {
-			wantCode(t, err, s3err.InvalidTag)
-			if out != "" {
-				t.Fatal("tag set returned together with an error")
-			}
-			return
-		}
-		if (s == "") != (out == "") {
-			t.Fatalf("input %q gave output %q", s, out)
-		}
-		values, err := url.ParseQuery(out)
-		if err != nil {
-			t.Fatalf("canonical output %q does not parse: %v", out, err)
-		}
-		if len(values) > object.MaxTags {
-			t.Fatalf("%d tags exceed the limit", len(values))
-		}
-		for k, v := range values {
-			if k == "" || len(k) > maxTagKeyLen || len(v) != 1 || len(v[0]) > maxTagValueLen {
-				t.Fatalf("tag %q=%q violates the bounds", k, v)
-			}
-		}
-		if values.Encode() != out {
-			t.Fatalf("output %q is not canonical", out)
 		}
 	})
 }

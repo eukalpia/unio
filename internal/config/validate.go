@@ -6,10 +6,15 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/eukalpia/unio/internal/auth"
+	"github.com/eukalpia/unio/internal/ids"
 )
 
 // Bounds enforced by Validate.
@@ -68,9 +73,17 @@ func Validate(c *Config) ([]string, error) {
 // checkNode validates the node identity and listen addresses.
 func checkNode(c *Config, r *report) {
 	if c.Node.ID == "" {
-		r.errorf("node.id is required: set UNIO_NODE_ID to this node's name, which must equal the host of its endpoints (for example node1)")
-	} else if !validHost(c.Node.ID) {
-		r.errorf("node.id %q is not a valid host name; use letters, digits, '-' and '.'", c.Node.ID)
+		r.errorf("node.id is required: set UNIO_NODE_ID to the host of this node's endpoints, for example node1 or unio-0.unio-hl.default.svc.cluster.local")
+	} else if _, err := ids.NodeIDFromHost(c.Node.ID); err != nil {
+		r.errorf("node.id: %w (UNIO_NODE_ID)", err)
+	}
+	if !regionPattern.MatchString(c.Node.Region) {
+		r.errorf("node.region %q must match ^[a-z0-9-]{1,32}$, for example us-east-1 (UNIO_REGION)", c.Node.Region)
+	}
+	for _, d := range c.Node.Domains {
+		if err := checkDomain(d); err != nil {
+			r.errorf("node.domains entry %q: %v (UNIO_DOMAINS)", d, err)
+		}
 	}
 	s3Port, err := listenPort(c.Node.S3Address)
 	if err != nil {
@@ -83,6 +96,37 @@ func checkNode(c *Config, r *report) {
 	if err == nil && s3Port == internodePort {
 		r.errorf("node.s3_address and node.internode_address must use different ports (both are %d)", s3Port)
 	}
+	if c.Node.AdminAddress != "" {
+		host, portStr, serr := net.SplitHostPort(c.Node.AdminAddress)
+		adminPort, perr := strconv.Atoi(portStr)
+		switch {
+		case serr != nil || perr != nil || adminPort < 1 || adminPort > 65535:
+			r.errorf("node.admin_address %q must have the form 127.0.0.1:9001 (UNIO_ADMIN_ADDRESS)", c.Node.AdminAddress)
+		case adminPort == s3Port || adminPort == internodePort:
+			r.errorf("node.admin_address must use a port of its own, not the S3 or internode port (%d)", adminPort)
+		default:
+			if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
+				r.warnf("node.admin_address %q is not a loopback address: the admin API and console are served over plain HTTP there, so keep that address on a trusted network", c.Node.AdminAddress)
+			}
+		}
+	}
+}
+
+// regionPattern is the form of a node region, such as us-east-1.
+var regionPattern = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
+
+// checkDomain requires a virtual-host suffix to be a DNS name, written without
+// surrounding blanks. An IP address is not a DNS name, and the name must pass
+// the same label rules as a node host.
+func checkDomain(d string) error {
+	if d == "" || d != strings.TrimSpace(d) {
+		return errors.New("must be a DNS name without surrounding blanks")
+	}
+	if net.ParseIP(d) != nil {
+		return errors.New("is an IP address; it must be a DNS name")
+	}
+	_, err := ids.NodeIDFromHost(d)
+	return err
 }
 
 // checkCluster validates the endpoints, the cluster secret and node membership.
@@ -100,13 +144,11 @@ func checkCluster(c *Config, r *report) []Endpoint {
 	if len(drives) == 0 {
 		return nil
 	}
-	checkSchemes(c, drives, r)
-	if c.Cluster.InsecureInternode {
-		r.warnf("INSECURE INTERNODE TRAFFIC: cluster.insecure_internode is enabled. Traffic between nodes is neither encrypted nor authenticated. Use this for benchmarks and development only.")
-	}
+	checkSchemes(drives, r)
+	checkNodeIDs(drives, r)
 	local := localDrives(c.Node.ID, drives)
 	if c.Node.ID != "" && len(local) == 0 {
-		r.errorf("no endpoint belongs to node %q: the host of at least one endpoint must equal node.id (endpoint hosts: %s)", c.Node.ID, strings.Join(hosts(drives), ", "))
+		r.errorf("no endpoint belongs to node %q: the host of at least one endpoint must equal node.id, ignoring case (endpoint hosts: %s)", c.Node.ID, strings.Join(distinctHosts(drives), ", "))
 	}
 	if portErr == nil {
 		checkLocalPorts(local, internodePort, r)
@@ -126,16 +168,34 @@ func checkClusterSecret(c *Config, r *report) {
 	}
 }
 
-// checkSchemes requires https endpoints unless insecure internode traffic is explicitly allowed.
-func checkSchemes(c *Config, drives []Endpoint, r *report) {
-	if c.Cluster.InsecureInternode {
-		return
-	}
+// checkSchemes refuses plain HTTP endpoints. Internode traffic is always mutual
+// TLS, so there is no setting that allows http, and the error says so.
+func checkSchemes(drives []Endpoint, r *report) {
 	for _, d := range drives {
 		if d.Scheme != "https" {
-			r.errorf("endpoint %s uses plain http; internode endpoints must use https (cluster.insecure_internode is for development only)", d)
+			r.errorf("endpoint %s uses plain http: internode traffic is always mutual TLS, so every endpoint must use https", d)
 			return
 		}
+	}
+}
+
+// checkNodeIDs requires that no two distinct endpoint hosts name the same node.
+// Node ids come from the first DNS label of a host, so for example
+// unio-0.a.example and unio-0.b.example would both be node unio-0, and the
+// error names both hosts. Hosts are compared without case, as DNS names are.
+func checkNodeIDs(drives []Endpoint, r *report) {
+	owner := make(map[ids.NodeID]string)
+	for _, host := range distinctHosts(drives) {
+		id, err := ids.NodeIDFromHost(host)
+		if err != nil {
+			r.errorf("endpoint host %q cannot name a node: %w", host, err)
+			continue
+		}
+		if first, taken := owner[id]; taken {
+			r.errorf("endpoint hosts %q and %q both name node %q; give each node a host whose first DNS label differs", first, host, id)
+			continue
+		}
+		owner[id] = host
 	}
 }
 
@@ -154,7 +214,7 @@ func checkLocalPorts(local []Endpoint, internodePort int, r *report) {
 func checkNodeCount(drives []Endpoint, r *report) {
 	counts := make(map[string]int)
 	for _, d := range drives {
-		counts[d.Host]++
+		counts[strings.ToLower(d.Host)]++
 	}
 	switch {
 	case len(counts) == 1 && len(drives) == 1:
@@ -210,10 +270,13 @@ func checkErasure(c *Config, drives []Endpoint, r *report) {
 	}
 }
 
-// checkMetadata validates the metadata partition count.
+// checkMetadata validates the metadata partition count and the metadata directory.
 func checkMetadata(c *Config, r *report) {
 	if p := c.Metadata.Partitions; p < 1 || p > maxMetadataPartitions {
 		r.errorf("metadata.partitions %d must be between 1 and %d (UNIO_METADATA_PARTITIONS)", p, maxMetadataPartitions)
+	}
+	if dir := c.Metadata.Dir; dir != "" && !filepath.IsAbs(dir) {
+		r.errorf("metadata.dir %q must be an absolute path, for example /var/lib/unio/meta (UNIO_METADATA_DIR)", dir)
 	}
 }
 
@@ -226,6 +289,13 @@ func checkStorage(c *Config, r *report) {
 	if b := c.Storage.MemoryBudget; b < minMemoryBudget {
 		r.errorf("storage.memory_budget %s must be at least %s (UNIO_MEMORY_BUDGET)", b, Size(minMemoryBudget))
 	}
+	switch c.Storage.Sync {
+	case SyncAlways:
+	case SyncBatch:
+		r.warnf("storage.sync is %q: drive writes are acknowledged before they are synced, so a power loss can lose writes from the last batch interval", SyncBatch)
+	default:
+		r.errorf("storage.sync %q must be %q or %q (UNIO_STORAGE_SYNC)", c.Storage.Sync, SyncAlways, SyncBatch)
+	}
 }
 
 // checkLimits validates concurrency limits.
@@ -234,8 +304,8 @@ func checkLimits(c *Config, r *report) {
 	if l.MaxRequests < 1 || l.MaxRequests > maxRequests {
 		r.errorf("limits.max_requests %d must be between 1 and %d (UNIO_MAX_REQUESTS)", l.MaxRequests, maxRequests)
 	}
-	if l.RequestQueue < 0 || l.RequestQueue > maxRequestQueue {
-		r.errorf("limits.request_queue %d must be between 0 and %d (UNIO_REQUEST_QUEUE)", l.RequestQueue, maxRequestQueue)
+	if l.RequestQueue < 1 || l.RequestQueue > maxRequestQueue {
+		r.errorf("limits.request_queue %d must be between 1 and %d (UNIO_REQUEST_QUEUE)", l.RequestQueue, maxRequestQueue)
 	}
 	if l.BackgroundConcurrency < 1 || l.BackgroundConcurrency > maxBackgroundJobs {
 		r.errorf("limits.background_concurrency %d must be between 1 and %d (UNIO_BACKGROUND_CONCURRENCY)",
@@ -243,21 +313,31 @@ func checkLimits(c *Config, r *report) {
 	}
 }
 
-// checkTimeouts validates that every timeout is positive and not absurdly large.
+// checkTimeouts validates that every timeout is positive and not absurdly
+// large. The one exception is timeouts.write, where zero means no cap.
 func checkTimeouts(c *Config, r *report) {
 	t := c.Timeouts
 	for _, item := range []struct {
-		name string
-		env  string
-		d    time.Duration
+		name   string
+		env    string
+		d      time.Duration
+		zeroOK bool
 	}{
-		{"timeouts.read_header", "UNIO_READ_HEADER_TIMEOUT", t.ReadHeader},
-		{"timeouts.read", "UNIO_READ_TIMEOUT", t.Read},
-		{"timeouts.write", "UNIO_WRITE_TIMEOUT", t.Write},
-		{"timeouts.idle", "UNIO_IDLE_TIMEOUT", t.Idle},
-		{"timeouts.shutdown", "UNIO_SHUTDOWN_TIMEOUT", t.Shutdown},
+		{"timeouts.read_header", "UNIO_READ_HEADER_TIMEOUT", t.ReadHeader, false},
+		{"timeouts.read_idle", "UNIO_READ_IDLE_TIMEOUT", t.ReadIdle, false},
+		{"timeouts.write", "UNIO_WRITE_TIMEOUT", t.Write, true},
+		{"timeouts.write_idle", "UNIO_WRITE_IDLE_TIMEOUT", t.WriteIdle, false},
+		{"timeouts.idle", "UNIO_IDLE_TIMEOUT", t.Idle, false},
+		{"timeouts.shutdown", "UNIO_SHUTDOWN_TIMEOUT", t.Shutdown, false},
 	} {
+		if item.zeroOK && item.d == 0 {
+			continue
+		}
 		if item.d <= 0 || item.d > maxTimeout {
+			if item.zeroOK {
+				r.errorf("%s %s must be 0 for no cap, or greater than 0 and at most %s (%s)", item.name, item.d, maxTimeout, item.env)
+				continue
+			}
 			r.errorf("%s %s must be greater than 0 and at most %s (%s)", item.name, item.d, maxTimeout, item.env)
 		}
 	}
@@ -287,19 +367,23 @@ func checkTLS(c *Config, r *report) {
 	}
 }
 
-// checkAuth validates the root credentials, which must be set and strong.
+// checkAuth requires the root credentials and checks them with
+// auth.ValidateRootCredentials, the rules the node applies at startup. The
+// two therefore accept exactly the same credentials. The error names the
+// setting that is wrong, and it never includes a value.
 func checkAuth(c *Config, r *report) {
 	user := c.Auth.RootUser.Expose()
 	password := c.Auth.RootPassword.Expose()
 	if user == "" {
 		r.errorf("auth.root_user is not set: set UNIO_ROOT_USER or UNIO_ROOT_USER_FILE (unio init generates one)")
-	} else if err := CheckRootUser(user); err != nil {
-		r.errorf("auth.root_user %v (UNIO_ROOT_USER)", err)
 	}
 	if password == "" {
 		r.errorf("auth.root_password is not set: set UNIO_ROOT_PASSWORD or UNIO_ROOT_PASSWORD_FILE (unio init generates one)")
-	} else if err := CheckRootPassword(user, password); err != nil {
-		r.errorf("auth.root_password %v (UNIO_ROOT_PASSWORD)", err)
+	}
+	if user != "" && password != "" {
+		if err := auth.ValidateRootCredentials(user, password); err != nil {
+			r.errorf("root credentials are refused: %v (UNIO_ROOT_USER, UNIO_ROOT_PASSWORD)", err)
+		}
 	}
 }
 
@@ -317,18 +401,63 @@ func checkLog(c *Config, r *report) {
 	}
 }
 
-// checkMetrics validates the metrics token, which must be strong and distinct from the cluster secret.
+// checkMetrics validates the optional metrics token and the pprof listener. A
+// token that is set must be strong and distinct from the cluster secret. Pprof
+// is protected by the token alone, so it cannot be enabled without one.
 func checkMetrics(c *Config, r *report) {
 	token := c.Metrics.Token
-	if !token.IsSet() {
-		r.errorf("metrics.token is not set: set UNIO_METRICS_TOKEN or UNIO_METRICS_TOKEN_FILE (at least %d characters)", MinSecretLength)
+	if token.IsSet() {
+		if err := CheckSecretValue(token.Expose()); err != nil {
+			r.errorf("metrics.token %v (UNIO_METRICS_TOKEN)", err)
+		}
+		if c.Cluster.Secret.IsSet() && subtle.ConstantTimeCompare([]byte(token.Expose()), []byte(c.Cluster.Secret.Expose())) == 1 {
+			r.errorf("metrics.token must differ from cluster.secret (UNIO_METRICS_TOKEN)")
+		}
+	} else if c.Metrics.Pprof {
+		r.errorf("metrics.pprof is enabled but metrics.token is not set: pprof is protected by the token alone; set UNIO_METRICS_TOKEN or UNIO_METRICS_TOKEN_FILE (UNIO_PPROF)")
+	}
+	checkPprofAddress(c, r)
+}
+
+// checkPprofAddress requires the pprof listener to bind a loopback IP address.
+// When pprof is enabled, its port must also not collide with the S3 or
+// internode listener, which would fail at startup.
+func checkPprofAddress(c *Config, r *report) {
+	addr := c.Metrics.PprofAddress
+	host, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		r.errorf("metrics.pprof_address %q must have the form 127.0.0.1:9190 (UNIO_PPROF_ADDRESS)", addr)
 		return
 	}
-	if err := CheckSecretValue(token.Expose()); err != nil {
-		r.errorf("metrics.token %v (UNIO_METRICS_TOKEN)", err)
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() {
+		r.errorf("metrics.pprof_address %q must name a loopback IP address, such as 127.0.0.1 or [::1] (UNIO_PPROF_ADDRESS)", addr)
+		return
 	}
-	if c.Cluster.Secret.IsSet() && subtle.ConstantTimeCompare([]byte(token.Expose()), []byte(c.Cluster.Secret.Expose())) == 1 {
-		r.errorf("metrics.token must differ from cluster.secret (UNIO_METRICS_TOKEN)")
+	port, err := strconv.Atoi(portStr)
+	if err != nil || port < 1 || port > 65535 {
+		r.errorf("metrics.pprof_address %q: the port must be between 1 and 65535 (UNIO_PPROF_ADDRESS)", addr)
+		return
+	}
+	if !c.Metrics.Pprof {
+		return
+	}
+	for _, listen := range []struct{ name, addr string }{
+		{"node.s3_address", c.Node.S3Address},
+		{"node.internode_address", c.Node.InternodeAddress},
+	} {
+		lhost, lportStr, err := net.SplitHostPort(listen.addr)
+		if err != nil {
+			continue // reported by checkNode
+		}
+		if lport, err := strconv.Atoi(lportStr); err != nil || lport != port {
+			continue
+		}
+		// A wildcard listener, or one on the same address, also binds the pprof address.
+		lip := net.ParseIP(lhost)
+		if lhost == "" || (lip != nil && (lip.IsUnspecified() || lip.Equal(ip))) {
+			r.errorf("metrics.pprof_address %q uses port %d, which %s already listens on (UNIO_PPROF_ADDRESS)", addr, port, listen.name)
+		}
 	}
 }
 
@@ -374,27 +503,36 @@ func listenPort(addr string) (int, error) {
 	return port, nil
 }
 
-// localDrives returns the endpoints whose host equals nodeID.
+// localDrives returns the endpoints whose host is nodeID, ignoring case.
 func localDrives(nodeID string, drives []Endpoint) []Endpoint {
 	var out []Endpoint
 	for _, d := range drives {
-		if d.Host == nodeID {
+		if strings.EqualFold(d.Host, nodeID) {
 			out = append(out, d)
 		}
 	}
 	return out
 }
 
-// hosts returns the distinct host names in drives, sorted.
-func hosts(drives []Endpoint) []string {
-	seen := make(map[string]struct{})
-	var out []string
+// distinctHosts returns the host names in drives, with names that differ only
+// in case counted once, sorted by their lower-case form. Each name is shown as
+// it first appears in drives.
+func distinctHosts(drives []Endpoint) []string {
+	seen := make(map[string]string)
 	for _, d := range drives {
-		if _, ok := seen[d.Host]; !ok {
-			seen[d.Host] = struct{}{}
-			out = append(out, d.Host)
+		key := strings.ToLower(d.Host)
+		if _, ok := seen[key]; !ok {
+			seen[key] = d.Host
 		}
 	}
-	sort.Strings(out)
+	keys := make([]string, 0, len(seen))
+	for k := range seen {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, seen[k])
+	}
 	return out
 }

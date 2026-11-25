@@ -47,6 +47,13 @@ func TestHTTPStatus(t *testing.T) {
 	if NoSuchKey.HTTPStatus() != http.StatusNotFound || Code("Unknown").HTTPStatus() != 500 {
 		t.Fatal("bad status mapping")
 	}
+	// A part number beyond the parts of an object is a range error, 416.
+	if InvalidPartNumber.HTTPStatus() != http.StatusRequestedRangeNotSatisfiable {
+		t.Fatalf("InvalidPartNumber status = %d, want 416", InvalidPartNumber.HTTPStatus())
+	}
+	if DeleteConflict.HTTPStatus() != http.StatusConflict {
+		t.Fatal("DeleteConflict must map to 409")
+	}
 }
 
 func TestWrapHidesCause(t *testing.T) {

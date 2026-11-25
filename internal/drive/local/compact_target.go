@@ -30,11 +30,25 @@ func (d *Drive) startCompaction() {
 		OnError: func(err error) {
 			slog.Default().Warn("drive compaction pass failed", "drive", d.lay.root, "err", err)
 		},
+		Urgent: d.shortOfSpace,
 	}
 	go func() {
 		defer close(d.compactDone)
 		compact.Run(ctx, compactTarget{d: d}, cfg)
 	}()
+}
+
+// shortOfSpace reports that the filesystem of the drive has less free space
+// than two segments or 5% of its size, whichever is larger. Compaction then
+// runs in its urgent mode: once writes start failing for lack of space, the
+// only way back is to reclaim the dead bytes quickly.
+func (d *Drive) shortOfSpace() bool {
+	total, free, err := capacity(d.lay.root)
+	if err != nil {
+		return false
+	}
+	reserve := max(2*uint64(max(d.opts.segmentSize, 0)), total/20)
+	return free < reserve
 }
 
 // compactTarget implements compact.Target over the drive.

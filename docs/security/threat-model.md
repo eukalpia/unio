@@ -1,7 +1,7 @@
 # Threat Model
 
 - Status: living document, reviewed with every security-relevant change
-- Last updated: 2026-10-23
+- Last updated: 2026-10-22
 
 This document lists what Unio protects, who it protects it from, where the
 trust boundaries are, and the mitigations every contribution must preserve.
@@ -59,27 +59,49 @@ fuzzed and never trusts lengths, counts or names from the other side.
 | False sense of encryption | Server-side encryption headers (SSE-S3, SSE-KMS, SSE-C, copy-source SSE-C) are refused with `NotImplemented` until encryption is implemented, never ignored | `s3api` |
 | Corrupted upload committed | `object.Body` returns `io.EOF` only after length, Content-MD5, SHA-256, checksum headers and **declared** trailers verify; the object layer commits only after a clean EOF (I4) | `s3api/payload`, `object/engine` |
 | Privilege escalation | Every operation maps to an IAM action and is authorized before touching storage; explicit deny wins; default deny | `s3api`, `auth/policy` |
-| Resource exhaustion | Header, body, idle and write-idle timeouts; concurrency limit with bounded queue (`503 SlowDown`); bounded XML bodies; global buffer budget | `s3api/middleware`, `bufpool` |
+| Resource exhaustion | Header, read-idle, write-idle and keep-alive idle timeouts; concurrency limit with bounded queue (`503 SlowDown`); bounded XML bodies; global buffer budget | `s3api/middleware`, `bufpool` |
 | Memory amplification | No allocation sized from client-supplied numbers without a cap; streaming everywhere except bounded XML | all parsers |
 | Information disclosure | Clients see only S3 codes and fixed messages; internal causes are logged with a request id | `s3err`, `s3api/apierr` |
-| Reserved namespace abuse | `/unio/*` is never treated as a bucket; bucket name `unio` is rejected | `s3api/router` |
+| Reserved namespace abuse | `/unio/*` is never treated as a bucket; bucket name `unio` is rejected; the admin API and the console answer only path-style and bare-domain requests, so a virtual-hosted request to those paths is an object request | `s3api/router` |
 | Log injection or secret leakage | Structured logging; signatures, secrets and query strings are never logged | `obs`, `s3api/middleware` |
+| Console script injection | Content-Security-Policy `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`; `X-Content-Type-Options: nosniff`; `Referrer-Policy: no-referrer`; the console has no inline script or style | `console/headers.go` |
+| Console asset path traversal | The request path is decoded once and refused with 404, never with the index fallback, if the decoded path holds a backslash, a control character or a second level of escaping (`%`), or any element that is `.`, `..` or empty. Files come only from the embedded tree. Covered by `FuzzAssetName` and the traversal tests | `console/path.go` |
 
 ### 4.2 Identity and access
 
 | Threat | Mitigation | Where |
 |---|---|---|
-| Default or weak credentials | No defaults; root credentials must meet length rules; `unio init` generates strong secrets | `config`, `auth/iam` |
+| Default or weak credentials | No defaults; root credentials must pass `auth.ValidateRootCredentials`, the same check at configuration load and at start; `unio init` generates strong secrets | `config`, `auth` |
 | Revoked access lingering | Local revocations take effect at once; cache fills are fenced by an epoch so an in-flight lookup cannot restore revoked state. Other nodes observe changes within the IAM cache TTL (5 s default) | `auth/iam` |
 | Re-created identity inheriting access | Users carry a random incarnation id; deletion marks the user disabled first, and cleanup touches only the deleted incarnation's keys and policy | `auth/iam` |
 | Secret theft from metadata | User secrets encrypted with AES-256-GCM under a key derived from the cluster secret (HKDF); access key id as additional data | `auth/iam` |
 | Policy parser abuse | Size limit, strict JSON, unsupported elements rejected rather than ignored, linear-time wildcard matching | `auth/policy` |
+| Forged or altered admin session | Token is `base64url(payload).base64url(HMAC-SHA256(key, payload))`. The key is HKDF-SHA256 of the cluster secret with info `unio/v1/console-session`. The HMAC is checked in constant time before the payload is parsed, the payload is decoded strictly, and a token lasts 12 h. Tokens longer than 1 KiB are refused. Covered by `FuzzOpenSession` | `admin/session.go` |
+| Revoked admin still holding a session | Every cookie request is checked against IAM: the key must be enabled and still allowed `unio:Admin`. A change made on the node that makes it takes effect at once; a change made on another node takes effect within the IAM cache TTL (5 s by default) | `admin/auth.go`, `auth/iam` |
+| CSRF on cookie-authenticated changes | The cookie is `HttpOnly`, `SameSite=Strict` and `Path=/unio/`. A state change made with the cookie must carry `X-Unio-CSRF`, which is HMAC-SHA256(key, "csrf" + cookie), compared in constant time. This is a token bound to the session and sent in a header, not a double-submit cookie. A page on another origin cannot read the cookie or compute the token. `GET session` returns the token to the same origin only | `admin/session.go`, `admin/auth.go` |
+| Login brute force | `POST session` allows 10 attempts per minute per client address. An IPv6 client is counted per /64. The limiter tracks at most 4096 addresses and forgets the least recently seen. The check runs before the body is read, and an excess attempt gets 429 `SlowDown` with `Retry-After`. The address is the TCP peer, and forwarded headers are not trusted. Behind a reverse proxy every client shares the proxy's address, so one client can throttle every login, and the limit does not slow an attacker who spreads attempts over many addresses | `admin/ratelimit.go`, `admin/login.go` |
+| Presigned URL outlives its intent | The URL is signed as the session's access key, so IAM applies when it is used, and the right to the action is checked when it is signed. `expiresSeconds` is limited to 1 to 3600 and the method to GET or PUT. The root secret signs only when the root account is the session | `admin/presign.go` |
+| Bucket policy broader than it looks | `policy.ParseBucket` accepts only the principal `*`, only resources inside the bucket the policy is stored on (no bare `*`, no other bucket, no `bucket*` prefix of a name) and only `s3:` actions, so a bucket policy can never grant `unio:Admin`. Named principals, `NotPrincipal` and `Condition` are refused with `MalformedPolicy`, never ignored; a refused document leaves the stored one unchanged | `auth/policy` |
+| Anonymous access beyond the published prefixes | An unsigned request is allowed only by an explicit Allow of the bucket's policy for that action and object; listing, writing, deleting and reading or changing the policy stay closed unless a statement opens them. A Deny in the bucket policy beats any identity Allow; an unknown or disabled user is refused even where the bucket policy allows everyone. A missing bucket answers anonymous callers with 403, not 404 | `auth/bucketpolicy` |
+| Revoked public access still served | The node that stores a change drops its cached policy at once; other nodes re-read it within one second. A stored policy that no longer parses is treated as absent, so anonymous access fails closed | `auth/bucketpolicy` |
+| Secret disclosed by the admin API | A new access key's secret is returned once by `POST users/{name}/keys`, with `Cache-Control: no-store`. IAM stores it sealed. Listings, logs and errors never carry it | `admin/users.go`, `auth/iam` |
+| Privilege escalation through several policies | A user's access is the union of its inline policy and its attached managed policies. An explicit Deny in any matching statement of any of them wins, an Allow must match otherwise, and anything else is denied. One function, `policy.EvaluateAll`, implements the rule, and it is linear in the total number of statements | `auth/policy`, `auth/iam` |
+| Attachment outliving its policy (dangling grant) | A policy is marked as deleting before its attachments are counted. An attach writes its attachment first, then confirms that the policy is live, and rolls the attachment back when it is not. Evaluation ignores an attachment unless its policy is live and has the same incarnation id, so a rollback that failed still grants nothing | `auth/iam` |
+| Access kept after a policy change | Replacing a document, detaching and deleting clear the local cache at once. Other nodes see the change within the cache TTL, 5 seconds by default. Deleting a policy that is still attached fails with `DeleteConflict` | `auth/iam` |
+| Inheritance by a re-created name | Each managed policy has a random incarnation id, and each attachment records it. A user's attachments are stored in the user record, so they are removed with the user. The incarnation-scoped deletion removes only the records of the deleted user or policy, and a delete that overlaps a re-creation leaves the new record alone | `auth/iam` |
+| Unbounded policy state | At most 1000 managed policies, counted by a slot counter that is never below the number of records; at most 10 attached policies per user; document size limit as for inline policies | `auth/iam` |
+| Policies on the root identity | Root keeps its implicit full access and cannot have policies. Attach, detach and inline policy changes for root are refused with `InvalidArgument` | `auth/iam` |
+
+Known limit: a storage failure during the rollback of a refused attach leaves
+the attachment in place. It then takes effect as soon as its policy is live.
+The attach reports the failure, so an operator must list the user's policies
+after such an error, and detach any attachment that should not exist.
 
 ### 4.3 Internode
 
 | Threat | Mitigation | Where |
 |---|---|---|
-| Eavesdropping or tampering | TLS 1.3 on every internode connection; plaintext only with an explicit, loudly logged flag | `cluster/uniwire` |
+| Eavesdropping or tampering | TLS 1.3 on every internode connection; no setting turns it off, and configuration refuses `http` endpoints | `cluster/uniwire`, `config` |
 | Rogue node joins | Mutual TLS 1.3 with certificates issued by the cluster CA; standard library verification (no `InsecureSkipVerify`) against the node's DNS identity `<node>.node.unio`; node identity taken from the certificate, never from the payload | `cluster/pki` |
 | Node impersonation inside Raft | Every identity field Raft reads (header id and address, legacy leader and candidate fields) is bound to the authenticated TLS peer; mismatches are refused | `cluster/raftnet` |
 | Stolen node certificate | Node certificates live 7 days and are renewed at half-life with a fresh key, bounding the exposure of a leaked certificate | `cluster/pki` |

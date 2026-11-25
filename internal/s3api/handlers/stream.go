@@ -68,15 +68,23 @@ func (d *deadlineWriter) arm() error {
 // connection writer may keep a reference to large slices until it is flushed,
 // and io.CopyBuffer reuses its buffer on the next read. It deliberately has no
 // ReadFrom method, so that io.CopyBuffer uses the caller's buffer.
+//
+// A call reports bytes only once its flush has succeeded. A failed call
+// reports none, so the sum of the counts is a lower bound on the bytes the
+// client may have received, and the observer never counts bytes that were
+// not sent.
 func (d *deadlineWriter) Write(p []byte) (int, error) {
 	if err := d.arm(); err != nil {
 		return 0, err
 	}
 	n, err := d.w.WriteBinary(p)
 	if err != nil {
-		return n, err
+		return 0, err
 	}
-	return n, d.w.Flush()
+	if err := d.w.Flush(); err != nil {
+		return 0, err
+	}
+	return n, nil
 }
 
 // streamObject writes a GET response whose body is the object. The header
@@ -108,7 +116,9 @@ func (e *Env) streamObject(c *Call, body *object.Reader, buf *bufpool.Buffer) {
 		e.abortStream(c, err)
 		return
 	}
-	if _, err := io.CopyBuffer(dw, struct{ io.Reader }{body.ReadCloser}, buf.Bytes()); err != nil {
+	n, err := io.CopyBuffer(dw, struct{ io.Reader }{body.ReadCloser}, buf.Bytes())
+	c.Stats.AddBytesStreamed(n)
+	if err != nil {
 		e.abortStream(c, err)
 	}
 }

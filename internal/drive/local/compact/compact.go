@@ -7,8 +7,10 @@
 package compact
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/eukalpia/unio/internal/drive/local/segment"
@@ -28,6 +30,11 @@ var (
 
 // DefaultMinDeadRatio is the dead fraction above which a segment is compacted.
 const DefaultMinDeadRatio = 0.5
+
+// UrgentMinDeadRatio is the threshold while the drive is short of space. It
+// is low so that every segment worth anything is reclaimed, but not zero, so
+// that a full drive of live data does not rewrite itself over and over.
+const UrgentMinDeadRatio = 0.1
 
 // Segment describes a sealed segment for planning.
 type Segment struct {
@@ -85,6 +92,12 @@ type Config struct {
 	Wake <-chan struct{}
 	// OnError receives errors from background passes. It may be nil.
 	OnError func(error)
+	// Urgent reports that the drive is short of space. It is asked once per
+	// pass. An urgent pass compacts every segment above UrgentMinDeadRatio,
+	// the one with the most dead bytes first, and ignores Limiter: freeing
+	// space then matters more than sparing foreground I/O, because writes
+	// are failing. Nil means never urgent.
+	Urgent func() bool
 }
 
 // Pass compacts every sealed segment above the dead-ratio threshold, oldest
@@ -95,8 +108,17 @@ func Pass(ctx context.Context, t Target, cfg Config) (int, error) {
 	if threshold == 0 {
 		threshold = DefaultMinDeadRatio
 	}
+	limiter := cfg.Limiter
+	segments := t.Sealed()
+	if cfg.Urgent != nil && cfg.Urgent() {
+		threshold = min(threshold, UrgentMinDeadRatio)
+		limiter = nil
+		slices.SortStableFunc(segments, func(a, b Segment) int {
+			return cmp.Compare(b.End-b.Live, a.End-a.Live)
+		})
+	}
 	retired := 0
-	for _, seg := range t.Sealed() {
+	for _, seg := range segments {
 		if err := ctx.Err(); err != nil {
 			return retired, err
 		}
@@ -108,7 +130,7 @@ func Pass(ctx context.Context, t Target, cfg Config) (int, error) {
 			if !ok {
 				return ErrBadRecord
 			}
-			if err := cfg.Limiter.Wait(ctx, segment.RecordSize(n)); err != nil {
+			if err := limiter.Wait(ctx, segment.RecordSize(n)); err != nil {
 				return err
 			}
 			_, err := t.Move(ctx, rec)

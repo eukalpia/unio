@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/eukalpia/unio/internal/bufpool"
 	"github.com/eukalpia/unio/internal/object"
 	"github.com/eukalpia/unio/internal/object/engine/gc"
 )
@@ -22,7 +23,9 @@ const (
 // defaults.
 type Options struct {
 	// InlineThreshold is the largest object stored inline in metadata, in
-	// bytes. Zero selects object.DefaultInlineThreshold. Values above
+	// bytes. Zero selects object.DefaultInlineThreshold. A negative value
+	// disables the inline tier: every object, zero-byte ones included, is
+	// erasure-coded and referenced by a part. Values above
 	// object.MaxInlineThreshold are rejected.
 	InlineThreshold int64
 	// Clock supplies modification times. Nil selects time.Now.
@@ -45,14 +48,25 @@ type Options struct {
 	// the engine. Writes wait for a slot or for their context. Zero selects
 	// DefaultMaxConcurrentWrites.
 	MaxConcurrentWrites int
-	// BufferBudget is the memory budget, in bytes, for pooled I/O buffers.
-	// It must be at least the inline threshold. Zero selects
-	// DefaultBufferBudget.
+	// BufferBudget is the memory budget, in bytes, for pooled I/O buffers
+	// that the engine creates for itself. It must be at least the inline
+	// threshold. Zero selects DefaultBufferBudget. It is ignored when Budget
+	// is set.
 	BufferBudget int64
+	// Budget is a memory budget shared with the caller, for example with the
+	// erasure sets and the rest of the node. When it is non-nil, every buffer
+	// the engine uses is charged to it instead of to a private budget of
+	// BufferBudget bytes. It must be at least the inline threshold.
+	Budget *bufpool.Budget
 }
+
+// inlineDisabled is the resolved inline threshold when the inline tier is
+// off.
+const inlineDisabled = -1
 
 // resolved is Options with every default applied and every value checked.
 type resolved struct {
+	// inlineThreshold is inlineDisabled, or the largest inline size in bytes.
 	inlineThreshold     int64
 	clock               func() time.Time
 	logger              *slog.Logger
@@ -68,8 +82,10 @@ func (o Options) resolve() (resolved, error) {
 	switch {
 	case r.inlineThreshold == 0:
 		r.inlineThreshold = object.DefaultInlineThreshold
-	case r.inlineThreshold < 0 || r.inlineThreshold > object.MaxInlineThreshold:
-		return resolved{}, fmt.Errorf("engine: inline threshold %d outside [1, %d]", r.inlineThreshold, object.MaxInlineThreshold)
+	case r.inlineThreshold < 0:
+		r.inlineThreshold = inlineDisabled
+	case r.inlineThreshold > object.MaxInlineThreshold:
+		return resolved{}, fmt.Errorf("engine: inline threshold %d above the maximum %d", r.inlineThreshold, object.MaxInlineThreshold)
 	}
 	r.clock = o.Clock
 	if r.clock == nil {
@@ -93,11 +109,11 @@ func (o Options) resolve() (resolved, error) {
 		return resolved{}, err
 	}
 	r.bufferBudget = o.BufferBudget
-	if r.bufferBudget == 0 {
+	switch {
+	case r.bufferBudget == 0:
 		r.bufferBudget = DefaultBufferBudget
-	}
-	if r.bufferBudget < r.inlineThreshold {
-		return resolved{}, fmt.Errorf("engine: buffer budget %d is smaller than the inline threshold %d", r.bufferBudget, r.inlineThreshold)
+	case r.bufferBudget < 0:
+		return resolved{}, fmt.Errorf("engine: negative buffer budget %d", r.bufferBudget)
 	}
 	return r, nil
 }

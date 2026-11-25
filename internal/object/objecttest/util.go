@@ -33,17 +33,8 @@ func checkPutOptions(opts object.PutOptions) error {
 	if opts.ChecksumAlgorithm > object.ChecksumSHA256 {
 		return s3err.Errorf(s3err.InvalidArgument, "unknown checksum algorithm")
 	}
-	return checkTags(opts.Tags)
-}
-
-func checkTags(tags string) error {
-	if tags == "" {
-		return nil
-	}
-	if n := strings.Count(tags, "&") + 1; n > object.MaxTags {
-		return s3err.Errorf(s3err.InvalidTag, "more than %d tags", object.MaxTags)
-	}
-	return nil
+	_, err := object.DecodeTags(opts.Tags)
+	return err
 }
 
 // checkPartNumber validates a multipart part number.

@@ -1,0 +1,95 @@
+# Comparison cluster: MinIO distributed mode, 4 nodes x 4 drives, the same
+# topology and host ports as cluster-4x4.yml. Used by bench/compare.md.
+#
+# The image is built from the last MinIO release by
+# deploy/docker/minio.Dockerfile. With 16 drives MinIO uses one erasure set of
+# 16 drives with EC:4 parity by default.
+#
+# Usage, from the repository root:
+#   docker compose -f deploy/compose/minio-4x4.yml up -d
+#
+# Do not run this together with another 4x4 stack: they all publish host ports
+# 9001 to 9004 on 127.0.0.1.
+
+name: minio-4x4
+
+x-minio-node: &minio-node
+  # Built once by minio1. The other nodes reuse the tag.
+  image: unio-minio-4x4:local
+  pull_policy: never
+  stop_grace_period: 30s
+  command: ["server", "http://minio{1...4}:9000/data{1...4}", "--console-address", ":9090"]
+  environment:
+    MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
+    MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+  networks:
+    - internal
+    - public
+
+services:
+  minio1:
+    build:
+      context: ../docker
+      dockerfile: minio.Dockerfile
+    <<: *minio-node
+    ports:
+      - "127.0.0.1:9001:9000"
+    volumes:
+      - minio1-data1:/data1
+      - minio1-data2:/data2
+      - minio1-data3:/data3
+      - minio1-data4:/data4
+  minio2:
+    <<: *minio-node
+    depends_on: [minio1]
+    ports:
+      - "127.0.0.1:9002:9000"
+    volumes:
+      - minio2-data1:/data1
+      - minio2-data2:/data2
+      - minio2-data3:/data3
+      - minio2-data4:/data4
+  minio3:
+    <<: *minio-node
+    depends_on: [minio1]
+    ports:
+      - "127.0.0.1:9003:9000"
+    volumes:
+      - minio3-data1:/data1
+      - minio3-data2:/data2
+      - minio3-data3:/data3
+      - minio3-data4:/data4
+  minio4:
+    <<: *minio-node
+    depends_on: [minio1]
+    ports:
+      - "127.0.0.1:9004:9000"
+    volumes:
+      - minio4-data1:/data1
+      - minio4-data2:/data2
+      - minio4-data3:/data3
+      - minio4-data4:/data4
+
+networks:
+  internal:
+    internal: true
+  public:
+    driver: bridge
+
+volumes:
+  minio1-data1:
+  minio1-data2:
+  minio1-data3:
+  minio1-data4:
+  minio2-data1:
+  minio2-data2:
+  minio2-data3:
+  minio2-data4:
+  minio3-data1:
+  minio3-data2:
+  minio3-data3:
+  minio3-data4:
+  minio4-data1:
+  minio4-data2:
+  minio4-data3:
+  minio4-data4:

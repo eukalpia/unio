@@ -17,6 +17,7 @@ import (
 	"github.com/eukalpia/unio/internal/bufpool"
 	"github.com/eukalpia/unio/internal/object"
 	"github.com/eukalpia/unio/internal/s3api/headers"
+	"github.com/eukalpia/unio/internal/s3api/reqstat"
 	"github.com/eukalpia/unio/internal/s3api/router"
 	"github.com/eukalpia/unio/internal/s3err"
 )
@@ -36,6 +37,9 @@ type Env struct {
 	WriteIdle time.Duration
 	// WriteCap caps the total time of one streamed response. Zero means none.
 	WriteCap time.Duration
+	// PolicyChanged is called after a bucket policy is stored or removed, so
+	// the authorizer of this node forgets its cached copy. It may be nil.
+	PolicyChanged func(bucket string)
 }
 
 // Call is one authenticated request ready for its operation.
@@ -57,12 +61,20 @@ type Call struct {
 	Authorize func(action auth.Action, bucket, key string) error
 	// Resource names the bucket or object for error responses.
 	Resource string
+	// Stats records the streamed bytes of the response for the Observer. It
+	// may be nil.
+	Stats *reqstat.Stats
 }
 
 // Handle runs the handler for op.
 func (e *Env) Handle(op router.Op, c *Call) error {
 	if encryptionRefused(op) {
 		if err := headers.RejectEncryption(c.Header); err != nil {
+			return err
+		}
+	}
+	if unsupportedRefused(op) {
+		if err := headers.RejectUnsupported(c.Header); err != nil {
 			return err
 		}
 	}
@@ -77,10 +89,18 @@ func (e *Env) Handle(op router.Op, c *Call) error {
 		return e.DeleteBucket(c)
 	case router.OpGetBucketLocation:
 		return e.GetBucketLocation(c)
+	case router.OpGetBucketPolicy:
+		return e.GetBucketPolicy(c)
+	case router.OpPutBucketPolicy:
+		return e.PutBucketPolicy(c)
+	case router.OpDeleteBucketPolicy:
+		return e.DeleteBucketPolicy(c)
 	case router.OpListObjectsV1:
 		return e.ListObjectsV1(c)
 	case router.OpListObjectsV2:
 		return e.ListObjectsV2(c)
+	case router.OpListObjectVersions:
+		return e.ListObjectVersions(c)
 	case router.OpListMultipartUploads:
 		return e.ListMultipartUploads(c)
 	case router.OpDeleteObjects:
@@ -107,6 +127,12 @@ func (e *Env) Handle(op router.Op, c *Call) error {
 		return e.AbortMultipartUpload(c)
 	case router.OpListParts:
 		return e.ListParts(c)
+	case router.OpPutObjectTagging:
+		return e.PutObjectTagging(c)
+	case router.OpGetObjectTagging:
+		return e.GetObjectTagging(c)
+	case router.OpDeleteObjectTagging:
+		return e.DeleteObjectTagging(c)
 	}
 	return s3err.Errorf(s3err.NotImplemented, "this operation is not supported")
 }
@@ -148,6 +174,18 @@ func queryInt(q url.Values, name string, def, lo, hi int) (int, error) {
 // httpTime formats t as an RFC 9110 HTTP date.
 func httpTime(t time.Time) string {
 	return t.UTC().Format(http.TimeFormat)
+}
+
+// unsupportedRefused reports whether requests of op are refused when they carry
+// a header for a feature outside the v0.1 scope, such as an ACL grant or Object
+// Lock. These are the operations that create buckets, objects and uploads.
+func unsupportedRefused(op router.Op) bool {
+	switch op {
+	case router.OpCreateBucket, router.OpPutObject, router.OpCopyObject,
+		router.OpCreateMultipartUpload, router.OpUploadPartCopy:
+		return true
+	}
+	return false
 }
 
 // encryptionRefused reports whether requests of op are refused when they carry

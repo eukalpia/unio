@@ -193,3 +193,36 @@ func TestLimiterUnlimitedAndCancel(t *testing.T) {
 		t.Fatalf("cancelled wait: err = %v", err)
 	}
 }
+
+// While the drive is short of space a pass takes segments with little
+// garbage too, the one with the most dead bytes first, and does not wait for
+// the rate limit.
+func TestUrgentPassReclaimsMoreAndFirstWhereItFreesMost(t *testing.T) {
+	f := &fakeTarget{
+		segments: []Segment{
+			{ID: 1, End: 1000, Live: 800}, // 20% dead: skipped normally, taken when urgent
+			{ID: 2, End: 1000, Live: 950}, // 5% dead: below even the urgent threshold
+			{ID: 3, End: 1000, Live: 100}, // 90% dead: the most to gain, so first
+		},
+		records: map[uint64][]Record{1: {rec(1, 0, 100)}, 2: {rec(2, 0, 100)}, 3: {rec(3, 0, 100)}},
+	}
+	slow := NewLimiter(1, 1) // one byte per second: a pass that waited would time out
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	n, err := Pass(ctx, f, Config{Limiter: slow, Urgent: func() bool { return true }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 || len(f.retired) != 2 || f.retired[0] != 3 || f.retired[1] != 1 {
+		t.Fatalf("retired %v (%d), want [3 1]", f.retired, n)
+	}
+
+	f.retired = nil
+	f.segments = []Segment{{ID: 4, End: 1000, Live: 800}}
+	f.records[4] = []Record{rec(4, 0, 100)}
+	n, err = Pass(ctx, f, Config{Urgent: func() bool { return false }})
+	if err != nil || n != 0 {
+		t.Fatalf("normal pass retired %d (%v), want none at 20%% dead", n, err)
+	}
+}

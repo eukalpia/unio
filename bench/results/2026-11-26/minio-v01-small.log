@@ -1,0 +1,10 @@
+put-4k PUT: ops=12013 errors=0 p99=42.613ms
+get-4k GET: ops=97669 errors=0 p99=8.052ms
+put-1m PUT: ops=3384 errors=0 p99=118.209ms
+get-1m GET: ops=36052 errors=0 p99=18.428ms
+list LIST_DELIMITER: ops=508 errors=0 p99=853.903ms
+list LIST_NO_DELIMITER: ops=469 errors=97 p99=859.109ms
+list TOTAL: ops=977 errors=97 p99=859.109ms
+mixed GET: ops=17980 errors=0 p99=30.189ms
+mixed PUT: ops=7681 errors=0 p99=37.597ms
+mixed TOTAL: ops=25661 errors=0 p99=34.505ms

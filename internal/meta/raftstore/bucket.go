@@ -194,6 +194,24 @@ func (s *Store) SetBucketVersioning(ctx context.Context, name string, state obje
 	return s.setPartitionVersioning(ctx, info.ID, state)
 }
 
+// SetBucketPolicy implements meta.Store. The policy lives only in the bucket
+// record of the system group: unlike versioning, writes in the data
+// partitions never consult it.
+func (s *Store) SetBucketPolicy(ctx context.Context, name string, policy []byte) error {
+	if len(policy) > object.MaxBucketPolicySize {
+		return s3err.Errorf(s3err.InvalidArgument, "bucket policy exceeds %d bytes", object.MaxBucketPolicySize)
+	}
+	info, _, err := s.lookupBucket(ctx, name, false)
+	if err != nil {
+		return err
+	}
+	cmd := &pb.Command{Cmd: &pb.Command_SetBucketPolicy{SetBucketPolicy: &pb.SetBucketPolicy{
+		Name: name, BucketId: uint64(info.ID), Policy: policy,
+	}}}
+	_, err = s.router.Propose(ctx, ids.SystemPartition, cmd)
+	return err
+}
+
 // setPartitionVersioning copies a bucket's versioning state to every data
 // partition.
 func (s *Store) setPartitionVersioning(ctx context.Context, bucket ids.BucketID, state object.VersioningState) error {

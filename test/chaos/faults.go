@@ -17,7 +17,7 @@ const helperImage = "alpine:3.20"
 const corruptScript = `set -eu
 f="$1"
 [ -f "$f" ] || { echo "not a regular file: $f" >&2; exit 2; }
-size=$(stat -c %s "$f")
+size=$(wc -c < "$f" | tr -d ' ')
 [ "$size" -gt 0 ] || { echo "empty file: $f" >&2; exit 3; }
 off=$(( $(od -An -N4 -tu4 /dev/urandom | tr -d ' ') % size ))
 cur=$(od -An -tu1 -j "$off" -N1 "$f" | tr -d ' ')
