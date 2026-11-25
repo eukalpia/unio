@@ -1,0 +1,2 @@
+put-64m PUT: ops=151 errors=0 p99=483.022ms
+get-64m GET: ops=1281 errors=0 p99=63.551ms

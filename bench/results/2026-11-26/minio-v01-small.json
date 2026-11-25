@@ -1,0 +1,265 @@
+{
+  "schema_version": 1,
+  "tool": "unio-bench",
+  "started_at": "2026-11-25T21:31:01.933620759Z",
+  "finished_at": "2026-11-25T21:33:15.293097126Z",
+  "interrupted": false,
+  "environment": {
+    "go_version": "go1.27.4",
+    "goos": "linux",
+    "goarch": "amd64",
+    "num_cpu": 4
+  },
+  "config": {
+    "endpoint": "http://127.0.0.1:19500",
+    "region": "us-east-1",
+    "path_style": true,
+    "bucket": "unio-bench-6aad4ab4",
+    "workloads": [
+      "put-4k",
+      "get-4k",
+      "put-1m",
+      "get-1m",
+      "list",
+      "mixed"
+    ],
+    "concurrency": 16,
+    "duration_seconds": 15,
+    "warmup_seconds": 3,
+    "list_keys": 20000,
+    "list_page": 1000,
+    "seed": 1
+  },
+  "workloads": [
+    {
+      "name": "put-4k",
+      "operations": [
+        {
+          "operation": "PUT",
+          "summary": {
+            "operations": 12013,
+            "errors": 0,
+            "dropped_samples": 0,
+            "bytes": 49205248,
+            "duration_seconds": 15,
+            "ops_per_second": 800.8666666666667,
+            "mib_per_second": 3.1283854166666667,
+            "latency_ms": {
+              "min": 2.411818,
+              "mean": 19.934580854324484,
+              "p50": 19.39624,
+              "p95": 32.45791,
+              "p99": 42.612605,
+              "max": 90.070575
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "get-4k",
+      "operations": [
+        {
+          "operation": "GET",
+          "summary": {
+            "operations": 97669,
+            "errors": 0,
+            "dropped_samples": 0,
+            "bytes": 400052224,
+            "duration_seconds": 15,
+            "ops_per_second": 6511.266666666666,
+            "mib_per_second": 25.434635416666666,
+            "latency_ms": {
+              "min": 0.317771,
+              "mean": 2.456332843112963,
+              "p50": 2.134424,
+              "p95": 5.347528,
+              "p99": 8.052103,
+              "max": 23.490925
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "put-1m",
+      "operations": [
+        {
+          "operation": "PUT",
+          "summary": {
+            "operations": 3384,
+            "errors": 0,
+            "dropped_samples": 0,
+            "bytes": 3548381184,
+            "duration_seconds": 15,
+            "ops_per_second": 225.6,
+            "mib_per_second": 225.6,
+            "latency_ms": {
+              "min": 16.383158,
+              "mean": 70.5902141820331,
+              "p50": 70.592716,
+              "p95": 103.12665,
+              "p99": 118.209152,
+              "max": 152.879757
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "get-1m",
+      "operations": [
+        {
+          "operation": "GET",
+          "summary": {
+            "operations": 36052,
+            "errors": 0,
+            "dropped_samples": 0,
+            "bytes": 37803261952,
+            "duration_seconds": 15,
+            "ops_per_second": 2403.4666666666667,
+            "mib_per_second": 2403.4666666666667,
+            "latency_ms": {
+              "min": 0.93893,
+              "mean": 6.6541215398590925,
+              "p50": 6.061907,
+              "p95": 13.506077,
+              "p99": 18.428433,
+              "max": 35.358271
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "list",
+      "operations": [
+        {
+          "operation": "LIST_DELIMITER",
+          "summary": {
+            "operations": 508,
+            "errors": 0,
+            "dropped_samples": 0,
+            "bytes": 0,
+            "duration_seconds": 15,
+            "ops_per_second": 33.86666666666667,
+            "mib_per_second": 0,
+            "latency_ms": {
+              "min": 7.504602,
+              "mean": 229.58386021062992,
+              "p50": 219.521972,
+              "p95": 621.231073,
+              "p99": 853.902645,
+              "max": 1104.310493
+            }
+          }
+        },
+        {
+          "operation": "LIST_NO_DELIMITER",
+          "summary": {
+            "operations": 469,
+            "errors": 97,
+            "dropped_samples": 0,
+            "bytes": 0,
+            "duration_seconds": 15,
+            "ops_per_second": 31.266666666666666,
+            "mib_per_second": 0,
+            "latency_ms": {
+              "min": 13.978009,
+              "mean": 239.04582054157783,
+              "p50": 216.939333,
+              "p95": 836.043136,
+              "p99": 859.108873,
+              "max": 1102.81662
+            }
+          }
+        },
+        {
+          "operation": "TOTAL",
+          "summary": {
+            "operations": 977,
+            "errors": 97,
+            "dropped_samples": 0,
+            "bytes": 0,
+            "duration_seconds": 15,
+            "ops_per_second": 65.13333333333334,
+            "mib_per_second": 0,
+            "latency_ms": {
+              "min": 7.504602,
+              "mean": 234.12598855783008,
+              "p50": 217.712628,
+              "p95": 825.086263,
+              "p99": 859.108873,
+              "max": 1104.310493
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "mixed",
+      "operations": [
+        {
+          "operation": "GET",
+          "summary": {
+            "operations": 17980,
+            "errors": 0,
+            "dropped_samples": 0,
+            "bytes": 73646080,
+            "duration_seconds": 15,
+            "ops_per_second": 1198.6666666666667,
+            "mib_per_second": 4.682291666666667,
+            "latency_ms": {
+              "min": 0.369949,
+              "mean": 6.949567878031146,
+              "p50": 4.919065,
+              "p95": 19.31143,
+              "p99": 30.188713,
+              "max": 80.214605
+            }
+          }
+        },
+        {
+          "operation": "PUT",
+          "summary": {
+            "operations": 7681,
+            "errors": 0,
+            "dropped_samples": 0,
+            "bytes": 31461376,
+            "duration_seconds": 15,
+            "ops_per_second": 512.0666666666667,
+            "mib_per_second": 2.000260416666667,
+            "latency_ms": {
+              "min": 3.621395,
+              "mean": 14.926659971097514,
+              "p50": 13.14658,
+              "p95": 30.056969,
+              "p99": 37.596939,
+              "max": 75.146172
+            }
+          }
+        },
+        {
+          "operation": "TOTAL",
+          "summary": {
+            "operations": 25661,
+            "errors": 0,
+            "dropped_samples": 0,
+            "bytes": 105107456,
+            "duration_seconds": 15,
+            "ops_per_second": 1710.7333333333333,
+            "mib_per_second": 6.682552083333333,
+            "latency_ms": {
+              "min": 0.369949,
+              "mean": 9.337317551342505,
+              "p50": 7.879291,
+              "p95": 24.71934,
+              "p99": 34.505261,
+              "max": 80.214605
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
