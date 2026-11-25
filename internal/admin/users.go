@@ -127,7 +127,7 @@ func (s *Service) createKey(c *call) (Response, error) {
 	if err != nil {
 		return Response{}, err
 	}
-	s.cfg.Logger.Info("access key created", "request_id", c.req.RequestID, "user", name, "access_key", key.ID)
+	s.cfg.Logger.Info("access key created", "request_id", c.req.RequestID, "user", logSafe(name), "access_key", key.ID)
 	return jsonResponse(http.StatusCreated, keyReply{AccessKeyID: key.ID, SecretKey: key.Secret})
 }
 

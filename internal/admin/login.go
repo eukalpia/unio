@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"crypto/sha256"
 	"crypto/subtle"
 	"errors"
 	"math"
@@ -77,9 +76,7 @@ func (s *Service) login(c *call) (Response, error) {
 		// wrong secret.
 		secret = string(s.dummy)
 	}
-	want := sha256.Sum256([]byte(secret))
-	got := sha256.Sum256([]byte(in.SecretKey))
-	if !found || subtle.ConstantTimeCompare(got[:], want[:]) != 1 {
+	if !found || !secretsEqual(secret, in.SecretKey) {
 		return Response{}, errDenied()
 	}
 	if err := s.cfg.IAM.Authorize(c.ctx, id, auth.ActionAdmin, "", ""); err != nil {
@@ -135,4 +132,19 @@ func retrySeconds(wait time.Duration) int {
 		return 1
 	}
 	return secs
+}
+
+// secretsEqual compares two secrets in time that depends on neither their
+// contents nor their lengths. Both are copied into buffers of maxSecretLen, so
+// the byte comparison always covers the same span, and the length check is a
+// separate constant-time step. The submitted secret is limited to
+// maxSecretLen before this call; a longer stored secret never matches.
+func secretsEqual(stored, submitted string) bool {
+	var a, b [maxSecretLen]byte
+	copy(a[:], stored)
+	copy(b[:], submitted)
+	sameBytes := subtle.ConstantTimeCompare(a[:], b[:])
+	sameLen := subtle.ConstantTimeEq(int32(len(stored)), int32(len(submitted))) //nolint:gosec // both lengths are bounded by maxSecretLen
+	fits := subtle.ConstantTimeLessOrEq(len(stored), maxSecretLen)
+	return sameBytes&sameLen&fits == 1
 }

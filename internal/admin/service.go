@@ -130,10 +130,10 @@ func (s *Service) reject(req Request, err error) Response {
 	status, code, _ := describe(err)
 	if status >= 500 {
 		s.cfg.Logger.Error("admin request failed",
-			"request_id", req.RequestID, "method", req.Method, "path", req.Path, "error", err.Error())
+			"request_id", req.RequestID, "method", logSafe(req.Method), "path", logSafe(req.Path), "error", err.Error())
 	} else {
 		s.cfg.Logger.Info("admin request refused",
-			"request_id", req.RequestID, "method", req.Method, "path", req.Path,
+			"request_id", req.RequestID, "method", logSafe(req.Method), "path", logSafe(req.Path),
 			"status", status, "code", string(code), "remote", req.RemoteAddr)
 	}
 	return errorResponse(req.RequestID, err)
