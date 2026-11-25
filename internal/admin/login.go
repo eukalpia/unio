@@ -144,7 +144,8 @@ func secretsEqual(stored, submitted string) bool {
 	copy(a[:], stored)
 	copy(b[:], submitted)
 	sameBytes := subtle.ConstantTimeCompare(a[:], b[:])
-	sameLen := subtle.ConstantTimeEq(int32(len(stored)), int32(len(submitted))) //nolint:gosec // both lengths are bounded by maxSecretLen
+	sameLen := subtle.ConstantTimeLessOrEq(len(stored), len(submitted)) &
+		subtle.ConstantTimeLessOrEq(len(submitted), len(stored))
 	fits := subtle.ConstantTimeLessOrEq(len(stored), maxSecretLen)
 	return sameBytes&sameLen&fits == 1
 }
