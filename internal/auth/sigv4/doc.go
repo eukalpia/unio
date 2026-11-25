@@ -19,10 +19,11 @@
 //     the body to the signature. An unsigned digest could be replaced
 //     together with the body;
 //   - every x-amz-* header that is present;
-//   - Content-MD5, Content-Type, Cache-Control, Content-Disposition,
-//     Content-Encoding, Content-Language and Expires, when present. An
-//     unsigned Content-MD5 could be replaced together with the body, and the
-//     others are stored with the object.
+//   - Content-MD5, Content-Type, Content-Disposition, Content-Encoding,
+//     Content-Language and Expires, when present. An unsigned Content-MD5
+//     could be replaced together with the body, and the others are stored
+//     with the object. Cache-Control is stored too but may be unsigned: the
+//     AWS SDKs never sign it, and S3 accepts it that way.
 //
 // A presigned URL (X-Amz-* query parameters) requires:
 //

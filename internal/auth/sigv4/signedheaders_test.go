@@ -52,7 +52,6 @@ func TestUnsignedHeadersAreRejected(t *testing.T) {
 		{"storage class", "X-Amz-Storage-Class", "STANDARD"},
 		{"content-md5", "Content-Md5", "1B2M2Y8AsgTpgAmY7PhCfg=="},
 		{"content-type", "Content-Type", "text/html"},
-		{"cache-control", "Cache-Control", "public, max-age=31536000"},
 		{"content-disposition", "Content-Disposition", "attachment"},
 		{"content-encoding", "Content-Encoding", "gzip"},
 	}
@@ -91,6 +90,9 @@ func TestUnsignedHeaderOutsideTheRuleIsAccepted(t *testing.T) {
 	after := http.Header{}
 	after.Set("X-Client-Trace", "anything")
 	after.Set("Accept-Encoding", "gzip")
+	// The AWS SDKs never sign Cache-Control (an unsignable header for them);
+	// S3 accepts it unsigned, and PutObject with CacheControl must work.
+	after.Set("Cache-Control", "public, max-age=31536000, immutable")
 	req := signedGet(t, nil, after)
 	a := newTestAuthenticator(docNow)
 	if _, err := a.Authenticate(context.Background(), req); err != nil {

@@ -17,15 +17,19 @@ import (
 // unsigned one could be changed in transit without breaking the signature.
 //
 // The object headers are required only for header auth: Content-MD5,
-// Content-Type, Cache-Control, Content-Disposition, Content-Encoding,
-// Content-Language and Expires. A presigned URL is generated before the
+// Content-Type, Content-Disposition, Content-Encoding, Content-Language and
+// Expires. A presigned URL is generated before the
 // request is sent, and a client such as a browser may add these headers
 // afterwards, as the standard upload flow does. S3 accepts that. When such a
 // header is listed in X-Amz-SignedHeaders, its value is still verified.
 //
-// The AWS SDKs sign every header they send, except Authorization,
-// User-Agent, X-Amzn-Trace-Id, Expect and Transfer-Encoding. Other headers,
-// such as Accept-Encoding, are never covered by this rule.
+// Cache-Control is not required. The AWS SDKs never sign it: it is on their
+// list of unsignable headers together with Authorization, User-Agent,
+// X-Amzn-Trace-Id, Expect, Transfer-Encoding and the hop-by-hop headers, and
+// S3 accepts it unsigned. Requiring it rejected every PutObject that set
+// CacheControl through the JavaScript SDK. When it is signed, its value is
+// still verified. Other headers, such as Accept-Encoding, are never covered
+// by this rule.
 func mustBeSigned(lname string, presigned bool) bool {
 	if strings.HasPrefix(lname, "x-amz-") {
 		return true
@@ -34,7 +38,7 @@ func mustBeSigned(lname string, presigned bool) bool {
 		return false
 	}
 	switch lname {
-	case "content-md5", "content-type", "cache-control", "content-disposition",
+	case "content-md5", "content-type", "content-disposition",
 		"content-encoding", "content-language", "expires":
 		return true
 	}
